@@ -1,0 +1,2618 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model access_control_log {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  access_right_id   String         @db.Uuid
+  access_point_id   String?        @db.VarChar(255)
+  user_id           String         @db.Uuid
+  event_id          String         @db.Uuid
+  action            access_action
+  result            access_status
+  denial_reason     denial_reason?
+  controller_device String?        @db.VarChar(100)
+  ip_address        String?        @db.Inet
+  scan_metadata     Json?
+  notes             String?
+  scanned_at        DateTime       @default(now()) @db.Timestamptz(6)
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  access_points     access_points? @relation(fields: [access_point_id], references: [id], onUpdate: NoAction, map: "fk_access_control_log_access_point")
+  access_rights     access_rights  @relation(fields: [access_right_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_access_control_log_access_right")
+  events            events         @relation(fields: [event_id], references: [id], onUpdate: NoAction, map: "fk_access_control_log_event")
+  users             users          @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "fk_access_control_log_user")
+
+  @@index([access_point_id], map: "idx_access_control_log_access_point")
+  @@index([access_right_id], map: "idx_access_control_log_access_right")
+  @@index([action], map: "idx_access_control_log_action")
+  @@index([denial_reason], map: "idx_access_control_log_denial_reason")
+  @@index([event_id], map: "idx_access_control_log_event")
+  @@index([event_id, scanned_at, denial_reason, result], map: "idx_access_control_log_event_denied")
+  @@index([event_id, scanned_at, result], map: "idx_access_control_log_event_success")
+  @@index([result], map: "idx_access_control_log_result")
+  @@index([scanned_at], map: "idx_access_control_log_scanned_at")
+  @@index([user_id], map: "idx_access_control_log_user")
+  @@index([user_id, scanned_at], map: "idx_access_control_log_user_recent")
+  @@index([scanned_at, result], map: "idx_access_control_venue_monthly")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model access_points {
+  id                          String               @id @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(255)
+  mapping_id                  String               @db.VarChar(255)
+  name                        String               @db.VarChar(200)
+  code                        String               @db.VarChar(100)
+  access_type                 access_type
+  allowed_zones               String[]
+  restricted_zones            String[]
+  security_level              security_level       @default(STANDARD)
+  latitude                    Decimal?             @db.Decimal(10, 8)
+  longitude                   Decimal?             @db.Decimal(11, 8)
+  is_active                   Boolean              @default(true)
+  requires_special_permission Boolean              @default(false)
+  operating_hours             Json?
+  metadata                    Json?
+  created_at                  DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime             @default(now()) @db.Timestamptz(6)
+  access_control_log          access_control_log[]
+  venue_mappings              venue_mappings       @relation(fields: [mapping_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_access_points_mapping")
+
+  @@unique([mapping_id, code], map: "uk_access_points_code")
+  @@index([is_active], map: "idx_access_points_active")
+  @@index([allowed_zones], map: "idx_access_points_allowed_zones", type: Gin)
+  @@index([latitude, longitude], map: "idx_access_points_coordinates")
+  @@index([mapping_id], map: "idx_access_points_mapping")
+  @@index([restricted_zones], map: "idx_access_points_restricted_zones", type: Gin)
+  @@index([security_level], map: "idx_access_points_security_level")
+  @@index([access_type], map: "idx_access_points_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model access_rights {
+  id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  qr_code                 String                    @unique(map: "uk_access_rights_qr_code") @db.VarChar(255)
+  user_id                 String?                   @db.Uuid
+  event_id                String?                   @db.Uuid
+  organizer_id            String?                   @db.Uuid
+  subscription_id         String?                   @db.Uuid
+  ticket_id               String?                   @db.Uuid
+  zone_id                 String?                   @db.VarChar(255)
+  seat_id                 String?                   @db.VarChar(255)
+  status                  access_right_status       @default(VALID)
+  source_type             access_source_type
+  access_code             String                    @unique(map: "uk_access_rights_access_code") @db.VarChar(100)
+  valid_from              DateTime                  @db.Timestamptz(6)
+  valid_until             DateTime                  @db.Timestamptz(6)
+  max_uses                Int                       @default(1)
+  current_uses            Int                       @default(0)
+  used_at                 DateTime?                 @db.Timestamptz(6)
+  used_at_access_point    String?                   @db.VarChar(255)
+  access_metadata         Json?
+  special_permissions     Json?
+  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  access_control_log      access_control_log[]
+  events                  events?                   @relation(fields: [event_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_access_rights_event")
+  organizers              organizers?               @relation(fields: [organizer_id], references: [id], onUpdate: NoAction, map: "fk_access_rights_organizer")
+  seats                   seats?                    @relation(fields: [seat_id], references: [id], onUpdate: NoAction, map: "fk_access_rights_seat")
+  subscriptions           subscriptions?            @relation(fields: [subscription_id], references: [id], onUpdate: NoAction, map: "fk_access_rights_subscription")
+  tickets                 tickets?                  @relation(fields: [ticket_id], references: [id], onUpdate: NoAction, map: "fk_access_rights_ticket")
+  users                   users?                    @relation(fields: [user_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_access_rights_user")
+  venue_zones             venue_zones?              @relation(fields: [zone_id], references: [id], onUpdate: NoAction, map: "fk_access_rights_zone")
+  access_transactions_log access_transactions_log[]
+
+  @@index([access_code], map: "idx_access_rights_access_code")
+  @@index([event_id], map: "idx_access_rights_event")
+  @@index([organizer_id], map: "idx_access_rights_organizer")
+  @@index([organizer_id, event_id], map: "idx_access_rights_organizer_event")
+  @@index([organizer_id, status], map: "idx_access_rights_organizer_status")
+  @@index([qr_code], map: "idx_access_rights_qr_code")
+  @@index([seat_id], map: "idx_access_rights_seat")
+  @@index([source_type], map: "idx_access_rights_source_type")
+  @@index([status], map: "idx_access_rights_status")
+  @@index([subscription_id], map: "idx_access_rights_subscription")
+  @@index([ticket_id], map: "idx_access_rights_ticket")
+  @@index([used_at], map: "idx_access_rights_used")
+  @@index([user_id], map: "idx_access_rights_user")
+  @@index([user_id, status], map: "idx_access_rights_user_valid")
+  @@index([event_id, status], map: "idx_access_rights_valid_for_event")
+  @@index([valid_from, valid_until], map: "idx_access_rights_validity")
+  @@index([zone_id], map: "idx_access_rights_zone")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model access_transactions_log {
+  id                                                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  access_right_id                                   String                  @db.Uuid
+  transaction_type                                  access_transaction_type
+  from_user_id                                      String?                 @db.Uuid
+  to_user_id                                        String?                 @db.Uuid
+  from_status                                       access_right_status?
+  to_status                                         access_right_status
+  reason                                            String?
+  metadata                                          Json?
+  created_at                                        DateTime                @default(now()) @db.Timestamptz(6)
+  access_rights                                     access_rights           @relation(fields: [access_right_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_access_transactions_log_access_right")
+  users_access_transactions_log_from_user_idTousers users?                  @relation("access_transactions_log_from_user_idTousers", fields: [from_user_id], references: [id], onUpdate: NoAction, map: "fk_access_transactions_log_from_user")
+  users_access_transactions_log_to_user_idTousers   users?                  @relation("access_transactions_log_to_user_idTousers", fields: [to_user_id], references: [id], onUpdate: NoAction, map: "fk_access_transactions_log_to_user")
+
+  @@index([access_right_id], map: "idx_access_transactions_log_access_right")
+  @@index([created_at], map: "idx_access_transactions_log_created_at")
+  @@index([from_user_id], map: "idx_access_transactions_log_from_user")
+  @@index([to_user_id], map: "idx_access_transactions_log_to_user")
+  @@index([transaction_type], map: "idx_access_transactions_log_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model audit_logs {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String?        @db.Uuid
+  table_name  String         @db.VarChar(100)
+  record_id   String?        @db.Uuid
+  action      audit_action
+  old_values  Json?
+  new_values  Json?
+  ip_address  String?        @db.Inet
+  user_agent  String?
+  severity    security_level @default(STANDARD)
+  description String?
+  metadata    Json?
+  created_at  DateTime       @default(now()) @db.Timestamptz(6)
+  users       users?         @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "fk_audit_logs_user")
+
+  @@index([action], map: "idx_audit_logs_action")
+  @@index([created_at], map: "idx_audit_logs_created_at")
+  @@index([ip_address], map: "idx_audit_logs_ip_address")
+  @@index([new_values], map: "idx_audit_logs_new_values", type: Gin)
+  @@index([old_values], map: "idx_audit_logs_old_values", type: Gin)
+  @@index([record_id], map: "idx_audit_logs_record_id")
+  @@index([severity], map: "idx_audit_logs_severity")
+  @@index([table_name], map: "idx_audit_logs_table_name")
+  @@index([table_name, record_id], map: "idx_audit_logs_table_record")
+  @@index([user_id], map: "idx_audit_logs_user")
+  @@index([user_id, created_at], map: "idx_audit_logs_user_recent")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model blacklist {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type            blacklist_type
+  value           String          @db.VarChar(255)
+  scope           blacklist_scope
+  target_event_id String?         @db.Uuid
+  target_venue_id String?         @db.VarChar(255)
+  organizer_id    String?         @db.Uuid
+  reason          String          @db.VarChar(100)
+  description     String?
+  severity        severity_level  @default(MEDIUM)
+  valid_from      DateTime        @default(now()) @db.Timestamptz(6)
+  valid_until     DateTime?       @db.Timestamptz(6)
+  created_by      String          @db.Uuid
+  appeal_status   appeal_status   @default(NONE)
+  appeal_notes    String?
+  is_active       Boolean         @default(true)
+  metadata        Json?
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime        @default(now()) @db.Timestamptz(6)
+  users           users           @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_blacklist_created_by")
+  organizers      organizers?     @relation(fields: [organizer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_blacklist_organizer")
+  events          events?         @relation(fields: [target_event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_blacklist_target_event")
+  venues          venues?         @relation(fields: [target_venue_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_blacklist_target_venue")
+
+  @@index([is_active], map: "idx_blacklist_active")
+  @@index([type, value, scope, is_active], map: "idx_blacklist_active_current")
+  @@index([created_by], map: "idx_blacklist_created_by")
+  @@index([organizer_id], map: "idx_blacklist_organizer")
+  @@index([organizer_id, scope], map: "idx_blacklist_organizer_scope")
+  @@index([scope], map: "idx_blacklist_scope")
+  @@index([severity], map: "idx_blacklist_severity")
+  @@index([target_event_id], map: "idx_blacklist_target_event")
+  @@index([target_venue_id], map: "idx_blacklist_target_venue")
+  @@index([type], map: "idx_blacklist_type")
+  @@index([valid_from, valid_until], map: "idx_blacklist_validity")
+  @@index([value], map: "idx_blacklist_value")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_categories {
+  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                   String             @unique(map: "uk_event_categories_code") @db.VarChar(50)
+  name                   String             @db.VarChar(200)
+  description            String?
+  parent_category_id     String?            @db.Uuid
+  default_duration       Int?
+  default_capacity       Int?
+  requires_referee       Boolean            @default(false)
+  allows_draw            Boolean            @default(false)
+  has_overtime           Boolean            @default(false)
+  has_penalties          Boolean            @default(false)
+  icon_url               String?
+  color_primary          String?            @db.VarChar(7)
+  color_secondary        String?            @db.VarChar(7)
+  default_ticket_price   Decimal?           @db.Decimal(10, 2)
+  currency               String             @default("TND") @db.VarChar(3)
+  rules                  Json?
+  metadata               Json?
+  is_active              Boolean            @default(true)
+  created_at             DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime           @default(now()) @db.Timestamptz(6)
+  event_categories       event_categories?  @relation("event_categoriesToevent_categories", fields: [parent_category_id], references: [id], onUpdate: NoAction, map: "fk_event_categories_parent")
+  other_event_categories event_categories[] @relation("event_categoriesToevent_categories")
+  events                 events[]
+
+  @@index([is_active], map: "idx_event_categories_active")
+  @@index([code], map: "idx_event_categories_code")
+  @@index([parent_category_id], map: "idx_event_categories_parent")
+  @@index([default_ticket_price], map: "idx_event_categories_price")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_groups {
+  id                             String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                           String                           @unique(map: "uk_event_groups_code") @db.VarChar(100)
+  name                           String                           @db.VarChar(200)
+  description                    String?
+  parent_group_id                String?                          @db.Uuid
+  type                           event_group_type
+  season                         String?                          @db.VarChar(20)
+  start_date                     DateTime                         @db.Date
+  end_date                       DateTime                         @db.Date
+  max_events                     Int?
+  current_events                 Int                              @default(0)
+  completed_events               Int                              @default(0)
+  group_rules                    Json?
+  metadata                       Json?
+  is_active                      Boolean                          @default(true)
+  created_at                     DateTime                         @default(now()) @db.Timestamptz(6)
+  updated_at                     DateTime                         @default(now()) @db.Timestamptz(6)
+  event_groups                   event_groups?                    @relation("event_groupsToevent_groups", fields: [parent_group_id], references: [id], onUpdate: NoAction, map: "fk_event_groups_parent")
+  other_event_groups             event_groups[]                   @relation("event_groupsToevent_groups")
+  events                         events[]
+  subscription_plan_event_groups subscription_plan_event_groups[]
+
+  @@index([is_active], map: "idx_event_groups_active")
+  @@index([code], map: "idx_event_groups_code")
+  @@index([current_events], map: "idx_event_groups_current_events")
+  @@index([start_date, end_date], map: "idx_event_groups_dates")
+  @@index([parent_group_id], map: "idx_event_groups_parent")
+  @@index([season], map: "idx_event_groups_season")
+  @@index([type], map: "idx_event_groups_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_media {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id      String           @db.Uuid
+  title         String           @db.VarChar(200)
+  media_type    event_media_type
+  file_url      String
+  file_size     Int?
+  mime_type     String?          @db.VarChar(100)
+  display_order Int?             @default(0)
+  is_featured   Boolean          @default(false)
+  is_public     Boolean          @default(true)
+  description   String?
+  metadata      Json?
+  created_at    DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime         @default(now()) @db.Timestamptz(6)
+  events        events           @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_media_event")
+
+  @@index([event_id], map: "idx_event_media_event")
+  @@index([is_featured], map: "idx_event_media_featured")
+  @@index([display_order], map: "idx_event_media_order")
+  @@index([is_public], map: "idx_event_media_public")
+  @@index([media_type], map: "idx_event_media_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_participants {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id          String                 @db.Uuid
+  participant_id    String                 @db.Uuid
+  role              event_participant_role
+  display_order     Int?                   @default(0)
+  is_confirmed      Boolean                @default(false)
+  is_featured       Boolean                @default(false)
+  participation_fee Decimal?               @db.Decimal(10, 2)
+  prize_money       Decimal?               @db.Decimal(10, 2)
+  performance_stats Json?
+  metadata          Json?
+  created_at        DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime               @default(now()) @db.Timestamptz(6)
+  events            events                 @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_participants_event")
+  participants      participants           @relation(fields: [participant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_participants_participant")
+
+  @@unique([event_id, participant_id, role], map: "uk_event_participants")
+  @@index([is_confirmed], map: "idx_event_participants_confirmed")
+  @@index([event_id], map: "idx_event_participants_event")
+  @@index([event_id, role], map: "idx_event_participants_event_role")
+  @@index([is_featured], map: "idx_event_participants_featured")
+  @@index([display_order], map: "idx_event_participants_order")
+  @@index([participant_id], map: "idx_event_participants_participant")
+  @@index([participant_id, role], map: "idx_event_participants_participant_role")
+  @@index([role], map: "idx_event_participants_role")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_restrictions {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id         String           @db.Uuid
+  restriction_type restriction_type
+  value            String?          @db.VarChar(200)
+  description      String?
+  is_enforced      Boolean          @default(true)
+  severity         severity_level   @default(MEDIUM)
+  is_active        Boolean          @default(true)
+  metadata         Json?
+  created_at       DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime         @default(now()) @db.Timestamptz(6)
+  events           events           @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_restrictions_event")
+
+  @@index([is_enforced], map: "idx_event_restrictions_enforced")
+  @@index([event_id], map: "idx_event_restrictions_event")
+  @@index([severity], map: "idx_event_restrictions_severity")
+  @@index([restriction_type], map: "idx_event_restrictions_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_schedules {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id              String    @db.Uuid
+  title                 String    @db.VarChar(200)
+  description           String?
+  schedule_type         String    @db.VarChar(50)
+  start_time            DateTime  @db.Timestamptz(6)
+  end_time              DateTime? @db.Timestamptz(6)
+  duration              Int?
+  location_within_venue String?   @db.VarChar(200)
+  presenter             String?   @db.VarChar(200)
+  display_order         Int?      @default(0)
+  is_mandatory          Boolean   @default(false)
+  is_live               Boolean   @default(false)
+  metadata              Json?
+  created_at            DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime  @default(now()) @db.Timestamptz(6)
+  events                events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_schedules_event")
+
+  @@index([event_id], map: "idx_event_schedules_event")
+  @@index([is_live], map: "idx_event_schedules_live")
+  @@index([is_mandatory], map: "idx_event_schedules_mandatory")
+  @@index([display_order], map: "idx_event_schedules_order")
+  @@index([start_time], map: "idx_event_schedules_start_time")
+  @@index([schedule_type], map: "idx_event_schedules_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_stats {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id           String        @db.Uuid
+  stat_type          String        @db.VarChar(100)
+  stat_category      String?       @db.VarChar(50)
+  value_numeric      Decimal?      @db.Decimal(15, 4)
+  value_text         String?
+  value_json         Json?
+  participant_id     String?       @db.Uuid
+  period             String?       @db.VarChar(50)
+  timestamp_recorded DateTime?     @default(now()) @db.Timestamptz(6)
+  is_official        Boolean       @default(false)
+  is_public          Boolean       @default(true)
+  created_at         DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime      @default(now()) @db.Timestamptz(6)
+  events             events        @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_stats_event")
+  participants       participants? @relation(fields: [participant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_stats_participant")
+
+  @@index([stat_category], map: "idx_event_stats_category")
+  @@index([event_id], map: "idx_event_stats_event")
+  @@index([is_official], map: "idx_event_stats_official")
+  @@index([participant_id], map: "idx_event_stats_participant")
+  @@index([period], map: "idx_event_stats_period")
+  @@index([timestamp_recorded], map: "idx_event_stats_timestamp")
+  @@index([stat_type], map: "idx_event_stats_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_ticket_config {
+  id                    String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id              String       @db.Uuid
+  ticket_type_id        String       @db.Uuid
+  zone_id               String?      @db.VarChar(255)
+  organizer_id          String?      @db.Uuid
+  price_override        Decimal?     @db.Decimal(10, 2)
+  available_quantity    Int?
+  sold_quantity         Int          @default(0)
+  sale_start_date       DateTime?    @db.Timestamptz(6)
+  sale_end_date         DateTime?    @db.Timestamptz(6)
+  min_purchase_quantity Int?         @default(1)
+  max_purchase_quantity Int?         @default(8)
+  is_active             Boolean      @default(true)
+  metadata              Json?
+  created_at            DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime     @default(now()) @db.Timestamptz(6)
+  events                events       @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_ticket_config_event")
+  organizers            organizers?  @relation(fields: [organizer_id], references: [id], onUpdate: NoAction, map: "fk_event_ticket_config_organizer")
+  ticket_types          ticket_types @relation(fields: [ticket_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_ticket_config_ticket_type")
+  venue_zones           venue_zones? @relation(fields: [zone_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_ticket_config_zone")
+
+  @@unique([event_id, ticket_type_id, zone_id], map: "uk_event_ticket_config")
+  @@index([is_active], map: "idx_event_ticket_config_active")
+  @@index([available_quantity], map: "idx_event_ticket_config_available")
+  @@index([event_id], map: "idx_event_ticket_config_event")
+  @@index([organizer_id], map: "idx_event_ticket_config_organizer")
+  @@index([sale_start_date, sale_end_date], map: "idx_event_ticket_config_sale_dates")
+  @@index([ticket_type_id], map: "idx_event_ticket_config_ticket_type")
+  @@index([zone_id], map: "idx_event_ticket_config_zone")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model events {
+  id                               String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                             String                     @unique(map: "uk_events_code") @db.VarChar(100)
+  name                             String                     @db.VarChar(200)
+  description                      String?
+  event_group_id                   String?                    @db.Uuid
+  category_id                      String                     @db.Uuid
+  organizer_id                     String                     @db.Uuid
+  venue_id                         String                     @db.VarChar(255)
+  mapping_id                       String                     @db.VarChar(255)
+  scheduled_start                  DateTime                   @db.Timestamptz(6)
+  scheduled_end                    DateTime                   @db.Timestamptz(6)
+  actual_start                     DateTime?                  @db.Timestamptz(6)
+  actual_end                       DateTime?                  @db.Timestamptz(6)
+  expected_duration                Int?
+  sales_start                      DateTime?                  @db.Timestamptz(6)
+  sales_end                        DateTime?                  @db.Timestamptz(6)
+  status                           event_status               @default(DRAFT)
+  visibility                       event_visibility           @default(PUBLIC)
+  max_capacity                     Int?
+  current_capacity                 Int                        @default(0)
+  capacity_override                Int?
+  organizer_contact_name           String?                    @db.VarChar(200)
+  organizer_contact_email          String?                    @db.VarChar(255)
+  organizer_contact_phone          String?                    @db.VarChar(20)
+  pricing_config                   Json?
+  restrictions                     Json?
+  metadata                         Json?
+  tags                             String[]
+  is_featured                      Boolean                    @default(false)
+  created_by                       String                     @db.Uuid
+  published_by                     String?                    @db.Uuid
+  published_at                     DateTime?                  @db.Timestamptz(6)
+  created_at                       DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime                   @default(now()) @db.Timestamptz(6)
+  access_control_log               access_control_log[]
+  access_rights                    access_rights[]
+  blacklist                        blacklist[]
+  event_media                      event_media[]
+  event_participants               event_participants[]
+  event_restrictions               event_restrictions[]
+  event_schedules                  event_schedules[]
+  event_stats                      event_stats[]
+  event_ticket_config              event_ticket_config[]
+  event_categories                 event_categories           @relation(fields: [category_id], references: [id], onUpdate: NoAction, map: "fk_events_category")
+  users_events_created_byTousers   users                      @relation("events_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_events_created_by")
+  event_groups                     event_groups?              @relation(fields: [event_group_id], references: [id], onUpdate: NoAction, map: "fk_events_event_group")
+  venue_mappings                   venue_mappings             @relation(fields: [mapping_id], references: [id], onUpdate: NoAction, map: "fk_events_mapping")
+  organizers                       organizers                 @relation(fields: [organizer_id], references: [id], onUpdate: NoAction, map: "fk_events_organizer")
+  users_events_published_byTousers users?                     @relation("events_published_byTousers", fields: [published_by], references: [id], onUpdate: NoAction, map: "fk_events_published_by")
+  venues                           venues                     @relation(fields: [venue_id], references: [id], onUpdate: NoAction, map: "fk_events_venue")
+  order_items                      order_items[]
+  subscription_plan_events         subscription_plan_events[]
+  tickets                          tickets[]
+  zone_mapping_overrides           zone_mapping_overrides[]
+
+  @@index([scheduled_start(sort: Desc), visibility, status], map: "idx_events_api_public")
+  @@index([category_id], map: "idx_events_category")
+  @@index([code], map: "idx_events_code")
+  @@index([created_at], map: "idx_events_created_at")
+  @@index([is_featured], map: "idx_events_featured")
+  @@index([is_featured, status, scheduled_start], map: "idx_events_featured_published")
+  @@index([event_group_id], map: "idx_events_group")
+  @@index([mapping_id], map: "idx_events_mapping")
+  @@index([metadata], map: "idx_events_metadata", type: Gin)
+  @@index([organizer_id], map: "idx_events_organizer_id")
+  @@index([organizer_id, status], map: "idx_events_organizer_status")
+  @@index([organizer_id, status, scheduled_start], map: "idx_events_organizer_upcoming")
+  @@index([pricing_config], map: "idx_events_pricing_config", type: Gin)
+  @@index([published_at], map: "idx_events_published_at")
+  @@index([status, scheduled_start], map: "idx_events_published_upcoming")
+  @@index([restrictions], map: "idx_events_restrictions", type: Gin)
+  @@index([sales_start, sales_end], map: "idx_events_sales_window")
+  @@index([scheduled_end], map: "idx_events_scheduled_end")
+  @@index([scheduled_start, scheduled_end], map: "idx_events_scheduled_range")
+  @@index([scheduled_start], map: "idx_events_scheduled_start")
+  @@index([scheduled_start, category_id, venue_id, status, visibility], map: "idx_events_search_api")
+  @@index([status], map: "idx_events_status")
+  @@index([tags], map: "idx_events_tags", type: Gin)
+  @@index([venue_id], map: "idx_events_venue")
+  @@index([venue_id, status, scheduled_start], map: "idx_events_venue_upcoming")
+  @@index([visibility], map: "idx_events_visibility")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model groups {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String        @unique(map: "uk_groups_code") @db.VarChar(100)
+  name        String        @db.VarChar(200)
+  description String?
+  type        group_type
+  valid_from  DateTime      @default(now()) @db.Timestamptz(6)
+  valid_until DateTime?     @db.Timestamptz(6)
+  is_active   Boolean       @default(true)
+  max_members Int?
+  metadata    Json?
+  created_at  DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime      @default(now()) @db.Timestamptz(6)
+  user_groups user_groups[]
+
+  @@index([is_active], map: "idx_groups_active")
+  @@index([code], map: "idx_groups_code")
+  @@index([metadata], map: "idx_groups_metadata", type: Gin)
+  @@index([type], map: "idx_groups_type")
+  @@index([type, is_active], map: "idx_groups_type_active")
+  @@index([valid_from, valid_until], map: "idx_groups_validity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model login_attempts {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String   @db.VarChar(255)
+  user_id        String?  @db.Uuid
+  ip_address     String   @db.Inet
+  user_agent     String?
+  success        Boolean
+  failure_reason String?  @db.VarChar(100)
+  is_suspicious  Boolean  @default(false)
+  geolocation    Json?
+  metadata       Json?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  users          users?   @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "fk_login_attempts_user")
+
+  @@index([created_at], map: "idx_login_attempts_created_at")
+  @@index([email], map: "idx_login_attempts_email")
+  @@index([email, created_at, success], map: "idx_login_attempts_failed_recent")
+  @@index([ip_address, created_at, success], map: "idx_login_attempts_fraud_analysis")
+  @@index([ip_address], map: "idx_login_attempts_ip_address")
+  @@index([ip_address, created_at], map: "idx_login_attempts_ip_recent")
+  @@index([success], map: "idx_login_attempts_success")
+  @@index([is_suspicious], map: "idx_login_attempts_suspicious")
+  @@index([user_id], map: "idx_login_attempts_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mfa_tokens {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String     @db.Uuid
+  method     mfa_method
+  token_hash String     @db.VarChar(255)
+  secret     String?    @db.VarChar(255)
+  expires_at DateTime   @db.Timestamptz(6)
+  is_used    Boolean    @default(false)
+  metadata   Json?
+  created_at DateTime   @default(now()) @db.Timestamptz(6)
+  used_at    DateTime?  @db.Timestamptz(6)
+  users      users      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_mfa_tokens_user")
+
+  @@index([expires_at], map: "idx_mfa_tokens_expires_at")
+  @@index([method], map: "idx_mfa_tokens_method")
+  @@index([is_used], map: "idx_mfa_tokens_used")
+  @@index([used_at], map: "idx_mfa_tokens_used_at")
+  @@index([user_id], map: "idx_mfa_tokens_user")
+  @@index([user_id, method, expires_at, is_used], map: "idx_mfa_tokens_user_valid")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model order_items {
+  id                   String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id             String              @db.Uuid
+  subscription_plan_id String?             @db.Uuid
+  ticket_type_id       String?             @db.Uuid
+  event_id             String?             @db.Uuid
+  item_type            order_item_type
+  item_name            String              @db.VarChar(200)
+  quantity             Int                 @default(1)
+  unit_price           Decimal             @db.Decimal(10, 2)
+  discount_amount      Decimal             @default(0) @db.Decimal(10, 2)
+  total_price          Decimal             @db.Decimal(10, 2)
+  currency             String              @default("TND") @db.VarChar(3)
+  item_configuration   Json?
+  metadata             Json?
+  created_at           DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime            @default(now()) @db.Timestamptz(6)
+  events               events?             @relation(fields: [event_id], references: [id], onUpdate: NoAction, map: "fk_order_items_event")
+  orders               orders              @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_order_items_order")
+  subscription_plans   subscription_plans? @relation(fields: [subscription_plan_id], references: [id], onUpdate: NoAction, map: "fk_order_items_subscription_plan")
+  ticket_types         ticket_types?       @relation(fields: [ticket_type_id], references: [id], onUpdate: NoAction, map: "fk_order_items_ticket_type")
+
+  @@index([event_id], map: "idx_order_items_event")
+  @@index([order_id], map: "idx_order_items_order")
+  @@index([subscription_plan_id], map: "idx_order_items_subscription_plan")
+  @@index([ticket_type_id], map: "idx_order_items_ticket_type")
+  @@index([total_price], map: "idx_order_items_total_price")
+  @@index([item_type], map: "idx_order_items_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model orders {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_number          String                  @unique(map: "uk_orders_number") @db.VarChar(50)
+  user_id               String?                 @db.Uuid
+  primary_organizer_id  String?                 @db.Uuid
+  status                order_status            @default(DRAFT)
+  subtotal_amount       Decimal                 @default(0) @db.Decimal(10, 2)
+  discount_amount       Decimal                 @default(0) @db.Decimal(10, 2)
+  tax_amount            Decimal                 @default(0) @db.Decimal(10, 2)
+  processing_fee        Decimal                 @default(0) @db.Decimal(10, 2)
+  total_amount          Decimal                 @default(0) @db.Decimal(10, 2)
+  currency              String                  @default("TND") @db.VarChar(3)
+  purchase_channel      purchase_channel        @default(WEB)
+  coupon_code           String?                 @db.VarChar(50)
+  guest_name            String?                 @db.VarChar(200)
+  guest_email           String?                 @db.VarChar(255)
+  guest_phone           String?                 @db.VarChar(20)
+  notes                 String?
+  metadata              Json?
+  confirmed_at          DateTime?               @db.Timestamptz(6)
+  expires_at            DateTime?               @db.Timestamptz(6)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  order_items           order_items[]
+  organizers            organizers?             @relation(fields: [primary_organizer_id], references: [id], onUpdate: NoAction, map: "fk_orders_primary_organizer")
+  users                 users?                  @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "fk_orders_user")
+  organizer_commissions organizer_commissions[]
+  payments              payments[]
+  refunds               refunds[]
+
+  @@index([purchase_channel], map: "idx_orders_channel")
+  @@index([confirmed_at], map: "idx_orders_confirmed_at")
+  @@index([created_at], map: "idx_orders_created_at")
+  @@index([expires_at], map: "idx_orders_expires_at")
+  @@index([guest_email], map: "idx_orders_guest_email")
+  @@index([primary_organizer_id, status], map: "idx_orders_organizer_status")
+  @@index([primary_organizer_id], map: "idx_orders_primary_organizer")
+  @@index([status], map: "idx_orders_status")
+  @@index([total_amount], map: "idx_orders_total_amount")
+  @@index([user_id], map: "idx_orders_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model organizer_commissions {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payment_id          String            @db.Uuid
+  order_id            String            @db.Uuid
+  organizer_id        String            @db.Uuid
+  commission_type     String            @db.VarChar(30)
+  base_amount         Decimal           @db.Decimal(10, 2)
+  commission_rate     Decimal?          @db.Decimal(5, 4)
+  commission_amount   Decimal           @db.Decimal(10, 2)
+  platform_fee        Decimal           @db.Decimal(10, 2)
+  net_to_organizer    Decimal           @db.Decimal(10, 2)
+  currency            String            @default("TND") @db.VarChar(3)
+  contract_version    String?           @default("v2.1") @db.VarChar(20)
+  commission_tier     String?           @db.VarChar(20)
+  volume_bonus        Decimal?          @default(0) @db.Decimal(8, 2)
+  loyalty_bonus       Decimal?          @default(0) @db.Decimal(8, 2)
+  calculation_details Json
+  status              commission_status @default(PENDING)
+  payment_due_date    DateTime          @db.Date
+  paid_date           DateTime?         @db.Timestamptz(6)
+  payment_reference   String?           @db.VarChar(100)
+  notes               String?
+  metadata            Json?
+  created_at          DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime          @default(now()) @db.Timestamptz(6)
+  orders              orders            @relation(fields: [order_id], references: [id], onUpdate: NoAction, map: "fk_organizer_commissions_order")
+  organizers          organizers        @relation(fields: [organizer_id], references: [id], onUpdate: NoAction, map: "fk_organizer_commissions_organizer")
+  payments            payments          @relation(fields: [payment_id], references: [id], onUpdate: NoAction, map: "fk_organizer_commissions_payment")
+
+  @@index([contract_version], map: "idx_organizer_commissions_contract_version")
+  @@index([payment_due_date], map: "idx_organizer_commissions_due_date")
+  @@index([order_id], map: "idx_organizer_commissions_order")
+  @@index([organizer_id], map: "idx_organizer_commissions_organizer")
+  @@index([organizer_id, status], map: "idx_organizer_commissions_organizer_status")
+  @@index([paid_date], map: "idx_organizer_commissions_paid_date")
+  @@index([payment_id], map: "idx_organizer_commissions_payment")
+  @@index([status], map: "idx_organizer_commissions_status")
+  @@index([commission_tier], map: "idx_organizer_commissions_tier")
+  @@index([commission_type], map: "idx_organizer_commissions_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model organizers {
+  id                                           String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                                         String                      @unique @db.VarChar(100)
+  name                                         String                      @db.VarChar(200)
+  short_name                                   String?                     @db.VarChar(100)
+  type                                         organizer_type
+  status                                       organizer_status            @default(PENDING)
+  legal_name                                   String?                     @db.VarChar(300)
+  rnis                                         String?                     @db.VarChar(20)
+  tax_id                                       String?                     @db.VarChar(50)
+  registration_number                          String?                     @db.VarChar(100)
+  contact_email                                String                      @unique(map: "uk_organizers_contact_email") @db.VarChar(255)
+  contact_phone                                String?                     @db.VarChar(20)
+  address                                      String?
+  city                                         String?                     @db.VarChar(100)
+  postal_code                                  String?                     @db.VarChar(20)
+  country                                      String                      @default("TN") @db.VarChar(2)
+  commission_rate                              Decimal                     @default(0.1200) @db.Decimal(5, 4)
+  payment_terms                                Int                         @default(15)
+  currency                                     String                      @default("TND") @db.VarChar(3)
+  is_vat_registered                            Boolean                     @default(false)
+  accepts_online_payments                      Boolean                     @default(true)
+  auto_confirm_events                          Boolean                     @default(false)
+  logo_url                                     String?
+  banner_url                                   String?
+  website_url                                  String?
+  social_media                                 Json?
+  description                                  String?
+  specialties                                  String[]
+  target_audience                              String[]
+  legal_documents                              Json?
+  banking_details                              Json?
+  insurance_info                               Json?
+  total_events_organized                       Int                         @default(0)
+  total_revenue_generated                      Decimal                     @default(0) @db.Decimal(15, 2)
+  average_satisfaction_score                   Decimal?                    @db.Decimal(3, 2)
+  last_event_date                              DateTime?                   @db.Date
+  validated_at                                 DateTime?                   @db.Timestamptz(6)
+  validated_by                                 String?                     @db.Uuid
+  accreditation_level                          String?                     @default("BASIC") @db.VarChar(20)
+  certification_expires_at                     DateTime?                   @db.Date
+  preferences                                  Json?
+  business_hours                               Json?
+  emergency_contact                            Json?
+  metadata                                     Json?
+  created_by                                   String?                     @db.Uuid
+  updated_by                                   String?                     @db.Uuid
+  created_at                                   DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                                   DateTime                    @default(now()) @db.Timestamptz(6)
+  access_rights                                access_rights[]
+  blacklist                                    blacklist[]
+  event_ticket_config                          event_ticket_config[]
+  events                                       events[]
+  orders                                       orders[]
+  organizer_commissions                        organizer_commissions[]
+  users_organizers_created_byTousers           users?                      @relation("organizers_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_organizers_created_by")
+  users_organizers_updated_byTousers           users?                      @relation("organizers_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction, map: "fk_organizers_updated_by")
+  users_organizers_validated_byTousers         users?                      @relation("organizers_validated_byTousers", fields: [validated_by], references: [id], onUpdate: NoAction, map: "fk_organizers_validated_by")
+  participants                                 participants[]
+  payments                                     payments[]
+  pricing_rules                                pricing_rules[]
+  subscription_plans                           subscription_plans[]
+  subscriptions                                subscriptions[]
+  ticket_types                                 ticket_types[]
+  tickets                                      tickets[]
+  venue_organizer_relations                    venue_organizer_relations[]
+  venues_venues_primary_manager_idToorganizers venues[]                    @relation("venues_primary_manager_idToorganizers")
+  venues_venues_primary_owner_idToorganizers   venues[]                    @relation("venues_primary_owner_idToorganizers")
+
+  @@index([status, validated_at], map: "idx_organizers_active_validated")
+  @@index([name, type, city, status], map: "idx_organizers_api_public")
+  @@index([banking_details], map: "idx_organizers_banking_details", type: Gin)
+  @@index([city, country], map: "idx_organizers_city_country")
+  @@index([code], map: "idx_organizers_code")
+  @@index([commission_rate], map: "idx_organizers_commission_rate")
+  @@index([contact_email], map: "idx_organizers_contact_email")
+  @@index([contact_phone], map: "idx_organizers_contact_phone")
+  @@index([created_at], map: "idx_organizers_created_at")
+  @@index([legal_documents], map: "idx_organizers_legal_documents", type: Gin)
+  @@index([metadata], map: "idx_organizers_metadata", type: Gin)
+  @@index([total_events_organized, total_revenue_generated], map: "idx_organizers_performance")
+  @@index([average_satisfaction_score], map: "idx_organizers_satisfaction")
+  @@index([social_media], map: "idx_organizers_social_media", type: Gin)
+  @@index([status], map: "idx_organizers_status")
+  @@index([type], map: "idx_organizers_type")
+  @@index([type, status], map: "idx_organizers_type_status")
+  @@index([updated_at], map: "idx_organizers_updated_at")
+  @@index([validated_at, status], map: "idx_organizers_validation")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model participant_relationships {
+  id                                                                    String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  participant_a_id                                                      String                        @db.Uuid
+  participant_b_id                                                      String                        @db.Uuid
+  relationship_type                                                     participant_relationship_type
+  intensity                                                             Int                           @default(5)
+  is_mutual                                                             Boolean                       @default(true)
+  start_date                                                            DateTime                      @default(dbgenerated("CURRENT_DATE")) @db.Date
+  end_date                                                              DateTime?                     @db.Date
+  description                                                           String?
+  metadata                                                              Json?
+  is_active                                                             Boolean                       @default(true)
+  created_at                                                            DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at                                                            DateTime                      @default(now()) @db.Timestamptz(6)
+  participants_participant_relationships_participant_a_idToparticipants participants                  @relation("participant_relationships_participant_a_idToparticipants", fields: [participant_a_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_participant_relationships_participant_a")
+  participants_participant_relationships_participant_b_idToparticipants participants                  @relation("participant_relationships_participant_b_idToparticipants", fields: [participant_b_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_participant_relationships_participant_b")
+
+  @@unique([participant_a_id, participant_b_id, relationship_type], map: "uk_participant_relationships")
+  @@index([is_active], map: "idx_participant_relationships_active")
+  @@index([participant_b_id, participant_a_id, relationship_type], map: "idx_participant_relationships_bidirectional")
+  @@index([start_date, end_date], map: "idx_participant_relationships_dates")
+  @@index([intensity], map: "idx_participant_relationships_intensity")
+  @@index([participant_a_id], map: "idx_participant_relationships_participant_a")
+  @@index([participant_b_id], map: "idx_participant_relationships_participant_b")
+  @@index([relationship_type], map: "idx_participant_relationships_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model participant_staff {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  participant_id String       @db.Uuid
+  first_name     String       @db.VarChar(100)
+  last_name      String       @db.VarChar(100)
+  nickname       String?      @db.VarChar(50)
+  date_of_birth  DateTime?    @db.Date
+  nationality    String?      @db.VarChar(2)
+  role           String       @db.VarChar(100)
+  position       String?      @db.VarChar(100)
+  jersey_number  Int?
+  contract_start DateTime?    @db.Date
+  contract_end   DateTime?    @db.Date
+  salary         Decimal?     @db.Decimal(12, 2)
+  currency       String?      @default("TND") @db.VarChar(3)
+  statistics     Json?
+  metadata       Json?
+  photo_url      String?
+  biography      String?
+  is_active      Boolean      @default(true)
+  created_at     DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime     @default(now()) @db.Timestamptz(6)
+  participants   participants @relation(fields: [participant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_participant_staff_participant_id")
+
+  @@index([is_active], map: "idx_participant_staff_active")
+  @@index([contract_start, contract_end], map: "idx_participant_staff_contract_dates")
+  @@index([jersey_number], map: "idx_participant_staff_jersey_number")
+  @@index([nationality], map: "idx_participant_staff_nationality")
+  @@index([participant_id], map: "idx_participant_staff_participant")
+  @@index([role], map: "idx_participant_staff_role")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model participants {
+  id                                                                                 String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                                                                               String                      @unique(map: "uk_participants_code") @db.VarChar(100)
+  name                                                                               String                      @db.VarChar(200)
+  short_name                                                                         String?                     @db.VarChar(100)
+  type                                                                               participant_type
+  category                                                                           String?                     @db.VarChar(50)
+  participant_category                                                               String?                     @db.VarChar(50)
+  nationality                                                                        String?                     @db.VarChar(2)
+  city                                                                               String?                     @db.VarChar(100)
+  founded_date                                                                       DateTime?                   @db.Date
+  disbanded_date                                                                     DateTime?                   @db.Date
+  logo_url                                                                           String?
+  banner_url                                                                         String?
+  website_url                                                                        String?
+  contact_email                                                                      String?                     @db.VarChar(255)
+  contact_phone                                                                      String?                     @db.VarChar(20)
+  contact_address                                                                    String?
+  social_media                                                                       Json?
+  description                                                                        String?
+  achievements                                                                       String[]
+  statistics                                                                         Json?
+  metadata                                                                           Json?
+  booking_agent_info                                                                 Json?
+  technical_requirements                                                             Json?
+  hospitality_requirements                                                           Json?
+  affiliated_organizer_id                                                            String?                     @db.Uuid
+  is_active                                                                          Boolean                     @default(true)
+  is_verified                                                                        Boolean                     @default(false)
+  created_at                                                                         DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                                                                         DateTime                    @default(now()) @db.Timestamptz(6)
+  event_participants                                                                 event_participants[]
+  event_stats                                                                        event_stats[]
+  participant_relationships_participant_relationships_participant_a_idToparticipants participant_relationships[] @relation("participant_relationships_participant_a_idToparticipants")
+  participant_relationships_participant_relationships_participant_b_idToparticipants participant_relationships[] @relation("participant_relationships_participant_b_idToparticipants")
+  participant_staff                                                                  participant_staff[]
+  organizers                                                                         organizers?                 @relation(fields: [affiliated_organizer_id], references: [id], onUpdate: NoAction, map: "fk_participants_affiliated_organizer")
+  user_profiles                                                                      user_profiles[]
+
+  @@index([is_active], map: "idx_participants_active")
+  @@index([affiliated_organizer_id], map: "idx_participants_affiliated_organizer")
+  @@index([booking_agent_info], map: "idx_participants_booking_agent", type: Gin)
+  @@index([category], map: "idx_participants_category")
+  @@index([city], map: "idx_participants_city")
+  @@index([code], map: "idx_participants_code")
+  @@index([founded_date], map: "idx_participants_founded_date")
+  @@index([nationality], map: "idx_participants_nationality")
+  @@index([participant_category], map: "idx_participants_participant_category")
+  @@index([social_media], map: "idx_participants_social_media", type: Gin)
+  @@index([statistics], map: "idx_participants_statistics", type: Gin)
+  @@index([technical_requirements], map: "idx_participants_technical_requirements", type: Gin)
+  @@index([type], map: "idx_participants_type")
+  @@index([is_verified], map: "idx_participants_verified")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model payment_attempts {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payment_id         String         @db.Uuid
+  attempt_number     Int
+  status             payment_status
+  failure_reason     String?
+  gateway_request    Json?
+  gateway_response   Json?
+  processing_time_ms Int?
+  attempted_at       DateTime       @default(now()) @db.Timestamptz(6)
+  created_at         DateTime       @default(now()) @db.Timestamptz(6)
+  payments           payments       @relation(fields: [payment_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payment_attempts_payment")
+
+  @@index([attempted_at], map: "idx_payment_attempts_attempted_at")
+  @@index([attempted_at, failure_reason, status], map: "idx_payment_attempts_failures")
+  @@index([payment_id], map: "idx_payment_attempts_payment")
+  @@index([status], map: "idx_payment_attempts_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model payment_methods {
+  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                   String              @unique(map: "uk_payment_methods_code") @db.VarChar(50)
+  name                   String              @db.VarChar(100)
+  provider               String              @db.VarChar(50)
+  type                   payment_method_type
+  is_active              Boolean             @default(true)
+  is_default             Boolean             @default(false)
+  min_amount             Decimal?            @default(0) @db.Decimal(10, 2)
+  max_amount             Decimal?            @db.Decimal(10, 2)
+  processing_fee_fixed   Decimal?            @default(0) @db.Decimal(8, 2)
+  processing_fee_percent Decimal?            @default(0) @db.Decimal(5, 4)
+  configuration          Json?
+  display_order          Int?                @default(0)
+  description            String?
+  created_at             DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime            @default(now()) @db.Timestamptz(6)
+  payments               payments[]
+
+  @@index([is_active], map: "idx_payment_methods_active")
+  @@index([code], map: "idx_payment_methods_code")
+  @@index([is_default], map: "idx_payment_methods_default")
+  @@index([display_order], map: "idx_payment_methods_display_order")
+  @@index([provider], map: "idx_payment_methods_provider")
+  @@index([type], map: "idx_payment_methods_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model payment_webhooks {
+  id                      String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webhook_id              String         @unique(map: "uk_payment_webhooks_id") @db.VarChar(100)
+  payment_id              String?        @db.Uuid
+  event_type              String         @db.VarChar(50)
+  external_transaction_id String         @db.VarChar(100)
+  status                  webhook_status @default(RECEIVED)
+  raw_payload             Json
+  parsed_data             Json?
+  signature               String?        @db.VarChar(255)
+  signature_valid         Boolean?
+  ip_source               String?        @db.Inet
+  user_agent              String?
+  processing_attempts     Int            @default(0)
+  last_processing_error   String?
+  processed_at            DateTime?      @db.Timestamptz(6)
+  metadata                Json?
+  created_at              DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime       @default(now()) @db.Timestamptz(6)
+  payments                payments?      @relation(fields: [payment_id], references: [id], onUpdate: NoAction, map: "fk_payment_webhooks_payment")
+
+  @@index([created_at], map: "idx_payment_webhooks_created_at")
+  @@index([event_type], map: "idx_payment_webhooks_event_type")
+  @@index([external_transaction_id], map: "idx_payment_webhooks_external_transaction")
+  @@index([payment_id], map: "idx_payment_webhooks_payment")
+  @@index([processed_at], map: "idx_payment_webhooks_processed_at")
+  @@index([status], map: "idx_payment_webhooks_status")
+  @@index([webhook_id], map: "idx_payment_webhooks_webhook_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model payments {
+  id                      String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payment_number          String                  @unique(map: "uk_payments_number") @db.VarChar(50)
+  order_id                String                  @db.Uuid
+  payment_method_id       String                  @db.Uuid
+  primary_organizer_id    String?                 @db.Uuid
+  amount                  Decimal                 @db.Decimal(10, 2)
+  currency                String                  @default("TND") @db.VarChar(3)
+  status                  payment_status          @default(PENDING)
+  external_transaction_id String?                 @unique(map: "uk_payments_external_transaction") @db.VarChar(100)
+  processing_fee          Decimal                 @default(0) @db.Decimal(8, 2)
+  net_amount              Decimal                 @db.Decimal(10, 2)
+  payment_date            DateTime?               @db.Timestamptz(6)
+  expires_at              DateTime?               @db.Timestamptz(6)
+  gateway_data            Json?
+  metadata                Json?
+  created_at              DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                @default(now()) @db.Timestamptz(6)
+  organizer_commissions   organizer_commissions[]
+  payment_attempts        payment_attempts[]
+  payment_webhooks        payment_webhooks[]
+  payment_methods         payment_methods         @relation(fields: [payment_method_id], references: [id], onUpdate: NoAction, map: "fk_payments_method")
+  orders                  orders                  @relation(fields: [order_id], references: [id], onUpdate: NoAction, map: "fk_payments_order")
+  organizers              organizers?             @relation(fields: [primary_organizer_id], references: [id], onUpdate: NoAction, map: "fk_payments_primary_organizer")
+  refunds                 refunds[]
+
+  @@index([amount], map: "idx_payments_amount")
+  @@index([expires_at], map: "idx_payments_expires_at")
+  @@index([external_transaction_id], map: "idx_payments_external_transaction")
+  @@index([payment_method_id], map: "idx_payments_method")
+  @@index([order_id], map: "idx_payments_order")
+  @@index([primary_organizer_id, payment_date, status], map: "idx_payments_organizer_monthly")
+  @@index([primary_organizer_id, status], map: "idx_payments_organizer_status")
+  @@index([payment_date], map: "idx_payments_payment_date")
+  @@index([primary_organizer_id], map: "idx_payments_primary_organizer")
+  @@index([status], map: "idx_payments_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model pricing_rules {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code             String            @unique(map: "uk_pricing_rules_code") @db.VarChar(50)
+  name             String            @db.VarChar(200)
+  description      String?
+  rule_type        pricing_rule_type
+  organizer_id     String?           @db.Uuid
+  conditions       Json
+  actions          Json
+  valid_from       DateTime          @db.Timestamptz(6)
+  valid_until      DateTime?         @db.Timestamptz(6)
+  priority         Int               @default(0)
+  is_stackable     Boolean           @default(false)
+  max_applications Int?
+  is_active        Boolean           @default(true)
+  metadata         Json?
+  created_at       DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime          @default(now()) @db.Timestamptz(6)
+  organizers       organizers?       @relation(fields: [organizer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pricing_rules_organizer")
+
+  @@index([actions], map: "idx_pricing_rules_actions", type: Gin)
+  @@index([is_active], map: "idx_pricing_rules_active")
+  @@index([code], map: "idx_pricing_rules_code")
+  @@index([conditions], map: "idx_pricing_rules_conditions", type: Gin)
+  @@index([organizer_id], map: "idx_pricing_rules_organizer")
+  @@index([organizer_id, is_active], map: "idx_pricing_rules_organizer_active")
+  @@index([priority(sort: Desc)], map: "idx_pricing_rules_priority")
+  @@index([rule_type], map: "idx_pricing_rules_type")
+  @@index([valid_from, valid_until], map: "idx_pricing_rules_validity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model rate_limiting {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  endpoint         String   @db.VarChar(200)
+  identifier_type  String   @db.VarChar(50)
+  identifier_value String   @db.VarChar(255)
+  requests_count   Int      @default(1)
+  window_start     DateTime @default(now()) @db.Timestamptz(6)
+  is_blocked       Boolean  @default(false)
+  last_request     DateTime @default(now()) @db.Timestamptz(6)
+  metadata         Json?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([is_blocked], map: "idx_rate_limiting_blocked")
+  @@index([endpoint], map: "idx_rate_limiting_endpoint")
+  @@index([identifier_type, identifier_value], map: "idx_rate_limiting_identifier")
+  @@index([last_request], map: "idx_rate_limiting_last_request")
+  @@index([window_start], map: "idx_rate_limiting_window_start")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model refunds {
+  id                                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  refund_number                     String        @unique(map: "uk_refunds_number") @db.VarChar(50)
+  payment_id                        String        @db.Uuid
+  order_id                          String        @db.Uuid
+  refund_type                       refund_type
+  amount                            Decimal       @db.Decimal(10, 2)
+  method                            refund_method
+  status                            refund_status @default(PENDING)
+  reason                            String        @db.VarChar(100)
+  description                       String?
+  requested_by                      String?       @db.Uuid
+  approved_by                       String?       @db.Uuid
+  external_refund_id                String?       @db.VarChar(100)
+  processing_fee                    Decimal       @default(0) @db.Decimal(8, 2)
+  net_refund_amount                 Decimal       @db.Decimal(10, 2)
+  expected_date                     DateTime?     @db.Date
+  completed_date                    DateTime?     @db.Timestamptz(6)
+  gateway_response                  Json?
+  metadata                          Json?
+  created_at                        DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at                        DateTime      @default(now()) @db.Timestamptz(6)
+  users_refunds_approved_byTousers  users?        @relation("refunds_approved_byTousers", fields: [approved_by], references: [id], onUpdate: NoAction, map: "fk_refunds_approved_by")
+  orders                            orders        @relation(fields: [order_id], references: [id], onUpdate: NoAction, map: "fk_refunds_order")
+  payments                          payments      @relation(fields: [payment_id], references: [id], onUpdate: NoAction, map: "fk_refunds_payment")
+  users_refunds_requested_byTousers users?        @relation("refunds_requested_byTousers", fields: [requested_by], references: [id], onUpdate: NoAction, map: "fk_refunds_requested_by")
+
+  @@index([approved_by], map: "idx_refunds_approved_by")
+  @@index([completed_date], map: "idx_refunds_completed_date")
+  @@index([method], map: "idx_refunds_method")
+  @@index([order_id], map: "idx_refunds_order")
+  @@index([payment_id], map: "idx_refunds_payment")
+  @@index([requested_by], map: "idx_refunds_requested_by")
+  @@index([status], map: "idx_refunds_status")
+  @@index([refund_type], map: "idx_refunds_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model roles {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String       @unique(map: "uk_roles_code") @db.VarChar(50)
+  name        String       @db.VarChar(100)
+  description String?
+  level       Int          @default(0)
+  is_active   Boolean      @default(true)
+  permissions Json?
+  created_at  DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime     @default(now()) @db.Timestamptz(6)
+  user_roles  user_roles[]
+
+  @@index([is_active], map: "idx_roles_active")
+  @@index([code], map: "idx_roles_code")
+  @@index([level], map: "idx_roles_level")
+  @@index([permissions], map: "idx_roles_permissions", type: Gin)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model seats {
+  id                  String          @id @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(255)
+  zone_id             String          @db.VarChar(255)
+  seat_number         String          @db.VarChar(20)
+  row_number          String?         @db.VarChar(20)
+  seat_type           seat_type       @default(STANDARD)
+  status              seat_status     @default(AVAILABLE)
+  x_coordinate        Decimal?        @db.Decimal(10, 4)
+  y_coordinate        Decimal?        @db.Decimal(10, 4)
+  price_modifier      Decimal?        @default(1.0000) @db.Decimal(5, 4)
+  features            String[]
+  is_accessible       Boolean         @default(false)
+  accessibility_notes String?
+  metadata            Json?
+  created_at          DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime        @default(now()) @db.Timestamptz(6)
+  access_rights       access_rights[]
+  venue_zones         venue_zones     @relation(fields: [zone_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_seats_zone")
+  tickets             tickets[]
+  venue_media         venue_media[]
+
+  @@unique([zone_id, seat_number, row_number], map: "uk_seats_position")
+  @@index([is_accessible], map: "idx_seats_accessible")
+  @@index([x_coordinate, y_coordinate], map: "idx_seats_coordinates")
+  @@index([price_modifier], map: "idx_seats_price_modifier")
+  @@index([status], map: "idx_seats_status")
+  @@index([seat_type], map: "idx_seats_type")
+  @@index([zone_id], map: "idx_seats_zone")
+  @@index([zone_id, status], map: "idx_seats_zone_available")
+  @@index([zone_id, status], map: "idx_seats_zone_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model security_events {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_type     String         @db.VarChar(100)
+  severity       security_level
+  target_user_id String?        @db.Uuid
+  ip_address     String?        @db.Inet
+  description    String
+  event_data     Json?
+  status         String         @default("OPEN") @db.VarChar(50)
+  resolved_at    DateTime?      @db.Timestamptz(6)
+  metadata       Json?
+  created_at     DateTime       @default(now()) @db.Timestamptz(6)
+  users          users?         @relation(fields: [target_user_id], references: [id], onUpdate: NoAction, map: "fk_security_events_target_user")
+
+  @@index([created_at], map: "idx_security_events_created_at")
+  @@index([event_type], map: "idx_security_events_event_type")
+  @@index([ip_address], map: "idx_security_events_ip_address")
+  @@index([resolved_at], map: "idx_security_events_resolved_at")
+  @@index([severity], map: "idx_security_events_severity")
+  @@index([status], map: "idx_security_events_status")
+  @@index([target_user_id], map: "idx_security_events_target_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model security_policies {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String    @unique(map: "uk_security_policies_code") @db.VarChar(50)
+  name        String    @db.VarChar(200)
+  description String?
+  policy_type String    @db.VarChar(50)
+  rules       Json
+  valid_from  DateTime  @default(now()) @db.Timestamptz(6)
+  valid_until DateTime? @db.Timestamptz(6)
+  is_active   Boolean   @default(true)
+  is_enforced Boolean   @default(true)
+  metadata    Json?
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([is_active], map: "idx_security_policies_active")
+  @@index([code], map: "idx_security_policies_code")
+  @@index([is_enforced], map: "idx_security_policies_enforced")
+  @@index([policy_type], map: "idx_security_policies_type")
+  @@index([valid_from, valid_until], map: "idx_security_policies_validity")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model subscription_plan_event_groups {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_plan_id String             @db.Uuid
+  event_group_id       String             @db.Uuid
+  is_included          Boolean            @default(true)
+  access_level         String?            @default("STANDARD") @db.VarChar(50)
+  priority_level       Int?               @default(0)
+  metadata             Json?
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime           @default(now()) @db.Timestamptz(6)
+  event_groups         event_groups       @relation(fields: [event_group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_subscription_plan_event_groups_group")
+  subscription_plans   subscription_plans @relation(fields: [subscription_plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_subscription_plan_event_groups_plan")
+
+  @@index([event_group_id], map: "idx_subscription_plan_event_groups_group")
+  @@index([is_included], map: "idx_subscription_plan_event_groups_included")
+  @@index([subscription_plan_id], map: "idx_subscription_plan_event_groups_plan")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model subscription_plan_events {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_plan_id String             @db.Uuid
+  event_id             String             @db.Uuid
+  is_included          Boolean            @default(true)
+  is_priority          Boolean            @default(false)
+  access_level         String?            @default("STANDARD") @db.VarChar(50)
+  metadata             Json?
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime           @default(now()) @db.Timestamptz(6)
+  events               events             @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_subscription_plan_events_event")
+  subscription_plans   subscription_plans @relation(fields: [subscription_plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_subscription_plan_events_plan")
+
+  @@index([event_id], map: "idx_subscription_plan_events_event")
+  @@index([is_included], map: "idx_subscription_plan_events_included")
+  @@index([subscription_plan_id], map: "idx_subscription_plan_events_plan")
+  @@index([is_priority], map: "idx_subscription_plan_events_priority")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model subscription_plan_zones {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_plan_id String             @db.Uuid
+  zone_id              String             @db.VarChar(255)
+  is_included          Boolean            @default(true)
+  price_override       Decimal?           @db.Decimal(10, 2)
+  priority_level       Int?               @default(0)
+  metadata             Json?
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime           @default(now()) @db.Timestamptz(6)
+  subscription_plans   subscription_plans @relation(fields: [subscription_plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_subscription_plan_zones_plan")
+  venue_zones          venue_zones        @relation(fields: [zone_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_subscription_plan_zones_zone")
+
+  @@unique([subscription_plan_id, zone_id], map: "uk_subscription_plan_zones")
+  @@index([is_included], map: "idx_subscription_plan_zones_included")
+  @@index([subscription_plan_id], map: "idx_subscription_plan_zones_plan")
+  @@index([zone_id], map: "idx_subscription_plan_zones_zone")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model subscription_plans {
+  id                             String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                           String                           @unique(map: "uk_subscription_plans_code") @db.VarChar(50)
+  name                           String                           @db.VarChar(200)
+  description                    String?
+  type                           subscription_plan_type
+  price                          Decimal                          @db.Decimal(10, 2)
+  currency                       String                           @default("TND") @db.VarChar(3)
+  max_subscribers                Int?
+  current_subscribers            Int                              @default(0)
+  organizer_id                   String                           @db.Uuid
+  valid_from                     DateTime                         @db.Date
+  valid_until                    DateTime                         @db.Date
+  sale_start_date                DateTime?                        @db.Date
+  sale_end_date                  DateTime?                        @db.Date
+  transferable                   Boolean                          @default(false)
+  max_transfers                  Int?                             @default(0)
+  auto_renew                     Boolean                          @default(false)
+  includes_playoffs              Boolean                          @default(false)
+  priority_booking               Boolean                          @default(false)
+  benefits                       Json?
+  restrictions                   Json?
+  metadata                       Json?
+  is_active                      Boolean                          @default(true)
+  created_at                     DateTime                         @default(now()) @db.Timestamptz(6)
+  updated_at                     DateTime                         @default(now()) @db.Timestamptz(6)
+  order_items                    order_items[]
+  subscription_plan_event_groups subscription_plan_event_groups[]
+  subscription_plan_events       subscription_plan_events[]
+  subscription_plan_zones        subscription_plan_zones[]
+  organizers                     organizers                       @relation(fields: [organizer_id], references: [id], onUpdate: NoAction, map: "fk_subscription_plans_organizer")
+  subscriptions                  subscriptions[]
+
+  @@index([is_active], map: "idx_subscription_plans_active")
+  @@index([code], map: "idx_subscription_plans_code")
+  @@index([current_subscribers, max_subscribers], map: "idx_subscription_plans_current_available")
+  @@index([organizer_id], map: "idx_subscription_plans_organizer")
+  @@index([organizer_id, type], map: "idx_subscription_plans_organizer_type")
+  @@index([price], map: "idx_subscription_plans_price")
+  @@index([sale_start_date, sale_end_date], map: "idx_subscription_plans_sale_dates")
+  @@index([type], map: "idx_subscription_plans_type")
+  @@index([valid_from, valid_until], map: "idx_subscription_plans_validity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model subscriptions {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_number String              @unique(map: "uk_subscriptions_number") @db.VarChar(50)
+  plan_id             String              @db.Uuid
+  user_id             String?             @db.Uuid
+  organizer_id        String?             @db.Uuid
+  status              subscription_status @default(PENDING)
+  start_date          DateTime            @db.Date
+  end_date            DateTime            @db.Date
+  price_paid          Decimal             @db.Decimal(10, 2)
+  currency            String              @default("TND") @db.VarChar(3)
+  transfers_used      Int                 @default(0)
+  next_billing_date   DateTime?           @db.Date
+  auto_renew_enabled  Boolean             @default(false)
+  subscriber_benefits Json?
+  metadata            Json?
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @default(now()) @db.Timestamptz(6)
+  access_rights       access_rights[]
+  organizers          organizers?         @relation(fields: [organizer_id], references: [id], onUpdate: NoAction, map: "fk_subscriptions_organizer")
+  subscription_plans  subscription_plans  @relation(fields: [plan_id], references: [id], onUpdate: NoAction, map: "fk_subscriptions_plan")
+  users               users?              @relation(fields: [user_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_subscriptions_user")
+
+  @@index([user_id, status], map: "idx_subscriptions_active")
+  @@index([start_date, end_date], map: "idx_subscriptions_dates")
+  @@index([organizer_id], map: "idx_subscriptions_organizer")
+  @@index([organizer_id, status], map: "idx_subscriptions_organizer_status")
+  @@index([plan_id], map: "idx_subscriptions_plan")
+  @@index([price_paid], map: "idx_subscriptions_price")
+  @@index([status], map: "idx_subscriptions_status")
+  @@index([user_id], map: "idx_subscriptions_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ticket_templates {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code             String           @unique(map: "uk_ticket_templates_code") @db.VarChar(50)
+  name             String           @db.VarChar(200)
+  description      String?
+  template_type    template_type
+  format           template_format  @default(PDF)
+  orientation      orientation_type @default(PORTRAIT)
+  template_content String
+  style_css        String?
+  paper_size       String?          @default("A4") @db.VarChar(20)
+  margin_top       Int?             @default(20)
+  margin_bottom    Int?             @default(20)
+  margin_left      Int?             @default(20)
+  margin_right     Int?             @default(20)
+  is_active        Boolean          @default(true)
+  is_default       Boolean          @default(false)
+  metadata         Json?
+  created_at       DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@index([is_active], map: "idx_ticket_templates_active")
+  @@index([code], map: "idx_ticket_templates_code")
+  @@index([is_default], map: "idx_ticket_templates_default")
+  @@index([format], map: "idx_ticket_templates_format")
+  @@index([template_type], map: "idx_ticket_templates_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ticket_types {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                   String                @unique(map: "uk_ticket_types_code") @db.VarChar(50)
+  name                   String                @db.VarChar(200)
+  description            String?
+  base_price             Decimal               @db.Decimal(10, 2)
+  currency               String                @default("TND") @db.VarChar(3)
+  organizer_id           String?               @db.Uuid
+  transferable           Boolean               @default(true)
+  refundable             Boolean               @default(false)
+  max_quantity_per_order Int?                  @default(8)
+  valid_from             DateTime?             @db.Date
+  valid_until            DateTime?             @db.Date
+  restrictions           Json?
+  metadata               Json?
+  is_active              Boolean               @default(true)
+  created_at             DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime              @default(now()) @db.Timestamptz(6)
+  event_ticket_config    event_ticket_config[]
+  order_items            order_items[]
+  organizers             organizers?           @relation(fields: [organizer_id], references: [id], onUpdate: NoAction, map: "fk_ticket_types_organizer")
+  tickets                tickets[]
+
+  @@index([is_active], map: "idx_ticket_types_active")
+  @@index([code], map: "idx_ticket_types_code")
+  @@index([organizer_id], map: "idx_ticket_types_organizer")
+  @@index([organizer_id, is_active], map: "idx_ticket_types_organizer_active")
+  @@index([base_price], map: "idx_ticket_types_price")
+  @@index([refundable], map: "idx_ticket_types_refundable")
+  @@index([transferable], map: "idx_ticket_types_transferable")
+  @@index([valid_from, valid_until], map: "idx_ticket_types_validity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model tickets {
+  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_number        String          @unique(map: "uk_tickets_number") @db.VarChar(50)
+  ticket_type_id       String          @db.Uuid
+  user_id              String?         @db.Uuid
+  event_id             String          @db.Uuid
+  zone_id              String?         @db.VarChar(255)
+  seat_id              String?         @db.VarChar(255)
+  organizer_id         String?         @db.Uuid
+  price_paid           Decimal         @db.Decimal(10, 2)
+  currency             String          @default("TND") @db.VarChar(3)
+  special_requirements String?
+  metadata             Json?
+  is_active            Boolean         @default(true)
+  created_at           DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime        @default(now()) @db.Timestamptz(6)
+  access_rights        access_rights[]
+  events               events          @relation(fields: [event_id], references: [id], onUpdate: NoAction, map: "fk_tickets_event")
+  organizers           organizers?     @relation(fields: [organizer_id], references: [id], onUpdate: NoAction, map: "fk_tickets_organizer")
+  seats                seats?          @relation(fields: [seat_id], references: [id], onUpdate: NoAction, map: "fk_tickets_seat")
+  ticket_types         ticket_types    @relation(fields: [ticket_type_id], references: [id], onUpdate: NoAction, map: "fk_tickets_type")
+  users                users?          @relation(fields: [user_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_tickets_user")
+  venue_zones          venue_zones?    @relation(fields: [zone_id], references: [id], onUpdate: NoAction, map: "fk_tickets_zone")
+
+  @@index([is_active], map: "idx_tickets_active")
+  @@index([event_id], map: "idx_tickets_event")
+  @@index([organizer_id], map: "idx_tickets_organizer")
+  @@index([organizer_id, event_id], map: "idx_tickets_organizer_event")
+  @@index([price_paid], map: "idx_tickets_price")
+  @@index([seat_id], map: "idx_tickets_seat")
+  @@index([ticket_type_id], map: "idx_tickets_type")
+  @@index([user_id], map: "idx_tickets_user")
+  @@index([zone_id], map: "idx_tickets_zone")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model user_groups {
+  id                                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                           String            @db.Uuid
+  group_id                          String            @db.Uuid
+  joined_at                         DateTime          @default(now()) @db.Timestamptz(6)
+  valid_until                       DateTime?         @db.Timestamptz(6)
+  status                            membership_status @default(ACTIVE)
+  added_by                          String?           @db.Uuid
+  metadata                          Json?
+  created_at                        DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at                        DateTime          @default(now()) @db.Timestamptz(6)
+  users_user_groups_added_byTousers users?            @relation("user_groups_added_byTousers", fields: [added_by], references: [id], onUpdate: NoAction, map: "fk_user_groups_added_by")
+  groups                            groups            @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_groups_group_id")
+  users_user_groups_user_idTousers  users             @relation("user_groups_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_groups_user_id")
+
+  @@unique([user_id, group_id], map: "uk_user_groups_user_group")
+  @@index([user_id, group_id, status], map: "idx_user_groups_active")
+  @@index([added_by], map: "idx_user_groups_added_by")
+  @@index([group_id], map: "idx_user_groups_group_id")
+  @@index([group_id, status], map: "idx_user_groups_group_status")
+  @@index([status], map: "idx_user_groups_status")
+  @@index([user_id], map: "idx_user_groups_user_id")
+  @@index([user_id, status], map: "idx_user_groups_user_status")
+  @@index([joined_at, valid_until], map: "idx_user_groups_validity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model user_profiles {
+  id                       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                  String                  @unique(map: "uk_user_profiles_user_id") @db.Uuid
+  date_of_birth            DateTime?               @db.Date
+  gender                   gender?
+  address                  String?
+  city                     String?                 @db.VarChar(100)
+  country                  String                  @default("TN") @db.VarChar(2)
+  postal_code              String?                 @db.VarChar(20)
+  language                 String                  @default("fr") @db.VarChar(5)
+  timezone                 String?                 @default("Africa/Tunis") @db.VarChar(50)
+  notifications            Boolean                 @default(true)
+  newsletter               Boolean                 @default(false)
+  supporter_since          DateTime?               @db.Date
+  favorite_player          String?                 @db.VarChar(100)
+  favorite_team_id         String?                 @db.Uuid
+  preferences              Json?
+  emergency_contact        Json?
+  created_at               DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                @default(now()) @db.Timestamptz(6)
+  identity_document_type   identity_document_type?
+  identity_document_number String?                 @db.VarChar(50)
+  identity_verified_at     DateTime?               @db.Timestamptz(6)
+  identity_verified        Boolean                 @default(false)
+  participants             participants?           @relation(fields: [favorite_team_id], references: [id], onUpdate: NoAction, map: "fk_user_profiles_favorite_team")
+  users                    users                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_profiles_user_id")
+
+  @@index([date_of_birth], map: "idx_user_profiles_birth_year")
+  @@index([city, country], map: "idx_user_profiles_city_country")
+  @@index([favorite_team_id], map: "idx_user_profiles_favorite_team")
+  @@index([gender], map: "idx_user_profiles_gender")
+  @@index([identity_document_type, identity_document_number], map: "idx_user_profiles_identity_lookup")
+  @@index([identity_document_number], map: "idx_user_profiles_identity_number")
+  @@index([identity_document_type], map: "idx_user_profiles_identity_type")
+  @@index([identity_verified], map: "idx_user_profiles_identity_verified")
+  @@index([language], map: "idx_user_profiles_language")
+  @@index([preferences], map: "idx_user_profiles_preferences", type: Gin)
+  @@index([supporter_since], map: "idx_user_profiles_supporter_since")
+  @@index([user_id], map: "idx_user_profiles_user_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model user_roles {
+  id                                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                             String            @db.Uuid
+  role_id                             String            @db.Uuid
+  assigned_at                         DateTime          @default(now()) @db.Timestamptz(6)
+  valid_until                         DateTime?         @db.Timestamptz(6)
+  status                              membership_status @default(ACTIVE)
+  assigned_by                         String?           @db.Uuid
+  notes                               String?
+  created_at                          DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at                          DateTime          @default(now()) @db.Timestamptz(6)
+  users_user_roles_assigned_byTousers users?            @relation("user_roles_assigned_byTousers", fields: [assigned_by], references: [id], onUpdate: NoAction, map: "fk_user_roles_assigned_by")
+  roles                               roles             @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_roles_role_id")
+  users_user_roles_user_idTousers     users             @relation("user_roles_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_roles_user_id")
+
+  @@unique([user_id, role_id], map: "uk_user_roles_user_role")
+  @@index([user_id, role_id, status], map: "idx_user_roles_active")
+  @@index([assigned_by], map: "idx_user_roles_assigned_by")
+  @@index([role_id], map: "idx_user_roles_role_id")
+  @@index([status], map: "idx_user_roles_status")
+  @@index([user_id], map: "idx_user_roles_user_id")
+  @@index([user_id, status], map: "idx_user_roles_user_status")
+  @@index([assigned_at, valid_until], map: "idx_user_roles_validity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model user_sessions {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  session_token      String   @unique(map: "uk_user_sessions_token") @db.VarChar(255)
+  user_id            String   @db.Uuid
+  ip_address         String   @db.Inet
+  user_agent         String?
+  device_fingerprint String?  @db.VarChar(255)
+  geolocation        Json?
+  is_active          Boolean  @default(true)
+  last_activity      DateTime @default(now()) @db.Timestamptz(6)
+  expires_at         DateTime @db.Timestamptz(6)
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime @default(now()) @db.Timestamptz(6)
+  users              users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_sessions_user")
+
+  @@index([is_active], map: "idx_user_sessions_active")
+  @@index([device_fingerprint], map: "idx_user_sessions_device_fingerprint")
+  @@index([expires_at, is_active], map: "idx_user_sessions_expired")
+  @@index([expires_at], map: "idx_user_sessions_expires_at")
+  @@index([ip_address], map: "idx_user_sessions_ip_address")
+  @@index([last_activity], map: "idx_user_sessions_last_activity")
+  @@index([session_token], map: "idx_user_sessions_token")
+  @@index([user_id], map: "idx_user_sessions_user")
+  @@index([user_id, last_activity, is_active], map: "idx_user_sessions_user_active")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  id                                                                  String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                                                               String                      @unique(map: "uk_users_email") @db.VarChar(255)
+  phone                                                               String?                     @db.VarChar(20)
+  first_name                                                          String                      @db.VarChar(100)
+  last_name                                                           String                      @db.VarChar(100)
+  avatar                                                              String?
+  password                                                            String                      @db.VarChar(255)
+  is_active                                                           Boolean                     @default(true)
+  email_verified                                                      DateTime?                   @db.Timestamptz(6)
+  phone_verified                                                      DateTime?                   @db.Timestamptz(6)
+  created_at                                                          DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                                                          DateTime                    @default(now()) @db.Timestamptz(6)
+  last_login                                                          DateTime?                   @db.Timestamptz(6)
+  metadata                                                            Json?                       @default("{}")
+  access_control_log                                                  access_control_log[]
+  access_rights                                                       access_rights[]
+  access_transactions_log_access_transactions_log_from_user_idTousers access_transactions_log[]   @relation("access_transactions_log_from_user_idTousers")
+  access_transactions_log_access_transactions_log_to_user_idTousers   access_transactions_log[]   @relation("access_transactions_log_to_user_idTousers")
+  api_clients                                                         api_clients[]
+  audit_logs                                                          audit_logs[]
+  blacklist                                                           blacklist[]
+  events_events_created_byTousers                                     events[]                    @relation("events_created_byTousers")
+  events_events_published_byTousers                                   events[]                    @relation("events_published_byTousers")
+  login_attempts                                                      login_attempts[]
+  mfa_tokens                                                          mfa_tokens[]
+  orders                                                              orders[]
+  organizers_organizers_created_byTousers                             organizers[]                @relation("organizers_created_byTousers")
+  organizers_organizers_updated_byTousers                             organizers[]                @relation("organizers_updated_byTousers")
+  organizers_organizers_validated_byTousers                           organizers[]                @relation("organizers_validated_byTousers")
+  refunds_refunds_approved_byTousers                                  refunds[]                   @relation("refunds_approved_byTousers")
+  refunds_refunds_requested_byTousers                                 refunds[]                   @relation("refunds_requested_byTousers")
+  security_events                                                     security_events[]
+  subscriptions                                                       subscriptions[]
+  tickets                                                             tickets[]
+  user_groups_user_groups_added_byTousers                             user_groups[]               @relation("user_groups_added_byTousers")
+  user_groups_user_groups_user_idTousers                              user_groups[]               @relation("user_groups_user_idTousers")
+  user_profiles                                                       user_profiles?
+  user_roles_user_roles_assigned_byTousers                            user_roles[]                @relation("user_roles_assigned_byTousers")
+  user_roles_user_roles_user_idTousers                                user_roles[]                @relation("user_roles_user_idTousers")
+  user_sessions                                                       user_sessions[]
+  venue_organizer_relations                                           venue_organizer_relations[]
+
+  @@index([is_active], map: "idx_users_active")
+  @@index([created_at], map: "idx_users_created_at")
+  @@index([email], map: "idx_users_email")
+  @@index([first_name, last_name], map: "idx_users_full_name")
+  @@index([last_login], map: "idx_users_last_login")
+  @@index([phone], map: "idx_users_phone")
+  @@index([email_verified, phone_verified], map: "idx_users_verified")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model venue_amenities {
+  id              String           @id @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(255)
+  mapping_id      String           @db.VarChar(255)
+  zone_id         String?          @db.VarChar(255)
+  name            String           @db.VarChar(200)
+  category        amenity_category
+  description     String?
+  is_free         Boolean          @default(true)
+  price           Decimal?         @db.Decimal(8, 2)
+  currency        String?          @default("TND") @db.VarChar(3)
+  is_available    Boolean          @default(true)
+  operating_hours Json?
+  capacity        Int?
+  coordinates     Json?
+  metadata        Json?
+  created_at      DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime         @default(now()) @db.Timestamptz(6)
+  venue_mappings  venue_mappings   @relation(fields: [mapping_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_amenities_mapping")
+  venue_zones     venue_zones?     @relation(fields: [zone_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_amenities_zone")
+
+  @@index([is_available], map: "idx_venue_amenities_available")
+  @@index([category], map: "idx_venue_amenities_category")
+  @@index([is_free], map: "idx_venue_amenities_free")
+  @@index([mapping_id], map: "idx_venue_amenities_mapping")
+  @@index([price], map: "idx_venue_amenities_price")
+  @@index([zone_id], map: "idx_venue_amenities_zone")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model venue_mappings {
+  id                                               String            @id @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(255)
+  venue_id                                         String            @db.VarChar(255)
+  name                                             String            @db.VarChar(200)
+  code                                             String            @db.VarChar(100)
+  description                                      String?
+  mapping_type                                     mapping_type
+  event_categories                                 String[]
+  effective_capacity                               Int
+  valid_from                                       DateTime?         @db.Timestamptz(6)
+  valid_until                                      DateTime?         @db.Timestamptz(6)
+  is_active                                        Boolean           @default(true)
+  metadata                                         Json?
+  created_at                                       DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at                                       DateTime          @default(now()) @db.Timestamptz(6)
+  access_points                                    access_points[]
+  events                                           events[]
+  venue_amenities                                  venue_amenities[]
+  venues_venue_mappings_venue_idTovenues           venues            @relation("venue_mappings_venue_idTovenues", fields: [venue_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_mappings_venue")
+  venue_media                                      venue_media[]
+  venue_zones                                      venue_zones[]
+  venues_venues_default_mapping_idTovenue_mappings venues[]          @relation("venues_default_mapping_idTovenue_mappings")
+
+  @@unique([venue_id, code], map: "uk_venue_mappings_code")
+  @@index([is_active], map: "idx_venue_mappings_active")
+  @@index([effective_capacity], map: "idx_venue_mappings_capacity")
+  @@index([event_categories], map: "idx_venue_mappings_categories", type: Gin)
+  @@index([mapping_type], map: "idx_venue_mappings_type")
+  @@index([valid_from, valid_until], map: "idx_venue_mappings_validity")
+  @@index([venue_id], map: "idx_venue_mappings_venue")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model venue_media {
+  id             String          @id @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(255)
+  venue_id       String?         @db.VarChar(255)
+  mapping_id     String?         @db.VarChar(255)
+  zone_id        String?         @db.VarChar(255)
+  seat_id        String?         @db.VarChar(255)
+  title          String          @db.VarChar(200)
+  media_type     media_type
+  category       media_category
+  file_url       String
+  file_size      Int?
+  mime_type      String?         @db.VarChar(100)
+  display_order  Int?            @default(0)
+  is_featured    Boolean         @default(false)
+  is_public      Boolean         @default(true)
+  description    String?
+  metadata       Json?
+  created_at     DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime        @default(now()) @db.Timestamptz(6)
+  venue_mappings venue_mappings? @relation(fields: [mapping_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_media_mapping")
+  seats          seats?          @relation(fields: [seat_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_media_seat")
+  venues         venues?         @relation(fields: [venue_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_media_venue")
+  venue_zones    venue_zones?    @relation(fields: [zone_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_media_zone")
+
+  @@index([category], map: "idx_venue_media_category")
+  @@index([is_featured], map: "idx_venue_media_featured")
+  @@index([mapping_id], map: "idx_venue_media_mapping")
+  @@index([is_public], map: "idx_venue_media_public")
+  @@index([seat_id], map: "idx_venue_media_seat")
+  @@index([media_type], map: "idx_venue_media_type")
+  @@index([venue_id], map: "idx_venue_media_venue")
+  @@index([zone_id], map: "idx_venue_media_zone")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model venue_organizer_relations {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  venue_id           String              @db.VarChar(255)
+  organizer_id       String              @db.Uuid
+  relation_type      venue_relation_type
+  valid_from         DateTime            @default(dbgenerated("CURRENT_DATE")) @db.Date
+  valid_until        DateTime?           @db.Date
+  is_active          Boolean             @default(true)
+  rental_rate        Decimal?            @db.Decimal(10, 2)
+  currency           String?             @default("TND") @db.VarChar(3)
+  payment_terms      Int?                @default(30)
+  priority_level     Int?                @default(0)
+  preferred_days     String[]
+  preferred_times    Json?
+  exclusive_access   Boolean             @default(false)
+  special_conditions String?
+  contract_reference String?             @db.VarChar(100)
+  notes              String?
+  metadata           Json?
+  created_by         String?             @db.Uuid
+  created_at         DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime            @default(now()) @db.Timestamptz(6)
+  users              users?              @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_venue_organizer_created_by")
+  organizers         organizers          @relation(fields: [organizer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_organizer_organizer")
+  venues             venues              @relation(fields: [venue_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_organizer_venue")
+
+  @@unique([venue_id, organizer_id, relation_type], map: "uk_venue_organizer_unique")
+  @@index([is_active], map: "idx_venue_organizer_active")
+  @@index([venue_id, priority_level(sort: Desc), relation_type, is_active], map: "idx_venue_organizer_active_priority")
+  @@index([created_by], map: "idx_venue_organizer_created_by")
+  @@index([valid_from, valid_until], map: "idx_venue_organizer_dates")
+  @@index([organizer_id], map: "idx_venue_organizer_organizer")
+  @@index([priority_level(sort: Desc)], map: "idx_venue_organizer_priority")
+  @@index([rental_rate], map: "idx_venue_organizer_rental_rate")
+  @@index([relation_type], map: "idx_venue_organizer_type")
+  @@index([venue_id], map: "idx_venue_organizer_venue")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model venue_zones {
+  id                      String                    @id @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(255)
+  mapping_id              String                    @db.VarChar(255)
+  parent_zone_id          String?                   @db.VarChar(255)
+  name                    String                    @db.VarChar(200)
+  code                    String                    @db.VarChar(100)
+  zone_type               zone_type
+  category                zone_category
+  level                   Int                       @default(0)
+  capacity                Int
+  base_price              Decimal                   @default(0) @db.Decimal(10, 2)
+  currency                String                    @default("TND") @db.VarChar(3)
+  coordinates             Json?
+  description             String?
+  amenities               String[]
+  is_accessible           Boolean                   @default(false)
+  requires_special_access Boolean                   @default(false)
+  metadata                Json?
+  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  access_rights           access_rights[]
+  event_ticket_config     event_ticket_config[]
+  seats                   seats[]
+  subscription_plan_zones subscription_plan_zones[]
+  tickets                 tickets[]
+  venue_amenities         venue_amenities[]
+  venue_media             venue_media[]
+  venue_mappings          venue_mappings            @relation(fields: [mapping_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_zones_mapping")
+  venue_zones             venue_zones?              @relation("venue_zonesTovenue_zones", fields: [parent_zone_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_venue_zones_parent")
+  other_venue_zones       venue_zones[]             @relation("venue_zonesTovenue_zones")
+  zone_mapping_overrides  zone_mapping_overrides[]
+
+  @@unique([mapping_id, code], map: "uk_venue_zones_code")
+  @@index([is_accessible], map: "idx_venue_zones_accessible")
+  @@index([amenities], map: "idx_venue_zones_amenities", type: Gin)
+  @@index([capacity], map: "idx_venue_zones_capacity")
+  @@index([category], map: "idx_venue_zones_category")
+  @@index([coordinates], map: "idx_venue_zones_coordinates", type: Gin)
+  @@index([level], map: "idx_venue_zones_level")
+  @@index([mapping_id], map: "idx_venue_zones_mapping")
+  @@index([parent_zone_id], map: "idx_venue_zones_parent")
+  @@index([base_price], map: "idx_venue_zones_price")
+  @@index([zone_type], map: "idx_venue_zones_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model venues {
+  id                                                       String                      @id @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(255)
+  name                                                     String                      @db.VarChar(200)
+  slug                                                     String                      @unique(map: "uk_venues_slug") @db.VarChar(200)
+  address                                                  String
+  city                                                     String                      @db.VarChar(100)
+  postal_code                                              String?                     @db.VarChar(20)
+  country                                                  String                      @default("TN") @db.VarChar(2)
+  latitude                                                 Decimal?                    @db.Decimal(10, 8)
+  longitude                                                Decimal?                    @db.Decimal(11, 8)
+  max_capacity                                             Int
+  description                                              String?
+  images                                                   String[]
+  global_amenities                                         String[]
+  primary_owner_id                                         String?                     @db.Uuid
+  primary_manager_id                                       String?                     @db.Uuid
+  default_mapping_id                                       String?                     @db.VarChar(255)
+  is_active                                                Boolean                     @default(true)
+  metadata                                                 Json?
+  created_at                                               DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                                               DateTime                    @default(now()) @db.Timestamptz(6)
+  blacklist                                                blacklist[]
+  events                                                   events[]
+  venue_mappings_venue_mappings_venue_idTovenues           venue_mappings[]            @relation("venue_mappings_venue_idTovenues")
+  venue_media                                              venue_media[]
+  venue_organizer_relations                                venue_organizer_relations[]
+  venue_mappings_venues_default_mapping_idTovenue_mappings venue_mappings?             @relation("venues_default_mapping_idTovenue_mappings", fields: [default_mapping_id], references: [id], onUpdate: NoAction, map: "fk_venues_default_mapping")
+  organizers_venues_primary_manager_idToorganizers         organizers?                 @relation("venues_primary_manager_idToorganizers", fields: [primary_manager_id], references: [id], onUpdate: NoAction, map: "fk_venues_primary_manager")
+  organizers_venues_primary_owner_idToorganizers           organizers?                 @relation("venues_primary_owner_idToorganizers", fields: [primary_owner_id], references: [id], onUpdate: NoAction, map: "fk_venues_primary_owner")
+
+  @@index([is_active], map: "idx_venues_active")
+  @@index([city, max_capacity(sort: Desc), is_active], map: "idx_venues_api_location")
+  @@index([max_capacity], map: "idx_venues_capacity")
+  @@index([city, country], map: "idx_venues_city_country")
+  @@index([latitude, longitude], map: "idx_venues_coordinates")
+  @@index([default_mapping_id], map: "idx_venues_default_mapping")
+  @@index([primary_manager_id], map: "idx_venues_primary_manager")
+  @@index([primary_owner_id], map: "idx_venues_primary_owner")
+  @@index([slug], map: "idx_venues_slug")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model zone_mapping_overrides {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id            String      @db.Uuid
+  zone_id             String      @db.VarChar(255)
+  name_override       String?     @db.VarChar(200)
+  capacity_override   Int?
+  price_override      Decimal?    @db.Decimal(10, 2)
+  access_restrictions Json?
+  metadata            Json?
+  created_at          DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime    @default(now()) @db.Timestamptz(6)
+  events              events      @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_zone_mapping_overrides_event")
+  venue_zones         venue_zones @relation(fields: [zone_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_zone_mapping_overrides_zone")
+
+  @@unique([event_id, zone_id], map: "uk_zone_mapping_overrides")
+  @@index([event_id], map: "idx_zone_mapping_overrides_event")
+  @@index([zone_id], map: "idx_zone_mapping_overrides_zone")
+}
+
+model api_access_logs {
+  id          BigInt      @id @default(autoincrement())
+  key_id      String      @db.Uuid
+  client_id   String      @db.Uuid
+  endpoint    String      @db.VarChar(255)
+  ip          String?     @db.Inet
+  status_code Int?
+  used_at     DateTime    @default(now()) @db.Timestamptz(6)
+  api_clients api_clients @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  api_keys    api_keys    @relation(fields: [key_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model api_clients {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String            @db.VarChar(100)
+  owner_id        String?           @db.Uuid
+  description     String?
+  status          api_status        @default(ACTIVE)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  api_access_logs api_access_logs[]
+  users           users?            @relation(fields: [owner_id], references: [id], onUpdate: NoAction)
+  api_keys        api_keys[]
+}
+
+model api_keys {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id       String            @db.Uuid
+  key             String            @unique @db.VarChar(64)
+  secret_hash     String            @db.VarChar(128)
+  status          api_status        @default(ACTIVE)
+  expires_at      DateTime?         @db.Timestamptz(6)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  last_used_at    DateTime?         @db.Timestamptz(6)
+  api_access_logs api_access_logs[]
+  api_clients     api_clients       @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum access_action {
+  ENTRY
+  EXIT
+  RE_ENTRY
+  ZONE_CHANGE
+  VALIDATION
+  CHECK
+  TRANSFER
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum access_right_status {
+  VALID
+  USED
+  EXPIRED
+  CANCELLED
+  TRANSFERRED
+  REFUNDED
+  BLOCKED
+  PENDING
+  SUSPENDED
+}
+
+enum access_source_type {
+  SUBSCRIPTION
+  TICKET
+  INVITATION
+  STAFF_PASS
+  PRESS_PASS
+  VIP_PASS
+  COMPLEMENTARY
+  SEASON_PASS
+  SPONSOR_PASS
+  ARTIST_PASS
+}
+
+enum access_status {
+  SUCCESS
+  DENIED
+  WARNING
+  ERROR
+  PARTIAL_SUCCESS
+  PENDING
+}
+
+enum access_transaction_type {
+  PURCHASE
+  TRANSFER
+  REFUND
+  CANCELLATION
+  UPGRADE
+  DOWNGRADE
+  SUSPENSION
+  RESTORATION
+  RENEWAL
+  EXCHANGE
+}
+
+enum access_type {
+  MAIN_ENTRANCE
+  VIP_ENTRANCE
+  STAFF_ENTRANCE
+  EMERGENCY_EXIT
+  SERVICE_ENTRANCE
+  DISABLED_ENTRANCE
+  MEDIA_ENTRANCE
+  PLAYER_ENTRANCE
+}
+
+enum amenity_category {
+  PARKING
+  FOOD_BEVERAGE
+  ENTERTAINMENT
+  ACCESSIBILITY
+  CONNECTIVITY
+  SHOPPING
+  HEALTH_SAFETY
+  COMFORT
+  TRANSPORT
+  CHILDCARE
+}
+
+enum appeal_status {
+  NONE
+  PENDING
+  ACCEPTED
+  REJECTED
+  UNDER_REVIEW
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum audit_action {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ACCESS_GRANTED
+  ACCESS_DENIED
+  EXPORT
+  IMPORT
+  BACKUP
+  RESTORE
+  APPROVE
+  REJECT
+  SUSPEND
+  ACTIVATE
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum blacklist_scope {
+  EVENT
+  VENUE
+  ORGANIZER
+  GLOBAL
+  CATEGORY
+  TEMPORAL
+}
+
+enum blacklist_type {
+  USER
+  EMAIL
+  PHONE
+  IP
+  DEVICE
+  CARD
+  QR_CODE
+  IDENTITY_DOC
+}
+
+enum commission_status {
+  PENDING
+  CALCULATED
+  APPROVED
+  DISPUTED
+  PAID
+  CANCELLED
+  PARTIAL_PAID
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum denial_reason {
+  INVALID_QR
+  ALREADY_USED
+  EXPIRED
+  WRONG_EVENT
+  WRONG_ZONE
+  WRONG_TIME
+  BLACKLISTED
+  TECHNICAL_ERROR
+  INSUFFICIENT_RIGHTS
+  CAPACITY_FULL
+  NOT_YET_VALID
+  DUPLICATE_ENTRY
+  CANCELLED_TICKET
+  SUSPENDED_USER
+  DEVICE_ERROR
+}
+
+enum event_group_type {
+  SEASON
+  TOURNAMENT
+  FESTIVAL
+  CONFERENCE
+  SERIES
+  CHAMPIONSHIP
+  LEAGUE
+  CUP
+  WORKSHOP_SERIES
+  EXHIBITION
+  ROADSHOW
+}
+
+enum event_media_type {
+  POSTER
+  PHOTO
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LIVESTREAM
+  HIGHLIGHT
+  INTERVIEW
+  TRAILER
+  REPLAY
+  TEASER
+}
+
+enum event_participant_role {
+  HOME_TEAM
+  AWAY_TEAM
+  MAIN_ARTIST
+  OPENING_ACT
+  GUEST
+  KEYNOTE_SPEAKER
+  PANELIST
+  MODERATOR
+  SPONSOR
+  REFEREE
+  OFFICIAL
+  SUPPORTING_ACT
+  HOST
+  SPECIAL_GUEST
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum event_status {
+  DRAFT
+  SCHEDULED
+  CONFIRMED
+  PUBLISHED
+  LIVE
+  FINISHED
+  CANCELLED
+  POSTPONED
+  SUSPENDED
+  RESCHEDULED
+}
+
+enum event_visibility {
+  PUBLIC
+  PRIVATE
+  MEMBERS_ONLY
+  VIP_ONLY
+  STAFF_ONLY
+  INVITE_ONLY
+  PREVIEW
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum group_type {
+  ACCESS
+  MARKETING
+  MIXED
+  ZONE_ASSIGNMENT
+  TEMPORAL
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum identity_document_type {
+  CIN
+  PASSPORT
+  DRIVING_LICENSE
+  RESIDENCE_PERMIT
+  MILITARY_ID
+  STUDENT_ID
+  PROFESSIONAL_ID
+  OTHER
+}
+
+enum mapping_type {
+  DEFAULT
+  EVENT_SPECIFIC
+  SEASONAL
+  MAINTENANCE
+  EMERGENCY
+  SPECIAL_EVENT
+  REDUCED_CAPACITY
+}
+
+enum media_category {
+  SEAT_VIEW
+  ZONE_OVERVIEW
+  VENUE_OVERVIEW
+  ACCESS_GUIDE
+  AMENITIES_INFO
+  SAFETY_INFO
+  PROMOTIONAL
+  HISTORICAL
+  VIRTUAL_TOUR
+}
+
+enum media_type {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  AUDIO
+  VR_360
+  PANORAMA
+  PLAN
+  INTERACTIVE_MAP
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum membership_status {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  CANCELLED
+  TERMINATED
+}
+
+enum mfa_method {
+  SMS
+  EMAIL
+  TOTP
+  APP_PUSH
+  HARDWARE_TOKEN
+  BIOMETRIC
+  BACKUP_CODES
+}
+
+enum order_item_type {
+  SUBSCRIPTION
+  TICKET
+  MERCHANDISE
+  PARKING
+  HOSPITALITY
+  MEMBERSHIP
+  UPGRADE
+  FEE
+  SERVICE
+  INSURANCE
+}
+
+enum order_status {
+  DRAFT
+  PENDING
+  CONFIRMED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  EXPIRED
+  PARTIALLY_FULFILLED
+  ON_HOLD
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum organizer_status {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+  BLACKLISTED
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum organizer_type {
+  SPORTS_CLUB
+  CULTURAL_PRODUCER
+  CORPORATE
+  ASSOCIATION
+  FEDERATION
+  INSTITUTION
+  PRIVATE_COMPANY
+}
+
+enum orientation_type {
+  PORTRAIT
+  LANDSCAPE
+}
+
+enum participant_relationship_type {
+  RIVALRY
+  PARTNERSHIP
+  SUBSIDIARY
+  ALLIANCE
+  COMPETITION
+  COLLABORATION
+  FEUD
+  FRIENDSHIP
+  COACHING
+  SPONSORSHIP
+  MANAGEMENT
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum participant_type {
+  TEAM
+  ARTIST
+  SPEAKER
+  ORGANIZATION
+  INDIVIDUAL
+  COMPANY
+  REFEREE
+  OFFICIAL
+  BAND
+  COMEDIAN
+  POLITICAL_FIGURE
+  ATHLETE
+}
+
+enum payment_method_type {
+  MOBILE_WALLET
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  CASH
+  CRYPTOCURRENCY
+  GIFT_CARD
+  PAYPAL
+  APPLE_PAY
+  GOOGLE_PAY
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum payment_status {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+  DISPUTED
+  PARTIAL_REFUND
+  EXPIRED
+  AUTHORIZED
+}
+
+enum pricing_rule_type {
+  EARLY_BIRD
+  LAST_MINUTE
+  GROUP_DISCOUNT
+  STUDENT_DISCOUNT
+  LOYALTY_DISCOUNT
+  SEASONAL
+  DYNAMIC
+  PROMOTIONAL
+  VOLUME_DISCOUNT
+  MEMBER_DISCOUNT
+  CORPORATE_RATE
+}
+
+enum purchase_channel {
+  WEB
+  MOBILE_APP
+  PHONE
+  COUNTER
+  PARTNER
+  API
+  KIOSK
+  AGENT
+  RESELLER
+}
+
+enum refund_method {
+  ORIGINAL
+  CREDIT_NOTE
+  BANK_TRANSFER
+  CASH
+  VOUCHER
+  OTHER
+}
+
+enum refund_status {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REJECTED
+}
+
+enum refund_type {
+  FULL
+  PARTIAL
+  CREDIT_NOTE
+  VOUCHER
+}
+
+enum restriction_type {
+  AGE_LIMIT
+  DRESS_CODE
+  GEOGRAPHICAL
+  MEMBERSHIP
+  SECURITY
+  CAPACITY
+  SPECIAL_NEEDS
+  CONTENT_WARNING
+  ID_REQUIRED
+  VACCINATION
+  BEHAVIOR
+}
+
+enum seat_layout {
+  NUMBERED
+  TABLE
+  SECTION
+  STANDING
+  BENCH
+  LOGE
+}
+
+enum seat_status {
+  AVAILABLE
+  SOLD
+  BLOCKED
+  MAINTENANCE
+  RESERVED
+  HELD
+}
+
+enum seat_type {
+  STANDARD
+  PREMIUM
+  VIP
+  ACCESSIBLE
+  OBSTRUCTED
+  AISLE
+  CORNER
+  FRONT_ROW
+  BACK_ROW
+}
+
+enum security_level {
+  PUBLIC
+  LOW
+  STANDARD
+  HIGH
+  MAXIMUM
+  RESTRICTED
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum severity_level {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  EMERGENCY
+}
+
+enum subscription_plan_type {
+  SEASON
+  PARTIAL
+  VIP
+  STUDENT
+  FAMILY
+  CORPORATE
+  LOYALTY
+  FLEX
+  PREMIUM
+  BASIC
+}
+
+enum subscription_status {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  CANCELLED
+  REFUNDED
+  TRANSFERRED
+  UPGRADED
+  DOWNGRADED
+}
+
+enum template_format {
+  PDF
+  HTML
+  PNG
+  THERMAL
+  EMAIL
+  SMS
+}
+
+enum template_type {
+  TICKET
+  SUBSCRIPTION
+  INVITATION
+  PASS
+  RECEIPT
+  CONFIRMATION
+  REMINDER
+}
+
+/// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+enum venue_relation_type {
+  OWNER
+  MANAGER
+  TENANT
+  PARTNER
+}
+
+enum webhook_status {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+  RETRY
+}
+
+enum zone_category {
+  PREMIUM
+  STANDARD
+  BASIC
+  VIP
+  ACCESSIBLE
+  COMPLIMENTARY
+  CORPORATE
+  STUDENT
+  CHILD
+}
+
+enum zone_type {
+  SEATING_AREA
+  STANDING_AREA
+  VIP_AREA
+  SERVICE_AREA
+  STAFF_AREA
+  EMERGENCY_AREA
+  DISABLED_AREA
+  FAMILY_AREA
+  CORPORATE_AREA
+  PRESS_AREA
+}
+
+enum api_status {
+  ACTIVE
+  DISABLED
+  REVOKED
+  EXPIRED
+}

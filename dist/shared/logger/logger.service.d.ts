@@ -1,0 +1,33 @@
+import { LoggerService as NestLoggerService } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+export declare class LoggerService implements NestLoggerService {
+    private readonly configService;
+    private logger;
+    private context;
+    constructor(configService: ConfigService);
+    private setupLogger;
+    setContext(context: string): void;
+    createChildLogger(context: string): LoggerService;
+    log(message: any, context?: string, ...meta: any[]): void;
+    info(message: any, context?: string, ...meta: any[]): void;
+    warn(message: any, context?: string, ...meta: any[]): void;
+    error(message: any, trace?: string, context?: string, ...meta: any[]): void;
+    debug(message: any, context?: string, ...meta: any[]): void;
+    verbose(message: any, context?: string, ...meta: any[]): void;
+    logBusinessEvent(event: string, data: any, userId?: string, organizerId?: string, metadata?: any): void;
+    logPaymentEvent(orderId: string, amount: number, currency: string, status: 'initiated' | 'processing' | 'completed' | 'failed' | 'refunded', provider?: string, metadata?: any): void;
+    logSecurityEvent(event: string, userId?: string, ip?: string, userAgent?: string, metadata?: any): void;
+    logAuthEvent(event: 'login' | 'logout' | 'register' | 'password_reset' | 'email_verification' | 'failed_login', userId?: string, email?: string, ip?: string, userAgent?: string, metadata?: any): void;
+    logPerformanceEvent(operation: string, duration: number, metadata?: any): void;
+    logErrorEvent(error: Error, context?: string, userId?: string, metadata?: any): void;
+    logApiEvent(method: string, url: string, statusCode: number, duration: number, userId?: string, ip?: string, userAgent?: string, metadata?: any): void;
+    logCacheEvent(event: 'hit' | 'miss' | 'set' | 'del' | 'expire', key: string, ttl?: number, metadata?: any): void;
+    logJobEvent(event: 'created' | 'processing' | 'completed' | 'failed' | 'retry', jobType: string, jobId: string, duration?: number, metadata?: any): void;
+    logWebhookEvent(event: 'received' | 'processed' | 'failed' | 'retry', provider: string, webhookType: string, webhookId?: string, metadata?: any): void;
+    logNotificationEvent(event: 'sent' | 'delivered' | 'failed' | 'opened' | 'clicked', type: 'email' | 'sms' | 'push' | 'in_app', recipient: string, notificationId?: string, metadata?: any): void;
+    startOperation(operationName: string, metadata?: any): string;
+    endOperation(operationName: string, operationId: string, success: boolean, duration?: number, metadata?: any): void;
+    logStructured(level: 'info' | 'warn' | 'error' | 'debug' | 'verbose', message: string, data: any): void;
+    logMetrics(component: string, metrics: any): void;
+    logHealthCheck(component: string, status: 'healthy' | 'unhealthy' | 'degraded', details?: any): void;
+}

@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix Admin - Gestion des Événements</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .admin-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #475569;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .nav-menu {
+            padding: 20px 0;
+        }
+        
+        .nav-section {
+            margin-bottom: 30px;
+        }
+        
+        .nav-section-title {
+            padding: 0 24px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            color: #e2e8f0;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(90deg, #DC143C, #B91C3C);
+            color: white;
+            border-right: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            min-height: 100vh;
+        }
+        
+        .top-bar {
+            background: white;
+            padding: 20px 32px;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .page-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .breadcrumb {
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .breadcrumb a {
+            color: #64748b;
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            color: #DC143C;
+        }
+        
+        .content-area {
+            padding: 32px;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, shadow 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgba(0,0,0,0.1);
+        }
+        
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .stat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .stat-icon.events {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+        
+        .stat-icon.upcoming {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        
+        .stat-icon.participants {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .stat-icon.revenue {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .stat-change {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .stat-change.positive {
+            color: #10b981;
+        }
+        
+        .stat-change.negative {
+            color: #ef4444;
+        }
+        
+        /* Action Bar */
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+            background: white;
+            padding: 20px 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        
+        .action-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex: 1;
+        }
+        
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 48px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .filter-select {
+            padding: 10px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px -3px rgba(220, 20, 60, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        /* Events Grid */
+        .events-section {
+            margin-bottom: 40px;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .events-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 24px;
+        }
+        
+        .event-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, shadow 0.2s;
+            cursor: pointer;
+        }
+        
+        .event-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+        
+        .event-header {
+            height: 160px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .event-type {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .event-status {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .event-status.scheduled {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        
+        .event-status.live {
+            background: #fee2e2;
+            color: #dc2626;
+            animation: pulse 2s infinite;
+        }
+        
+        .event-status.completed {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .event-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .event-date {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .event-info {
+            padding: 24px;
+        }
+        
+        .event-participants {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .participant {
+            flex: 1;
+            text-align: center;
+        }
+        
+        .participant-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin: 0 auto 8px;
+        }
+        
+        .participant-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .vs-separator {
+            font-size: 18px;
+            font-weight: 700;
+            color: #64748b;
+        }
+        
+        .event-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .event-stat {
+            text-align: center;
+        }
+        
+        .event-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #DC143C;
+            margin-bottom: 4px;
+        }
+        
+        .event-stat-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .event-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .event-actions .btn {
+            flex: 1;
+            justify-content: center;
+            padding: 10px 16px;
+            font-size: 13px;
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            margin-bottom: 32px;
+        }
+        
+        .quick-actions h3 {
+            color: #1e293b;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        
+        .quick-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        
+        .quick-action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            text-decoration: none;
+            color: #475569;
+            transition: all 0.2s;
+        }
+        
+        .quick-action-btn:hover {
+            border-color: #DC143C;
+            background: #fef2f2;
+            color: #DC143C;
+            transform: translateY(-2px);
+        }
+        
+        .quick-action-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        
+        .quick-action-title {
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            padding: 24px 24px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #64748b;
+            cursor: pointer;
+            padding: 4px;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .participants-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+        
+        .participants-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .participant-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .participant-select {
+            flex: 1;
+        }
+        
+        .remove-participant {
+            background: #fee2e2;
+            color: #dc2626;
+            border: none;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        /* Calendar View */
+        .calendar-view {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            margin-bottom: 32px;
+        }
+        
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .calendar-nav {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .calendar-nav button {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .calendar-nav button:hover {
+            background: #f8fafc;
+        }
+        
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background: #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .calendar-day {
+            background: white;
+            padding: 12px 8px;
+            min-height: 80px;
+            position: relative;
+        }
+        
+        .calendar-day.other-month {
+            background: #f8fafc;
+            color: #94a3b8;
+        }
+        
+        .calendar-day.today {
+            background: #fef2f2;
+        }
+        
+        .day-number {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .calendar-event {
+            background: #DC143C;
+            color: white;
+            font-size: 10px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            margin-bottom: 2px;
+            cursor: pointer;
+        }
+        
+        .calendar-event:hover {
+            background: #B91C3C;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .events-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .action-left {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">E</div>
+                    <span>Entrix Admin</span>
+                </div>
+            </div>
+            
+            <div class="nav-menu">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        Dashboard
+                    </a>
+                    <a href="#" class="nav-item active">
+                        <span class="nav-icon">🎪</span>
+                        Événements
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🏟️</span>
+                        Venues
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">👥</span>
+                        Utilisateurs
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Billetterie</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎫</span>
+                        Billets
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📋</span>
+                        Abonnements
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">💳</span>
+                        Paiements
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Sécurité</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🔐</span>
+                        Contrôle d'accès
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📋</span>
+                        Audit
+                    </a>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div>
+                    <h1 class="page-title">Gestion des Événements</h1>
+                    <div class="breadcrumb">
+                        <a href="#">Dashboard</a> > <a href="#">Événements</a> > Gestion
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-title">Total Événements</div>
+                            <div class="stat-icon events">🎪</div>
+                        </div>
+                        <div class="stat-value">247</div>
+                        <div class="stat-change positive">+12% vs mois dernier</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-title">À venir</div>
+                            <div class="stat-icon upcoming">⏰</div>
+                        </div>
+                        <div class="stat-value">43</div>
+                        <div class="stat-change positive">+8 cette semaine</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-title">Participants</div>
+                            <div class="stat-icon participants">👨‍👩‍👧‍👦</div>
+                        </div>
+                        <div class="stat-value">89</div>
+                        <div class="stat-change positive">+15 nouveaux</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-title">Revenus</div>
+                            <div class="stat-icon revenue">💰</div>
+                        </div>
+                        <div class="stat-value">2.4M TND</div>
+                        <div class="stat-change positive">+18% vs saison passée</div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <h3>Actions Rapides</h3>
+                    <div class="quick-actions-grid">
+                        <a href="#" class="quick-action-btn" onclick="showNewEventModal()">
+                            <div class="quick-action-icon">➕</div>
+                            <div class="quick-action-title">Nouvel Événement</div>
+                        </a>
+                        <a href="#" class="quick-action-btn" onclick="showParticipantsModal()">
+                            <div class="quick-action-icon">👥</div>
+                            <div class="quick-action-title">Gérer Participants</div>
+                        </a>
+                        <a href="#" class="quick-action-btn" onclick="showCalendarView()">
+                            <div class="quick-action-icon">📅</div>
+                            <div class="quick-action-title">Vue Calendrier</div>
+                        </a>
+                        <a href="#" class="quick-action-btn" onclick="showReportsModal()">
+                            <div class="quick-action-icon">📊</div>
+                            <div class="quick-action-title">Rapports</div>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <div class="action-left">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" class="search-input" placeholder="Rechercher événements..." id="searchInput">
+                        </div>
+                        
+                        <div class="filter-group">
+                            <select class="filter-select" id="typeFilter">
+                                <option value="">Tous types</option>
+                                <option value="FOOTBALL">Football</option>
+                                <option value="BASKETBALL">Basketball</option>
+                                <option value="CONCERT">Concert</option>
+                                <option value="CONFERENCE">Conférence</option>
+                            </select>
+                            
+                            <select class="filter-select" id="statusFilter">
+                                <option value="">Tous statuts</option>
+                                <option value="SCHEDULED">Programmé</option>
+                                <option value="LIVE">En cours</option>
+                                <option value="COMPLETED">Terminé</option>
+                                <option value="CANCELLED">Annulé</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="action-right">
+                        <button class="btn btn-secondary" onclick="exportEvents()">
+                            📄 Exporter
+                        </button>
+                        <button class="btn btn-primary" onclick="showNewEventModal()">
+                            ➕ Nouvel Événement
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Events Section -->
+                <div class="events-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Événements Récents</h2>
+                    </div>
+                    
+                    <div class="events-grid" id="eventsGrid">
+                        <!-- Event Card 1 -->
+                        <div class="event-card" onclick="editEvent('ca_vs_est_j15')">
+                            <div class="event-header">
+                                <div class="event-type">Football</div>
+                                <div class="event-status scheduled">Programmé</div>
+                                <div class="event-title">CA vs EST</div>
+                                <div class="event-date">15 Février 2025 - 19:00</div>
+                            </div>
+                            <div class="event-info">
+                                <div class="event-participants">
+                                    <div class="participant">
+                                        <div class="participant-logo">CA</div>
+                                        <div class="participant-name">Club Africain</div>
+                                    </div>
+                                    <div class="vs-separator">VS</div>
+                                    <div class="participant">
+                                        <div class="participant-logo">EST</div>
+                                        <div class="participant-name">Espérance ST</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="event-stats">
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">45,000</div>
+                                        <div class="event-stat-label">Capacité</div>
+                                    </div>
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">89%</div>
+                                        <div class="event-stat-label">Vendus</div>
+                                    </div>
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">450K</div>
+                                        <div class="event-stat-label">TND</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="event-actions">
+                                    <button class="btn btn-secondary">✏️ Modifier</button>
+                                    <button class="btn btn-primary">🎫 Billets</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Event Card 2 -->
+                        <div class="event-card" onclick="editEvent('concert_latifa')">
+                            <div class="event-header">
+                                <div class="event-type">Concert</div>
+                                <div class="event-status live">En Direct</div>
+                                <div class="event-title">Latifa Live</div>
+                                <div class="event-date">10 Février 2025 - 21:00</div>
+                            </div>
+                            <div class="event-info">
+                                <div class="event-participants">
+                                    <div class="participant">
+                                        <div class="participant-logo">🎤</div>
+                                        <div class="participant-name">Latifa Arfaoui</div>
+                                    </div>
+                                    <div class="vs-separator">🎵</div>
+                                    <div class="participant">
+                                        <div class="participant-logo">🎸</div>
+                                        <div class="participant-name">Orchestre</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="event-stats">
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">25,000</div>
+                                        <div class="event-stat-label">Capacité</div>
+                                    </div>
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">100%</div>
+                                        <div class="event-stat-label">Complet</div>
+                                    </div>
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">680K</div>
+                                        <div class="event-stat-label">TND</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="event-actions">
+                                    <button class="btn btn-secondary">📊 Stats Live</button>
+                                    <button class="btn btn-primary">🎬 Diffusion</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Event Card 3 -->
+                        <div class="event-card" onclick="editEvent('tech_summit')">
+                            <div class="event-header">
+                                <div class="event-type">Conférence</div>
+                                <div class="event-status scheduled">Programmé</div>
+                                <div class="event-title">Tech Summit 2025</div>
+                                <div class="event-date">25 Mars 2025 - 09:00</div>
+                            </div>
+                            <div class="event-info">
+                                <div class="event-participants">
+                                    <div class="participant">
+                                        <div class="participant-logo">💻</div>
+                                        <div class="participant-name">Tech Leaders</div>
+                                    </div>
+                                    <div class="vs-separator">+</div>
+                                    <div class="participant">
+                                        <div class="participant-logo">🚀</div>
+                                        <div class="participant-name">Startups</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="event-stats">
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">2,000</div>
+                                        <div class="event-stat-label">Capacité</div>
+                                    </div>
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">75%</div>
+                                        <div class="event-stat-label">Vendus</div>
+                                    </div>
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">180K</div>
+                                        <div class="event-stat-label">TND</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="event-actions">
+                                    <button class="btn btn-secondary">✏️ Modifier</button>
+                                    <button class="btn btn-primary">🎫 Billets</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Event Card 4 -->
+                        <div class="event-card" onclick="editEvent('basketball_playoffs')">
+                            <div class="event-header">
+                                <div class="event-type">Basketball</div>
+                                <div class="event-status completed">Terminé</div>
+                                <div class="event-title">Playoffs - Finale</div>
+                                <div class="event-date">5 Février 2025 - 20:00</div>
+                            </div>
+                            <div class="event-info">
+                                <div class="event-participants">
+                                    <div class="participant">
+                                        <div class="participant-logo">🏀</div>
+                                        <div class="participant-name">Étoile Sahel</div>
+                                    </div>
+                                    <div class="vs-separator">VS</div>
+                                    <div class="participant">
+                                        <div class="participant-logo">⭐</div>
+                                        <div class="participant-name">US Monastir</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="event-stats">
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">8,000</div>
+                                        <div class="event-stat-label">Capacité</div>
+                                    </div>
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">95%</div>
+                                        <div class="event-stat-label">Présents</div>
+                                    </div>
+                                    <div class="event-stat">
+                                        <div class="event-stat-value">120K</div>
+                                        <div class="event-stat-label">TND</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="event-actions">
+                                    <button class="btn btn-secondary">📊 Rapport</button>
+                                    <button class="btn btn-primary">🏆 Résultats</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Calendar View (Initially Hidden) -->
+                <div class="calendar-view" id="calendarView" style="display: none;">
+                    <div class="calendar-header">
+                        <h2 class="section-title">Calendrier des Événements</h2>
+                        <div class="calendar-nav">
+                            <button onclick="prevMonth()">‹</button>
+                            <span id="currentMonth">Février 2025</span>
+                            <button onclick="nextMonth()">›</button>
+                            <button onclick="goToToday()">Aujourd'hui</button>
+                        </div>
+                    </div>
+                    
+                    <div class="calendar-grid" id="calendarGrid">
+                        <!-- Calendar will be generated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Event Modal -->
+    <div class="modal" id="newEventModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Nouvel Événement</h2>
+                <button class="modal-close" onclick="hideModal('newEventModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="newEventForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Titre</label>
+                            <input type="text" class="form-input" placeholder="Nom de l'événement">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Type</label>
+                            <select class="form-input">
+                                <option value="">Sélectionner un type</option>
+                                <option value="FOOTBALL">Football</option>
+                                <option value="BASKETBALL">Basketball</option>
+                                <option value="CONCERT">Concert</option>
+                                <option value="CONFERENCE">Conférence</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Date</label>
+                            <input type="date" class="form-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Heure</label>
+                            <input type="time" class="form-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Venue</label>
+                            <select class="form-input">
+                                <option value="">Sélectionner un lieu</option>
+                                <option value="stade_olympique">Stade Olympique de Radès</option>
+                                <option value="palais_sports">Palais des Sports</option>
+                                <option value="theatre_carthage">Théâtre de Carthage</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Capacité</label>
+                            <input type="number" class="form-input" placeholder="40000">
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-input form-textarea" placeholder="Description de l'événement..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="participants-section">
+                        <div class="participants-header">
+                            <h3>Participants</h3>
+                            <button type="button" class="btn btn-secondary" onclick="addParticipant()">➕ Ajouter</button>
+                        </div>
+                        <div id="participantsList">
+                            <div class="participant-item">
+                                <select class="form-input participant-select">
+                                    <option value="">Sélectionner un participant</option>
+                                    <option value="ca_tunis">Club Africain</option>
+                                    <option value="est_tunis">Espérance Sportive de Tunis</option>
+                                    <option value="css_sfax">Club Sportif Sfaxien</option>
+                                    <option value="latifa">Latifa Arfaoui</option>
+                                </select>
+                                <select class="form-input">
+                                    <option value="HOME">Domicile</option>
+                                    <option value="AWAY">Extérieur</option>
+                                    <option value="PERFORMER">Artiste</option>
+                                    <option value="SPEAKER">Conférencier</option>
+                                </select>
+                                <button type="button" class="remove-participant" onclick="removeParticipant(this)">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                        <button type="button" class="btn btn-secondary" onclick="hideModal('newEventModal')">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Créer Événement</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Sample events data
+        const eventsData = [
+            {
+                id: 'ca_vs_est_j15',
+                title: 'CA vs EST',
+                type: 'FOOTBALL',
+                status: 'SCHEDULED',
+                date: '2025-02-15',
+                time: '19:00',
+                participants: ['Club Africain', 'Espérance ST'],
+                capacity: 45000,
+                sold: 89,
+                revenue: 450000
+            },
+            {
+                id: 'concert_latifa',
+                title: 'Latifa Live',
+                type: 'CONCERT',
+                status: 'LIVE',
+                date: '2025-02-10',
+                time: '21:00',
+                participants: ['Latifa Arfaoui', 'Orchestre'],
+                capacity: 25000,
+                sold: 100,
+                revenue: 680000
+            },
+            {
+                id: 'tech_summit',
+                title: 'Tech Summit 2025',
+                type: 'CONFERENCE',
+                status: 'SCHEDULED',
+                date: '2025-03-25',
+                time: '09:00',
+                participants: ['Tech Leaders', 'Startups'],
+                capacity: 2000,
+                sold: 75,
+                revenue: 180000
+            },
+            {
+                id: 'basketball_playoffs',
+                title: 'Playoffs - Finale',
+                type: 'BASKETBALL',
+                status: 'COMPLETED',
+                date: '2025-02-05',
+                time: '20:00',
+                participants: ['Étoile Sahel', 'US Monastir'],
+                capacity: 8000,
+                sold: 95,
+                revenue: 120000
+            }
+        ];
+        
+        // Modal functions
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+        
+        function hideModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+        
+        function showNewEventModal() {
+            showModal('newEventModal');
+        }
+        
+        function showParticipantsModal() {
+            alert('Module de gestion des participants - À implémenter');
+        }
+        
+        function showCalendarView() {
+            const eventsGrid = document.getElementById('eventsGrid').parentElement;
+            const calendarView = document.getElementById('calendarView');
+            
+            if (calendarView.style.display === 'none') {
+                eventsGrid.style.display = 'none';
+                calendarView.style.display = 'block';
+                generateCalendar();
+            } else {
+                eventsGrid.style.display = 'block';
+                calendarView.style.display = 'none';
+            }
+        }
+        
+        function showReportsModal() {
+            alert('Module de rapports - À implémenter');
+        }
+        
+        function editEvent(eventId) {
+            alert(`Édition de l'événement ${eventId} - À implémenter`);
+        }
+        
+        function exportEvents() {
+            alert('Export des événements - À implémenter');
+        }
+        
+        // Participant management
+        function addParticipant() {
+            const participantsList = document.getElementById('participantsList');
+            const newParticipant = document.createElement('div');
+            newParticipant.className = 'participant-item';
+            newParticipant.innerHTML = `
+                <select class="form-input participant-select">
+                    <option value="">Sélectionner un participant</option>
+                    <option value="ca_tunis">Club Africain</option>
+                    <option value="est_tunis">Espérance Sportive de Tunis</option>
+                    <option value="css_sfax">Club Sportif Sfaxien</option>
+                    <option value="latifa">Latifa Arfaoui</option>
+                </select>
+                <select class="form-input">
+                    <option value="HOME">Domicile</option>
+                    <option value="AWAY">Extérieur</option>
+                    <option value="PERFORMER">Artiste</option>
+                    <option value="SPEAKER">Conférencier</option>
+                </select>
+                <button type="button" class="remove-participant" onclick="removeParticipant(this)">🗑️</button>
+            `;
+            participantsList.appendChild(newParticipant);
+        }
+        
+        function removeParticipant(button) {
+            button.parentElement.remove();
+        }
+        
+        // Calendar functions
+        let currentDate = new Date();
+        
+        function generateCalendar() {
+            const calendar = document.getElementById('calendarGrid');
+            const monthYear = document.getElementById('currentMonth');
+            
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            
+            monthYear.textContent = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(currentDate);
+            
+            // Clear calendar
+            calendar.innerHTML = '';
+            
+            // Add day headers
+            const dayHeaders = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+            dayHeaders.forEach(day => {
+                const dayHeader = document.createElement('div');
+                dayHeader.className = 'calendar-day';
+                dayHeader.style.fontWeight = 'bold';
+                dayHeader.style.textAlign = 'center';
+                dayHeader.style.background = '#f1f5f9';
+                dayHeader.textContent = day;
+                calendar.appendChild(dayHeader);
+            });
+            
+            // Get first day of month and number of days
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+            
+            // Add empty cells for previous month
+            for (let i = 0; i < startingDayOfWeek; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'calendar-day other-month';
+                calendar.appendChild(emptyDay);
+            }
+            
+            // Add days of current month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                
+                const dayNumber = document.createElement('div');
+                dayNumber.className = 'day-number';
+                dayNumber.textContent = day;
+                dayElement.appendChild(dayNumber);
+                
+                // Check if today
+                const today = new Date();
+                if (year === today.getFullYear() && month === today.getMonth() && day === today.getDate()) {
+                    dayElement.classList.add('today');
+                }
+                
+                // Add sample events
+                if (day === 10) {
+                    const event = document.createElement('div');
+                    event.className = 'calendar-event';
+                    event.textContent = 'Latifa Live';
+                    dayElement.appendChild(event);
+                }
+                if (day === 15) {
+                    const event = document.createElement('div');
+                    event.className = 'calendar-event';
+                    event.textContent = 'CA vs EST';
+                    dayElement.appendChild(event);
+                }
+                
+                calendar.appendChild(dayElement);
+            }
+        }
+        
+        function prevMonth() {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            generateCalendar();
+        }
+        
+        function nextMonth() {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            generateCalendar();
+        }
+        
+        function goToToday() {
+            currentDate = new Date();
+            generateCalendar();
+        }
+        
+        // Search and filter functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const eventCards = document.querySelectorAll('.event-card');
+            
+            eventCards.forEach(card => {
+                const title = card.querySelector('.event-title').textContent.toLowerCase();
+                const participants = Array.from(card.querySelectorAll('.participant-name'))
+                    .map(p => p.textContent.toLowerCase()).join(' ');
+                
+                if (title.includes(searchTerm) || participants.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+        
+        document.getElementById('typeFilter').addEventListener('change', function(e) {
+            const selectedType = e.target.value;
+            const eventCards = document.querySelectorAll('.event-card');
+            
+            eventCards.forEach(card => {
+                const eventType = card.querySelector('.event-type').textContent;
+                
+                if (!selectedType || eventType === selectedType) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+        
+        document.getElementById('statusFilter').addEventListener('change', function(e) {
+            const selectedStatus = e.target.value.toLowerCase();
+            const eventCards = document.querySelectorAll('.event-card');
+            
+            eventCards.forEach(card => {
+                const eventStatus = card.querySelector('.event-status').textContent.toLowerCase();
+                
+                if (!selectedStatus || eventStatus.includes(selectedStatus)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+        
+        // Form submission
+        document.getElementById('newEventForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Événement créé avec succès !');
+            hideModal('newEventModal');
+            // Here you would normally send the data to your backend
+        });
+        
+        // Mobile sidebar toggle
+        function toggleMobileSidebar() {
+            document.querySelector('.sidebar').classList.toggle('mobile-open');
+        }
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal')) {
+                e.target.classList.remove('show');
+            }
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard événements Entrix initialisé');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix Admin - Venues & Cartographie</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .admin-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #475569;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .nav-menu {
+            padding: 20px 0;
+        }
+        
+        .nav-section {
+            margin-bottom: 30px;
+        }
+        
+        .nav-section-title {
+            padding: 0 24px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            color: #e2e8f0;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(90deg, #DC143C, #B91C3C);
+            color: white;
+            border-right: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            background: #f8fafc;
+        }
+        
+        .top-bar {
+            background: white;
+            padding: 16px 32px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .notification-bell {
+            position: relative;
+            padding: 8px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .notification-bell:hover {
+            background: #e2e8f0;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            background: #DC143C;
+            border-radius: 50%;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        /* Content Area */
+        .content-area {
+            padding: 32px;
+        }
+        
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, shadow 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgba(0,0,0,0.1);
+        }
+        
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .stat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .stat-icon.venues {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+        
+        .stat-icon.mappings {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .stat-icon.zones {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        
+        .stat-icon.seats {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .stat-change {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .stat-change.positive {
+            color: #10b981;
+        }
+        
+        .stat-change.negative {
+            color: #ef4444;
+        }
+        
+        /* Action Bar */
+        .action-bar {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+            background: white;
+            padding: 20px 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 48px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px -3px rgba(220, 20, 60, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        /* Venues Grid */
+        .venues-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 24px;
+        }
+        
+        .venue-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, shadow 0.2s;
+            cursor: pointer;
+        }
+        
+        .venue-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+        
+        .venue-image {
+            height: 200px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 48px;
+        }
+        
+        .venue-status {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .venue-status.active {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        
+        .venue-status.inactive {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .venue-info {
+            padding: 24px;
+        }
+        
+        .venue-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .venue-location {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .venue-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .venue-stat {
+            text-align: center;
+        }
+        
+        .venue-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #DC143C;
+            margin-bottom: 4px;
+        }
+        
+        .venue-stat-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .venue-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .venue-actions .btn {
+            flex: 1;
+            justify-content: center;
+            padding: 10px 16px;
+            font-size: 13px;
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            margin-bottom: 32px;
+        }
+        
+        .quick-actions h3 {
+            color: #1e293b;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        
+        .quick-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        
+        .quick-action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            text-decoration: none;
+            color: #475569;
+            transition: all 0.2s;
+        }
+        
+        .quick-action-btn:hover {
+            border-color: #DC143C;
+            background: #fef2f2;
+            color: #DC143C;
+            transform: translateY(-2px);
+        }
+        
+        .quick-action-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        
+        .quick-action-title {
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            padding: 24px 24px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #64748b;
+            cursor: pointer;
+            padding: 4px;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .venues-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">E</div>
+                    <span>Entrix Admin</span>
+                </div>
+            </div>
+            
+            <div class="nav-menu">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        Dashboard
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎪</span>
+                        Événements
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎫</span>
+                        Billetterie
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Venues & Cartographie</div>
+                    <a href="#" class="nav-item active">
+                        <span class="nav-icon">🏟️</span>
+                        Venues
+                    </a>
+                    <a href="#" class="nav-item" onclick="showMappingsView()">
+                        <span class="nav-icon">🗺️</span>
+                        Cartographies
+                    </a>
+                    <a href="#" class="nav-item" onclick="showZonesView()">
+                        <span class="nav-icon">📍</span>
+                        Zones & Places
+                    </a>
+                    <a href="#" class="nav-item" onclick="showAccessPointsView()">
+                        <span class="nav-icon">🚪</span>
+                        Points d'Accès
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎯</span>
+                        Commodités
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Système</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">👥</span>
+                        Utilisateurs
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🔐</span>
+                        Sécurité
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">⚙️</span>
+                        Paramètres
+                    </a>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <h1 class="page-title">Venues & Cartographie</h1>
+                <div class="user-menu">
+                    <div class="notification-bell">
+                        <span>🔔</span>
+                        <div class="notification-badge"></div>
+                    </div>
+                    <div class="user-avatar">AM</div>
+                </div>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div>
+                                <div class="stat-title">Total Venues</div>
+                                <div class="stat-value">12</div>
+                                <div class="stat-change positive">+2 ce mois</div>
+                            </div>
+                            <div class="stat-icon venues">🏟️</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div>
+                                <div class="stat-title">Cartographies</div>
+                                <div class="stat-value">34</div>
+                                <div class="stat-change positive">+5 ce mois</div>
+                            </div>
+                            <div class="stat-icon mappings">🗺️</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div>
+                                <div class="stat-title">Zones Actives</div>
+                                <div class="stat-value">247</div>
+                                <div class="stat-change positive">+12 ce mois</div>
+                            </div>
+                            <div class="stat-icon zones">📍</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div>
+                                <div class="stat-title">Places Totales</div>
+                                <div class="stat-value">89,547</div>
+                                <div class="stat-change positive">+2,340 ce mois</div>
+                            </div>
+                            <div class="stat-icon seats">🪑</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <h3>Actions Rapides</h3>
+                    <div class="quick-actions-grid">
+                        <a href="#" class="quick-action-btn" onclick="showNewVenueModal()">
+                            <div class="quick-action-icon">➕</div>
+                            <div class="quick-action-title">Nouveau Venue</div>
+                        </a>
+                        <a href="#" class="quick-action-btn" onclick="showMappingEditor()">
+                            <div class="quick-action-icon">🗺️</div>
+                            <div class="quick-action-title">Éditeur Cartographie</div>
+                        </a>
+                        <a href="#" class="quick-action-btn" onclick="showImportDialog()">
+                            <div class="quick-action-icon">📤</div>
+                            <div class="quick-action-title">Importer Données</div>
+                        </a>
+                        <a href="#" class="quick-action-btn" onclick="showReports()">
+                            <div class="quick-action-icon">📊</div>
+                            <div class="quick-action-title">Rapports</div>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-input" placeholder="Rechercher venues, zones, ou places...">
+                    </div>
+                    <button class="btn btn-secondary">
+                        <span>📋</span>
+                        Filtres
+                    </button>
+                    <button class="btn btn-secondary">
+                        <span>📤</span>
+                        Exporter
+                    </button>
+                    <button class="btn btn-primary" onclick="showNewVenueModal()">
+                        <span>➕</span>
+                        Nouveau Venue
+                    </button>
+                </div>
+                
+                <!-- Venues Grid -->
+                <div class="venues-grid">
+                    <!-- Stade Olympique -->
+                    <div class="venue-card" onclick="showVenueDetails('stade-olympique')">
+                        <div class="venue-image">
+                            🏟️
+                            <div class="venue-status active">Actif</div>
+                        </div>
+                        <div class="venue-info">
+                            <h3 class="venue-name">Stade Olympique de Tunis</h3>
+                            <div class="venue-location">
+                                <span>📍</span>
+                                Tunis, Tunisie
+                            </div>
+                            <div class="venue-stats">
+                                <div class="venue-stat">
+                                    <div class="venue-stat-value">45,000</div>
+                                    <div class="venue-stat-label">Capacité Max</div>
+                                </div>
+                                <div class="venue-stat">
+                                    <div class="venue-stat-value">4</div>
+                                    <div class="venue-stat-label">Cartographies</div>
+                                </div>
+                            </div>
+                            <div class="venue-actions">
+                                <button class="btn btn-secondary">✏️ Éditer</button>
+                                <button class="btn btn-primary">🗺️ Cartographies</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Salle de Spectacle -->
+                    <div class="venue-card" onclick="showVenueDetails('salle-spectacle')">
+                        <div class="venue-image">
+                            🎭
+                            <div class="venue-status active">Actif</div>
+                        </div>
+                        <div class="venue-info">
+                            <h3 class="venue-name">Théâtre Municipal</h3>
+                            <div class="venue-location">
+                                <span>📍</span>
+                                Tunis Centre, Tunisie
+                            </div>
+                            <div class="venue-stats">
+                                <div class="venue-stat">
+                                    <div class="venue-stat-value">2,500</div>
+                                    <div class="venue-stat-label">Capacité Max</div>
+                                </div>
+                                <div class="venue-stat">
+                                    <div class="venue-stat-value">2</div>
+                                    <div class="venue-stat-label">Cartographies</div>
+                                </div>
+                            </div>
+                            <div class="venue-actions">
+                                <button class="btn btn-secondary">✏️ Éditer</button>
+                                <button class="btn btn-primary">🗺️ Cartographies</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Salle de Conférence -->
+                    <div class="venue-card" onclick="showVenueDetails('centre-conference')">
+                        <div class="venue-image">
+                            🏢
+                            <div class="venue-status active">Actif</div>
+                        </div>
+                        <div class="venue-info">
+                            <h3 class="venue-name">Centre de Conférences</h3>
+                            <div class="venue-location">
+                                <span>📍</span>
+                                Les Berges du Lac, Tunis
+                            </div>
+                            <div class="venue-stats">
+                                <div class="venue-stat">
+                                    <div class="venue-stat-value">1,200</div>
+                                    <div class="venue-stat-label">Capacité Max</div>
+                                </div>
+                                <div class="venue-stat">
+                                    <div class="venue-stat-value">3</div>
+                                    <div class="venue-stat-label">Cartographies</div>
+                                </div>
+                            </div>
+                            <div class="venue-actions">
+                                <button class="btn btn-secondary">✏️ Éditer</button>
+                                <button class="btn btn-primary">🗺️ Cartographies</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Complexe Sportif -->
+                    <div class="venue-card" onclick="showVenueDetails('complexe-sportif')">
+                        <div class="venue-image">
+                            🏀
+                            <div class="venue-status active">Actif</div>
+                        </div>
+                        <div class="venue-info">
+                            <h3 class="venue-name">Palais des Sports</h3>
+                            <div class="venue-location">
+                                <span>📍</span>
+                                El Menzah, Tunis
+                            </div>
+                            <div class="venue-stats">
+                                <div class="venue-stat">
+                                    <div class="venue-stat-value">8,000</div>
+                                    <div class="venue-stat-label">Capacité Max</div>
+                                </div>
+                                <div class="venue-stat">
+                                    <div class="venue-stat-value">3</div>
+                                    <div class="venue-stat-label">Cartographies</div>
+                                </div>
+                            </div>
+                            <div class="venue-actions">
+                                <button class="btn btn-secondary">✏️ Éditer</button>
+                                <button class="btn btn-primary">🗺️ Cartographies</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Nouveau Venue -->
+    <div class="modal" id="newVenueModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Nouveau Venue</h2>
+                <button class="modal-close" onclick="hideModal('newVenueModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="newVenueForm">
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Nom du Venue</label>
+                        <input type="text" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;" placeholder="Ex: Stade Olympique de Tunis">
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Ville</label>
+                            <input type="text" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;" placeholder="Tunis">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Capacité Maximale</label>
+                            <input type="number" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;" placeholder="45000">
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Adresse</label>
+                        <textarea style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; height: 80px;" placeholder="Adresse complète du venue"></textarea>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Latitude</label>
+                            <input type="number" step="0.000001" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;" placeholder="36.8065">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Longitude</label>
+                            <input type="number" step="0.000001" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;" placeholder="10.1815">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                        <button type="button" class="btn btn-secondary" onclick="hideModal('newVenueModal')">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Créer Venue</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Show/Hide Modal
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+        
+        function hideModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+        
+        function showNewVenueModal() {
+            showModal('newVenueModal');
+        }
+        
+        // Navigation functions
+        function showMappingsView() {
+            window.open('#mappings', '_blank');
+        }
+        
+        function showZonesView() {
+            window.open('#zones', '_blank');
+        }
+        
+        function showAccessPointsView() {
+            window.open('#access-points', '_blank');
+        }
+        
+        function showVenueDetails(venueId) {
+            // Simuler l'ouverture des détails du venue
+            alert(`Ouverture des détails pour: ${venueId}`);
+        }
+        
+        function showMappingEditor() {
+            alert('Lancement de l\'éditeur de cartographie...');
+        }
+        
+        function showImportDialog() {
+            alert('Ouverture de l\'assistant d\'importation...');
+        }
+        
+        function showReports() {
+            alert('Génération des rapports...');
+        }
+        
+        // Form handling
+        document.getElementById('newVenueForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Venue créé avec succès!');
+            hideModal('newVenueModal');
+        });
+        
+        // Search functionality
+        document.querySelector('.search-input').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const venueCards = document.querySelectorAll('.venue-card');
+            
+            venueCards.forEach(card => {
+                const venueName = card.querySelector('.venue-name').textContent.toLowerCase();
+                const venueLocation = card.querySelector('.venue-location').textContent.toLowerCase();
+                
+                if (venueName.includes(searchTerm) || venueLocation.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+        
+        // Mobile sidebar toggle
+        function toggleMobileSidebar() {
+            document.querySelector('.sidebar').classList.toggle('mobile-open');
+        }
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal')) {
+                e.target.classList.remove('show');
+            }
+        });
+    </script>
+</body>
+</html>

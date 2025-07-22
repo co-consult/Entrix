@@ -1,0 +1,494 @@
+{{!-- 
+  Template : Notification de changement de rôle
+  Fichier : templates/notifications/role-changed.hbs
+  Usage : Notifier un membre que son rôle dans le groupe a changé
+  Variables : groupName, memberName, oldRole, newRole, changedBy, changedAt, permissions, reason
+--}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rôle modifié - {{groupName}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .role-change-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .role-change-box h2 {
+            font-size: 22px;
+            margin-bottom: 20px;
+        }
+        
+        .role-transition {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 25px 0;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .role-badge {
+            background-color: rgba(255,255,255,0.2);
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .role-badge.old {
+            background-color: rgba(255,255,255,0.1);
+            opacity: 0.7;
+            text-decoration: line-through;
+        }
+        
+        .role-badge.new {
+            background-color: rgba(255,255,255,0.3);
+            box-shadow: 0 0 20px rgba(255,255,255,0.3);
+        }
+        
+        .arrow {
+            font-size: 24px;
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .group-info {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .group-info h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .group-info .icon {
+            margin-right: 10px;
+            color: #6c757d;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #6c757d;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-value {
+            color: #495057;
+            font-size: 14px;
+        }
+        
+        {{#if reason}}
+        .reason-section {
+            background-color: #e8f4fd;
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .reason-section h4 {
+            color: #1976d2;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .reason-section p {
+            color: #424242;
+            font-style: italic;
+            margin: 0;
+        }
+        {{/if}}
+        
+        .permissions-section {
+            background-color: #fff;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .permissions-section h3 {
+            color: #495057;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 18px;
+        }
+        
+        .permissions-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .permissions-column {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .permissions-column h4 {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .permissions-column.old h4 {
+            color: #dc3545;
+        }
+        
+        .permissions-column.new h4 {
+            color: #28a745;
+        }
+        
+        .permission-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        
+        .permission-icon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
+        
+        .permission-granted {
+            color: #28a745;
+        }
+        
+        .permission-denied {
+            color: #dc3545;
+        }
+        
+        .actions {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: transform 0.2s ease;
+            margin: 0 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+            color: #2d3436;
+        }
+        
+        .footer {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .footer p {
+            margin-bottom: 10px;
+        }
+        
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #ddd, transparent);
+            margin: 30px 0;
+        }
+        
+        .role-explanation {
+            background-color: #e8f5e8;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .role-explanation h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .role-explanation ul {
+            color: #424242;
+            margin-left: 20px;
+        }
+        
+        .role-explanation li {
+            margin: 5px 0;
+        }
+        
+        @media (max-width: 600px) {
+            .content {
+                padding: 20px 15px;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .permissions-comparison {
+                grid-template-columns: 1fr;
+            }
+            
+            .role-transition {
+                flex-direction: column;
+            }
+            
+            .actions .btn {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🔄 Rôle modifié</h1>
+            <p>Votre rôle dans le groupe {{groupName}} a été mis à jour</p>
+        </div>
+
+        <!-- Contenu principal -->
+        <div class="content">
+            <!-- Changement de rôle principal -->
+            <div class="role-change-box">
+                <h2>Félicitations {{memberName}} !</h2>
+                <div class="role-transition">
+                    <div class="role-badge old">{{translateRole oldRole}}</div>
+                    <div class="arrow">→</div>
+                    <div class="role-badge new">{{translateRole newRole}}</div>
+                </div>
+                <p>Votre nouveau rôle est effectif immédiatement</p>
+            </div>
+
+            <!-- Informations du changement -->
+            <div class="group-info">
+                <h3>
+                    <span class="icon">ℹ️</span>
+                    Détails du changement
+                </h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Groupe</span>
+                        <span class="info-value">{{groupName}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Modifié par</span>
+                        <span class="info-value">{{changedBy}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Date du changement</span>
+                        <span class="info-value">{{formatDate changedAt 'DD/MM/YYYY à HH:mm'}}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Statut</span>
+                        <span class="info-value">✅ Actif</span>
+                    </div>
+                </div>
+            </div>
+
+            {{#if reason}}
+            <!-- Raison du changement -->
+            <div class="reason-section">
+                <h4>💬 Raison du changement</h4>
+                <p>"{{reason}}"</p>
+            </div>
+            {{/if}}
+
+            <!-- Comparaison des permissions -->
+            {{#if permissions}}
+            <div class="permissions-section">
+                <h3>🔐 Vos nouvelles permissions</h3>
+                <div class="permissions-comparison">
+                    <div class="permissions-column old">
+                        <h4>❌ Anciennes permissions</h4>
+                        {{#each permissions.old}}
+                        <div class="permission-item">
+                            <span class="permission-icon {{#if this.granted}}permission-granted{{else}}permission-denied{{/if}}">
+                                {{#if this.granted}}✅{{else}}❌{{/if}}
+                            </span>
+                            <span>{{this.name}}</span>
+                        </div>
+                        {{/each}}
+                    </div>
+                    
+                    <div class="permissions-column new">
+                        <h4>✅ Nouvelles permissions</h4>
+                        {{#each permissions.new}}
+                        <div class="permission-item">
+                            <span class="permission-icon {{#if this.granted}}permission-granted{{else}}permission-denied{{/if}}">
+                                {{#if this.granted}}✅{{else}}❌{{/if}}
+                            </span>
+                            <span>{{this.name}}</span>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+            </div>
+            {{/if}}
+
+            <!-- Explication du nouveau rôle -->
+            <div class="role-explanation">
+                <h4>🎯 Que signifie votre nouveau rôle "{{translateRole newRole}}" ?</h4>
+                <ul>
+                    {{#if (eq newRole "OWNER")}}
+                    <li>Vous êtes maintenant propriétaire du groupe</li>
+                    <li>Vous pouvez gérer tous les aspects du groupe</li>
+                    <li>Vous pouvez modifier les rôles des autres membres</li>
+                    <li>Vous pouvez supprimer le groupe</li>
+                    <li>Aucune limite de dépenses</li>
+                    {{else if (eq newRole "ADMIN")}}
+                    <li>Vous pouvez inviter de nouveaux membres</li>
+                    <li>Vous pouvez gérer les membres existants</li>
+                    <li>Vous pouvez modifier les paramètres du groupe</li>
+                    <li>Vous pouvez voir tous les achats du groupe</li>
+                    <li>Aucune limite de dépenses</li>
+                    {{else if (eq newRole "MANAGER")}}
+                    <li>Vous pouvez inviter de nouveaux membres</li>
+                    <li>Vous pouvez effectuer des achats pour le groupe</li>
+                    <li>Vous pouvez voir l'historique des achats</li>
+                    <li>Limite de dépenses : {{formatCurrency permissions.spendingLimit 'TND'}}</li>
+                    {{else if (eq newRole "MEMBER")}}
+                    <li>Vous pouvez effectuer des achats pour le groupe</li>
+                    <li>Vous participez aux événements du groupe</li>
+                    <li>Limite de dépenses : {{formatCurrency permissions.spendingLimit 'TND'}}</li>
+                    {{/if}}
+                </ul>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Actions -->
+            <div class="actions">
+                <a href="{{groupUrl}}" class="btn">
+                    👥 Voir le groupe
+                </a>
+                <a href="{{permissionsUrl}}" class="btn btn-secondary">
+                    🔐 Voir mes permissions
+                </a>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Informations supplémentaires -->
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; color: #6c757d; font-size: 14px;">
+                <p><strong>💡 Conseils pour bien utiliser votre nouveau rôle :</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    {{#if (or (eq newRole "OWNER") (eq newRole "ADMIN"))}}
+                    <li>Familiarisez-vous avec les paramètres du groupe</li>
+                    <li>Vérifiez les permissions des autres membres</li>
+                    <li>Consultez l'historique des activités du groupe</li>
+                    {{/if}}
+                    {{#if (or (eq newRole "MANAGER") (eq newRole "MEMBER"))}}
+                    <li>Vérifiez votre limite de dépenses</li>
+                    <li>Explorez les événements disponibles</li>
+                    {{/if}}
+                    <li>N'hésitez pas à contacter les administrateurs si vous avez des questions</li>
+                </ul>
+                
+                <p style="margin-top: 15px;">
+                    🔄 <strong>Changement d'avis ?</strong> Vous pouvez toujours demander à un administrateur 
+                    de modifier votre rôle si nécessaire.
+                </p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>Entrix</strong> - Plateforme de gestion d'événements</p>
+            <p>
+                <a href="{{unsubscribeUrl}}">Se désabonner</a> | 
+                <a href="{{supportUrl}}">Support</a> | 
+                <a href="{{websiteUrl}}">entrix.tn</a>
+            </p>
+            <p style="font-size: 12px; opacity: 0.7;">
+                Cet email a été envoyé automatiquement. Merci de ne pas y répondre directement.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

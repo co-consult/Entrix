@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix Admin - Users & Roles Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .admin-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #475569;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .nav-menu {
+            padding: 20px 0;
+        }
+        
+        .nav-section {
+            margin-bottom: 30px;
+        }
+        
+        .nav-section-title {
+            padding: 0 24px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            color: #e2e8f0;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(90deg, #DC143C, #B91C3C);
+            color: white;
+            border-right: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            background: #f8fafc;
+        }
+        
+        .top-bar {
+            background: white;
+            padding: 16px 32px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .page-subtitle {
+            font-size: 14px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        
+        .top-bar-actions {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .search-box {
+            position: relative;
+            max-width: 300px;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 8px 16px 8px 40px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+        }
+        
+        .notification-bell {
+            position: relative;
+            padding: 8px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .notification-bell:hover {
+            background: #e2e8f0;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            background: #DC143C;
+            border-radius: 50%;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .content-area {
+            padding: 32px;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--accent-color, #DC143C);
+        }
+        
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        
+        .stat-info {
+            flex: 1;
+        }
+        
+        .stat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        
+        .stat-change {
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .stat-change.positive {
+            color: #10b981;
+        }
+        
+        .stat-change.negative {
+            color: #ef4444;
+        }
+        
+        .stat-change.neutral {
+            color: #64748b;
+        }
+        
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            background: var(--accent-color, #DC143C);
+        }
+        
+        .stat-card.users {
+            --accent-color: #3b82f6;
+        }
+        
+        .stat-card.active {
+            --accent-color: #10b981;
+        }
+        
+        .stat-card.roles {
+            --accent-color: #f59e0b;
+        }
+        
+        .stat-card.groups {
+            --accent-color: #8b5cf6;
+        }
+        
+        .stat-card.security {
+            --accent-color: #ef4444;
+        }
+        
+        .stat-card.growth {
+            --accent-color: #06b6d4;
+        }
+        
+        /* Action Buttons */
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+            background: white;
+            padding: 20px 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px -3px rgba(220, 20, 60, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: #DC143C;
+            border: 2px solid #DC143C;
+        }
+        
+        .btn-outline:hover {
+            background: #DC143C;
+            color: white;
+        }
+        
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+        
+        /* Charts Section */
+        .charts-section {
+            display: grid;
+            gap: 24px;
+        }
+        
+        .chart-card {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .chart-period {
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 12px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .chart-container {
+            height: 300px;
+            background: #f8fafc;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 14px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chart-placeholder {
+            text-align: center;
+        }
+        
+        .mock-chart {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #3b82f6 0%, #1d4ed8 50%, #DC143C 100%);
+            opacity: 0.1;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Activity Feed */
+        .activity-section {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .activity-header {
+            padding: 24px 24px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .activity-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 16px;
+        }
+        
+        .activity-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .activity-tab {
+            padding: 12px 16px;
+            border: none;
+            background: transparent;
+            color: #64748b;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .activity-tab.active {
+            color: #DC143C;
+            border-bottom-color: #DC143C;
+        }
+        
+        .activity-feed {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .activity-item {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            gap: 12px;
+            transition: background 0.2s;
+        }
+        
+        .activity-item:hover {
+            background: #f8fafc;
+        }
+        
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        
+        .activity-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .activity-avatar.admin {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+        }
+        
+        .activity-avatar.user {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .activity-avatar.security {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+        
+        .activity-content {
+            flex: 1;
+        }
+        
+        .activity-text {
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+        
+        .activity-time {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .activity-meta {
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        /* Quick Stats */
+        .quick-stats {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .quick-stats-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 20px;
+        }
+        
+        .quick-stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .quick-stat-item:last-child {
+            border-bottom: none;
+        }
+        
+        .quick-stat-label {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .quick-stat-value {
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        /* Alerts */
+        .alerts-section {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .alerts-header {
+            padding: 20px 24px;
+            background: #fef2f2;
+            border-bottom: 1px solid #fecaca;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .alerts-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #dc2626;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .alert-item {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            gap: 12px;
+        }
+        
+        .alert-item:last-child {
+            border-bottom: none;
+        }
+        
+        .alert-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .alert-icon.critical {
+            background: #ef4444;
+        }
+        
+        .alert-icon.warning {
+            background: #f59e0b;
+        }
+        
+        .alert-icon.info {
+            background: #3b82f6;
+        }
+        
+        .alert-content {
+            flex: 1;
+        }
+        
+        .alert-text {
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+        
+        .alert-time {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        /* Role Distribution */
+        .role-distribution {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        
+        .role-item {
+            text-align: center;
+            padding: 16px;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+        
+        .role-count {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        
+        .role-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Recent Users */
+        .recent-users {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .recent-user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            position: relative;
+        }
+        
+        .recent-user-avatar:hover {
+            transform: scale(1.1);
+        }
+        
+        .recent-user-avatar::after {
+            content: attr(data-name);
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        
+        .recent-user-avatar:hover::after {
+            opacity: 1;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .top-bar-actions {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+        
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .stat-card {
+            animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .stat-card:nth-child(1) { animation-delay: 0.1s; }
+        .stat-card:nth-child(2) { animation-delay: 0.2s; }
+        .stat-card:nth-child(3) { animation-delay: 0.3s; }
+        .stat-card:nth-child(4) { animation-delay: 0.4s; }
+        .stat-card:nth-child(5) { animation-delay: 0.5s; }
+        .stat-card:nth-child(6) { animation-delay: 0.6s; }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">E</div>
+                    <span>Entrix Admin</span>
+                </div>
+            </div>
+            
+            <div class="nav-menu">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        Dashboard Global
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎪</span>
+                        Événements
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🏟️</span>
+                        Venues
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎫</span>
+                        Billetterie
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Users & Sécurité</div>
+                    <a href="#" class="nav-item active">
+                        <span class="nav-icon">👥</span>
+                        Dashboard Users
+                    </a>
+                    <a href="#" class="nav-item" onclick="showUsersManagement()">
+                        <span class="nav-icon">🙋</span>
+                        Gestion Utilisateurs
+                    </a>
+                    <a href="#" class="nav-item" onclick="showRolesPermissions()">
+                        <span class="nav-icon">🔐</span>
+                        Rôles & Permissions
+                    </a>
+                    <a href="#" class="nav-item" onclick="showGroupsManagement()">
+                        <span class="nav-icon">👪</span>
+                        Groupes
+                    </a>
+                    <a href="#" class="nav-item" onclick="showSecurityCenter()">
+                        <span class="nav-icon">🛡️</span>
+                        Centre Sécurité
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📋</span>
+                        Audit & Logs
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Système</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">⚙️</span>
+                        Paramètres
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🔄</span>
+                        Intégrations
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        Analytics
+                    </a>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div>
+                    <h1 class="page-title">Dashboard Users & Rôles</h1>
+                    <div class="page-subtitle">Vue d'ensemble de la gestion des utilisateurs et de la sécurité</div>
+                </div>
+                <div class="top-bar-actions">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-input" placeholder="Rechercher utilisateurs, rôles...">
+                    </div>
+                    <div class="notification-bell">
+                        <span>🔔</span>
+                        <div class="notification-badge"></div>
+                    </div>
+                    <div class="user-avatar">AM</div>
+                </div>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card users">
+                        <div class="stat-header">
+                            <div class="stat-info">
+                                <div class="stat-title">Total Utilisateurs</div>
+                                <div class="stat-value">24,847</div>
+                                <div class="stat-change positive">
+                                    <span>↗️</span>
+                                    +12.5% ce mois
+                                </div>
+                            </div>
+                            <div class="stat-icon">👥</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card active">
+                        <div class="stat-header">
+                            <div class="stat-info">
+                                <div class="stat-title">Utilisateurs Actifs</div>
+                                <div class="stat-value">18,923</div>
+                                <div class="stat-change positive">
+                                    <span>↗️</span>
+                                    +8.2% ce mois
+                                </div>
+                            </div>
+                            <div class="stat-icon">✅</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card roles">
+                        <div class="stat-header">
+                            <div class="stat-info">
+                                <div class="stat-title">Rôles Actifs</div>
+                                <div class="stat-value">12</div>
+                                <div class="stat-change neutral">
+                                    <span>➡️</span>
+                                    Stable
+                                </div>
+                            </div>
+                            <div class="stat-icon">🔐</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card groups">
+                        <div class="stat-header">
+                            <div class="stat-info">
+                                <div class="stat-title">Groupes</div>
+                                <div class="stat-value">47</div>
+                                <div class="stat-change positive">
+                                    <span>↗️</span>
+                                    +3 ce mois
+                                </div>
+                            </div>
+                            <div class="stat-icon">👪</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card security">
+                        <div class="stat-header">
+                            <div class="stat-info">
+                                <div class="stat-title">Incidents Sécurité</div>
+                                <div class="stat-value">3</div>
+                                <div class="stat-change negative">
+                                    <span>⚠️</span>
+                                    +2 cette semaine
+                                </div>
+                            </div>
+                            <div class="stat-icon">🛡️</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card growth">
+                        <div class="stat-header">
+                            <div class="stat-info">
+                                <div class="stat-title">Croissance</div>
+                                <div class="stat-value">+15.8%</div>
+                                <div class="stat-change positive">
+                                    <span>📈</span>
+                                    vs mois précédent
+                                </div>
+                            </div>
+                            <div class="stat-icon">📊</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <div class="quick-actions">
+                        <button class="btn btn-primary" onclick="showNewUserModal()">
+                            <span>➕</span>
+                            Nouvel Utilisateur
+                        </button>
+                        <button class="btn btn-secondary" onclick="showBulkImport()">
+                            <span>📤</span>
+                            Import Masse
+                        </button>
+                        <button class="btn btn-secondary" onclick="showRoleCreator()">
+                            <span>🔐</span>
+                            Nouveau Rôle
+                        </button>
+                    </div>
+                    <div class="quick-actions">
+                        <button class="btn btn-outline">
+                            <span>📊</span>
+                            Rapport Complet
+                        </button>
+                        <button class="btn btn-secondary">
+                            <span>⚙️</span>
+                            Paramètres
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Dashboard Grid -->
+                <div class="dashboard-grid">
+                    <!-- Charts Section -->
+                    <div class="charts-section">
+                        <!-- User Growth Chart -->
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Croissance des Utilisateurs</h3>
+                                <select class="chart-period">
+                                    <option>30 derniers jours</option>
+                                    <option>3 derniers mois</option>
+                                    <option>12 derniers mois</option>
+                                </select>
+                            </div>
+                            <div class="chart-container">
+                                <div class="mock-chart"></div>
+                                <div class="chart-placeholder">
+                                    📈 Graphique de croissance des utilisateurs<br>
+                                    <small>+2,847 nouveaux utilisateurs ce mois</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Role Distribution Chart -->
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Répartition par Rôles</h3>
+                                <button class="chart-period">Voir Détails</button>
+                            </div>
+                            <div class="role-distribution">
+                                <div class="role-item">
+                                    <div class="role-count">18,234</div>
+                                    <div class="role-label">Users</div>
+                                </div>
+                                <div class="role-item">
+                                    <div class="role-count">4,856</div>
+                                    <div class="role-label">Subscribers</div>
+                                </div>
+                                <div class="role-item">
+                                    <div class="role-count">1,247</div>
+                                    <div class="role-label">VIP</div>
+                                </div>
+                                <div class="role-item">
+                                    <div class="role-count">347</div>
+                                    <div class="role-label">Staff</div>
+                                </div>
+                                <div class="role-item">
+                                    <div class="role-count">89</div>
+                                    <div class="role-label">Admins</div>
+                                </div>
+                                <div class="role-item">
+                                    <div class="role-count">74</div>
+                                    <div class="role-label">Security</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Panel -->
+                    <div style="display: grid; gap: 24px;">
+                        <!-- Quick Stats -->
+                        <div class="quick-stats">
+                            <h3 class="quick-stats-title">Statistiques Rapides</h3>
+                            <div class="quick-stat-item">
+                                <span class="quick-stat-label">Connexions aujourd'hui</span>
+                                <span class="quick-stat-value">3,247</span>
+                            </div>
+                            <div class="quick-stat-item">
+                                <span class="quick-stat-label">Nouvelles inscriptions</span>
+                                <span class="quick-stat-value">89</span>
+                            </div>
+                            <div class="quick-stat-item">
+                                <span class="quick-stat-label">Taux de rétention</span>
+                                <span class="quick-stat-value">78.5%</span>
+                            </div>
+                            <div class="quick-stat-item">
+                                <span class="quick-stat-label">Sessions moyennes</span>
+                                <span class="quick-stat-value">24min</span>
+                            </div>
+                            <div class="quick-stat-item">
+                                <span class="quick-stat-label">Utilisateurs en ligne</span>
+                                <span class="quick-stat-value">1,456</span>
+                            </div>
+                            
+                            <div style="margin-top: 16px;">
+                                <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #374151;">Derniers utilisateurs inscrits</div>
+                                <div class="recent-users">
+                                    <div class="recent-user-avatar" data-name="Ahmed Ben Ali">AB</div>
+                                    <div class="recent-user-avatar" data-name="Fatima Trabelsi">FT</div>
+                                    <div class="recent-user-avatar" data-name="Mohamed Khelil">MK</div>
+                                    <div class="recent-user-avatar" data-name="Salma Gharbi">SG</div>
+                                    <div class="recent-user-avatar" data-name="Youssef Mansouri">YM</div>
+                                    <div class="recent-user-avatar" data-name="Nadia Belkadhi">NB</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Security Alerts -->
+                        <div class="alerts-section">
+                            <div class="alerts-header">
+                                <h3 class="alerts-title">
+                                    <span>⚠️</span>
+                                    Alertes Sécurité
+                                </h3>
+                                <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">Voir Tout</button>
+                            </div>
+                            <div class="alert-item">
+                                <div class="alert-icon critical">!</div>
+                                <div class="alert-content">
+                                    <div class="alert-text">Tentatives de connexion suspectes détectées</div>
+                                    <div class="alert-time">Il y a 15 minutes</div>
+                                </div>
+                            </div>
+                            <div class="alert-item">
+                                <div class="alert-icon warning">⚠</div>
+                                <div class="alert-content">
+                                    <div class="alert-text">5 comptes désactivés pour inactivité</div>
+                                    <div class="alert-time">Il y a 2 heures</div>
+                                </div>
+                            </div>
+                            <div class="alert-item">
+                                <div class="alert-icon info">i</div>
+                                <div class="alert-content">
+                                    <div class="alert-text">Mise à jour des politiques de mot de passe</div>
+                                    <div class="alert-time">Il y a 1 jour</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Activity Feed -->
+                <div class="activity-section">
+                    <div class="activity-header">
+                        <h3 class="activity-title">Activité Récente</h3>
+                        <div class="activity-tabs">
+                            <button class="activity-tab active">Tout</button>
+                            <button class="activity-tab">Utilisateurs</button>
+                            <button class="activity-tab">Sécurité</button>
+                            <button class="activity-tab">Rôles</button>
+                        </div>
+                    </div>
+                    <div class="activity-feed">
+                        <div class="activity-item">
+                            <div class="activity-avatar admin">AM</div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>Admin Manager</strong> a créé un nouveau rôle <strong>"Event Coordinator"</strong>
+                                </div>
+                                <div class="activity-time">Il y a 5 minutes</div>
+                                <div class="activity-meta">Rôle • Permissions: gestion événements, lecture venues</div>
+                            </div>
+                        </div>
+                        
+                        <div class="activity-item">
+                            <div class="activity-avatar user">AB</div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>Ahmed Ben Ali</strong> s'est inscrit et a été ajouté au groupe <strong>"Supporters CA"</strong>
+                                </div>
+                                <div class="activity-time">Il y a 12 minutes</div>
+                                <div class="activity-meta">Nouveau utilisateur • IP: 41.229.xxx.xxx • Tunis, TN</div>
+                            </div>
+                        </div>
+                        
+                        <div class="activity-item">
+                            <div class="activity-avatar security">SM</div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>Security Manager</strong> a bloqué 3 comptes pour activité suspecte
+                                </div>
+                                <div class="activity-time">Il y a 25 minutes</div>
+                                <div class="activity-meta">Sécurité • Raison: Tentatives de connexion multiples échouées</div>
+                            </div>
+                        </div>
+                        
+                        <div class="activity-item">
+                            <div class="activity-avatar user">FT</div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>Fatima Trabelsi</strong> a été promue au rôle <strong>"VIP Gold"</strong>
+                                </div>
+                                <div class="activity-time">Il y a 1 heure</div>
+                                <div class="activity-meta">Promotion automatique • Critère: 10+ événements cette saison</div>
+                            </div>
+                        </div>
+                        
+                        <div class="activity-item">
+                            <div class="activity-avatar admin">VM</div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>Venue Manager</strong> a ajouté 150 utilisateurs au groupe <strong>"Staff Stade Olympique"</strong>
+                                </div>
+                                <div class="activity-time">Il y a 2 heures</div>
+                                <div class="activity-meta">Import masse • Fichier: staff_stade_2025.csv</div>
+                            </div>
+                        </div>
+                        
+                        <div class="activity-item">
+                            <div class="activity-avatar user">MK</div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>Mohamed Khelil</strong> a activé l'authentification à deux facteurs
+                                </div>
+                                <div class="activity-time">Il y a 3 heures</div>
+                                <div class="activity-meta">Sécurité renforcée • Méthode: Application mobile</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Variables globales
+        let activityData = [];
+        let securityAlerts = [];
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            startRealTimeUpdates();
+            loadInitialData();
+        });
+        
+        function setupEventListeners() {
+            // Search functionality
+            document.querySelector('.search-input').addEventListener('input', handleSearch);
+            
+            // Activity tabs
+            document.querySelectorAll('.activity-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    switchActivityTab(this);
+                });
+            });
+            
+            // Chart period selectors
+            document.querySelectorAll('.chart-period').forEach(selector => {
+                selector.addEventListener('change', function() {
+                    updateChart(this.closest('.chart-card'), this.value);
+                });
+            });
+        }
+        
+        // Navigation functions
+        function showUsersManagement() {
+            window.open('#users-management', '_blank');
+        }
+        
+        function showRolesPermissions() {
+            window.open('#roles-permissions', '_blank');
+        }
+        
+        function showGroupsManagement() {
+            window.open('#groups-management', '_blank');
+        }
+        
+        function showSecurityCenter() {
+            window.open('#security-center', '_blank');
+        }
+        
+        // Modal functions
+        function showNewUserModal() {
+            alert('Ouverture du formulaire de création d\'utilisateur...');
+        }
+        
+        function showBulkImport() {
+            alert('Ouverture de l\'assistant d\'import en masse...');
+        }
+        
+        function showRoleCreator() {
+            alert('Ouverture du créateur de rôles...');
+        }
+        
+        // Search functionality
+        function handleSearch(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            console.log('Recherche:', searchTerm);
+            
+            // Ici, on implémenterait la logique de recherche
+            // Filtrage des utilisateurs, rôles, groupes, etc.
+        }
+        
+        // Activity feed management
+        function switchActivityTab(tabElement) {
+            // Remove active class from all tabs
+            document.querySelectorAll('.activity-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Add active class to clicked tab
+            tabElement.classList.add('active');
+            
+            // Filter activity feed
+            const filter = tabElement.textContent.toLowerCase();
+            filterActivityFeed(filter);
+        }
+        
+        function filterActivityFeed(filter) {
+            const items = document.querySelectorAll('.activity-item');
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                
+                if (filter === 'tout' || 
+                    (filter === 'utilisateurs' && (text.includes('inscrit') || text.includes('promu'))) ||
+                    (filter === 'sécurité' && (text.includes('sécurité') || text.includes('bloqué') || text.includes('authentification'))) ||
+                    (filter === 'rôles' && (text.includes('rôle') || text.includes('permissions')))) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+        
+        // Real-time updates
+        function startRealTimeUpdates() {
+            // Simuler des mises à jour en temps réel
+            setInterval(updateRealTimeStats, 30000); // Toutes les 30 secondes
+            setInterval(checkSecurityAlerts, 60000); // Toutes les minutes
+            setInterval(updateActivityFeed, 45000); // Toutes les 45 secondes
+        }
+        
+        function updateRealTimeStats() {
+            // Simuler des changements dans les statistiques
+            const onlineUsersElement = document.querySelector('.quick-stat-item:nth-child(5) .quick-stat-value');
+            if (onlineUsersElement) {
+                const currentValue = parseInt(onlineUsersElement.textContent.replace(',', ''));
+                const variation = Math.floor(Math.random() * 40) - 20; // ±20
+                const newValue = Math.max(0, currentValue + variation);
+                onlineUsersElement.textContent = newValue.toLocaleString();
+            }
+            
+            // Simuler de nouvelles connexions
+            const connectionsElement = document.querySelector('.quick-stat-item:nth-child(1) .quick-stat-value');
+            if (connectionsElement) {
+                const currentValue = parseInt(connectionsElement.textContent.replace(',', ''));
+                const newConnections = Math.floor(Math.random() * 10);
+                connectionsElement.textContent = (currentValue + newConnections).toLocaleString();
+            }
+        }
+        
+        function checkSecurityAlerts() {
+            // Simuler des alertes de sécurité
+            const alertTypes = [
+                { type: 'warning', text: 'Pic de connexions détecté', time: 'maintenant' },
+                { type: 'info', text: 'Sauvegarde automatique terminée', time: 'Il y a 1 minute' },
+                { type: 'critical', text: 'Tentative d\'accès non autorisé', time: 'Il y a 2 minutes' }
+            ];
+            
+            if (Math.random() < 0.3) { // 30% de chance
+                const randomAlert = alertTypes[Math.floor(Math.random() * alertTypes.length)];
+                addSecurityAlert(randomAlert);
+            }
+        }
+        
+        function addSecurityAlert(alert) {
+            const alertsContainer = document.querySelector('.alerts-section');
+            const newAlert = document.createElement('div');
+            newAlert.className = 'alert-item';
+            newAlert.innerHTML = `
+                <div class="alert-icon ${alert.type}">!</div>
+                <div class="alert-content">
+                    <div class="alert-text">${alert.text}</div>
+                    <div class="alert-time">${alert.time}</div>
+                </div>
+            `;
+            
+            // Insérer en haut de la liste (après le header)
+            const firstAlert = alertsContainer.querySelector('.alert-item');
+            if (firstAlert) {
+                firstAlert.parentNode.insertBefore(newAlert, firstAlert);
+            } else {
+                alertsContainer.appendChild(newAlert);
+            }
+            
+            // Limiter à 5 alertes maximum
+            const alerts = alertsContainer.querySelectorAll('.alert-item');
+            if (alerts.length > 5) {
+                alerts[alerts.length - 1].remove();
+            }
+        }
+        
+        function updateActivityFeed() {
+            // Simuler de nouvelles activités
+            const activities = [
+                { user: 'System', action: 'a effectué une sauvegarde automatique', time: 'maintenant', type: 'admin' },
+                { user: 'Security Bot', action: 'a détecté une anomalie dans les connexions', time: 'Il y a 1 minute', type: 'security' },
+                { user: 'Random User', action: 's\'est connecté depuis un nouvel appareil', time: 'Il y a 2 minutes', type: 'user' }
+            ];
+            
+            if (Math.random() < 0.4) { // 40% de chance
+                const randomActivity = activities[Math.floor(Math.random() * activities.length)];
+                addActivityItem(randomActivity);
+            }
+        }
+        
+        function addActivityItem(activity) {
+            const activityFeed = document.querySelector('.activity-feed');
+            const newItem = document.createElement('div');
+            newItem.className = 'activity-item';
+            
+            const initials = activity.user.split(' ').map(n => n[0]).join('').substring(0, 2);
+            
+            newItem.innerHTML = `
+                <div class="activity-avatar ${activity.type}">${initials}</div>
+                <div class="activity-content">
+                    <div class="activity-text">
+                        <strong>${activity.user}</strong> ${activity.action}
+                    </div>
+                    <div class="activity-time">${activity.time}</div>
+                </div>
+            `;
+            
+            // Insérer en haut de la liste
+            const firstItem = activityFeed.firstElementChild;
+            if (firstItem) {
+                activityFeed.insertBefore(newItem, firstItem);
+            } else {
+                activityFeed.appendChild(newItem);
+            }
+            
+            // Limiter à 10 items maximum
+            const items = activityFeed.querySelectorAll('.activity-item');
+            if (items.length > 10) {
+                items[items.length - 1].remove();
+            }
+        }
+        
+        // Chart updates
+        function updateChart(chartCard, period) {
+            const chartContainer = chartCard.querySelector('.chart-container');
+            
+            // Simuler le chargement
+            chartContainer.style.opacity = '0.5';
+            
+            setTimeout(() => {
+                chartContainer.style.opacity = '1';
+                console.log(`Graphique mis à jour pour la période: ${period}`);
+            }, 500);
+        }
+        
+        // Data loading
+        function loadInitialData() {
+            // Simuler le chargement des données initiales
+            console.log('Chargement des données dashboard...');
+            
+            // Animer les cartes statistiques
+            const statCards = document.querySelectorAll('.stat-card');
+            statCards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    card.style.transition = 'all 0.5s ease-out';
+                    
+                    setTimeout(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    }, 100);
+                }, index * 100);
+            });
+        }
+        
+        // Export functions
+        function exportUserData() {
+            console.log('Export des données utilisateurs...');
+            // Logique d'export
+        }
+        
+        function generateUserReport() {
+            console.log('Génération du rapport utilisateurs...');
+            // Logique de génération de rapport
+        }
+        
+        // Utility functions
+        function formatNumber(num) {
+            return num.toLocaleString();
+        }
+        
+        function timeAgo(date) {
+            const now = new Date();
+            const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+            
+            if (diffInMinutes < 1) return 'maintenant';
+            if (diffInMinutes < 60) return `Il y a ${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''}`;
+            
+            const diffInHours = Math.floor(diffInMinutes / 60);
+            if (diffInHours < 24) return `Il y a ${diffInHours} heure${diffInHours > 1 ? 's' : ''}`;
+            
+            const diffInDays = Math.floor(diffInHours / 24);
+            return `Il y a ${diffInDays} jour${diffInDays > 1 ? 's' : ''}`;
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'n') {
+                e.preventDefault();
+                showNewUserModal();
+            }
+            
+            if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                document.querySelector('.search-input').focus();
+            }
+            
+            if (e.key === 'Escape') {
+                // Close any open modals
+                console.log('Fermeture des modals...');
+            }
+        });
+        
+        // Responsive handling
+        function handleResize() {
+            if (window.innerWidth < 768) {
+                // Mobile optimizations
+                document.querySelector('.sidebar').classList.remove('mobile-open');
+            }
+        }
+        
+        window.addEventListener('resize', handleResize);
+        
+        console.log('👥 Dashboard Users & Rôles initialisé');
+        console.log('💡 Raccourcis: Ctrl+N (Nouvel utilisateur), Ctrl+F (Recherche), Echap (Fermer)');
+    </script>
+</body>
+</html>

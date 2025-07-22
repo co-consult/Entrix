@@ -1,0 +1,30 @@
+export type GroupRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER';
+export type MembershipStatus = 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'LEFT';
+export type GroupPermission = 'canInvite' | 'canPurchase' | 'canViewOrders' | 'canManageMembers' | 'canEditGroup' | 'canDeleteGroup' | 'canViewFinances' | 'canApproveJoins';
+export declare const DEFAULT_ROLE_PERMISSIONS: Record<GroupRole, GroupPermission[]>;
+export interface GroupMembershipInfo {
+    groupId: string;
+    userId: string;
+    role: GroupRole;
+    status: MembershipStatus;
+    joinedAt: Date;
+    validUntil?: Date;
+    permissions: GroupPermission[];
+    spendingLimit?: number;
+    isActive: boolean;
+}
+export declare const GROUP_PERMISSIONS_KEY = "group_permissions";
+export declare const RequireGroupPermissions: (permissions: GroupPermission[], minimumRole?: GroupRole) => import("@nestjs/common").CustomDecorator<string>;
+export declare const RequireGroupRole: (minimumRole: GroupRole) => import("@nestjs/common").CustomDecorator<string>;
+export declare const RequireGroupOwner: () => import("@nestjs/common").CustomDecorator<string>;
+export declare const GroupMembership: (...dataOrPipes: (import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>> | keyof GroupMembershipInfo)[]) => ParameterDecorator;
+export declare const GroupRole: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const GroupPermissions: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const HasGroupPermission: (permission: GroupPermission) => (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const IsGroupOwner: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const IsGroupAdmin: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const GroupSpendingLimit: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare function hasMinimumRole(userRole: GroupRole, minimumRole: GroupRole): boolean;
+export declare function getDefaultPermissionsForRole(role: GroupRole): GroupPermission[];
+export declare function canManageMember(managerRole: GroupRole, targetRole: GroupRole): boolean;
+export declare function isActiveMembership(membership: GroupMembershipInfo): boolean;

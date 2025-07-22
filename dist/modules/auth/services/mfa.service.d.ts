@@ -1,0 +1,55 @@
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../../../shared/prisma/prisma.service';
+import { RedisService } from '../../../shared/redis/redis.service';
+import { LoggerService } from '../../../shared/logger/logger.service';
+import { EmailService } from '../../../shared/email/email.service';
+import { IMfaService } from '../../../common/interfaces/auth.interface';
+import { MfaConfig, MfaToken, AuthContext } from '../../../common/types/auth.types';
+import { mfa_method } from '@prisma/client';
+export declare class MfaService implements IMfaService {
+    private readonly prisma;
+    private readonly redis;
+    private readonly email;
+    private readonly config;
+    private readonly logger;
+    private readonly encryptionKey;
+    private readonly issuerName;
+    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, config: ConfigService, logger: LoggerService);
+    enableMfa(userId: string, method: mfa_method, config: Partial<MfaConfig>): Promise<MfaConfig>;
+    disableMfa(userId: string, method?: mfa_method): Promise<void>;
+    generateMfaToken(userId: string, method: mfa_method): Promise<MfaToken>;
+    verifyMfaToken(userId: string, method: mfa_method, token: string): Promise<boolean>;
+    setupTotp(userId: string): Promise<{
+        secret: string;
+        qrCode: string;
+        backupCodes: string[];
+    }>;
+    verifyTotp(userId: string, token: string): Promise<boolean>;
+    generateBackupCodes(userId: string): Promise<string[]>;
+    useBackupCode(userId: string, code: string): Promise<boolean>;
+    getUserMfaConfig(userId: string): Promise<MfaConfig | null>;
+    isMfaRequired(userId: string, context: Partial<AuthContext>): Promise<boolean>;
+    sendSmsCode(userId: string, phoneNumber: string): Promise<void>;
+    sendEmailCode(userId: string, email: string): Promise<void>;
+    private enableTotpMfa;
+    private enableSmsMfa;
+    private enableEmailMfa;
+    private generateNumericToken;
+    private generateAlphanumericToken;
+    private generateBackupCodesArray;
+    private encrypt;
+    private decrypt;
+    private checkMfaRateLimit;
+    private sendSmsToken;
+    private sendEmailToken;
+    private mapToMfaToken;
+    createChallenge(userId: string, method: 'email' | 'sms' | 'totp'): Promise<{
+        challengeId: string;
+        expiresIn: number;
+    }>;
+    verifyChallenge(userId: string, code: string, method: 'email' | 'sms' | 'totp'): Promise<boolean>;
+    private createEmailChallenge;
+    private createSmsChallenge;
+    private verifyEmailChallenge;
+    private verifySmsChallenge;
+}

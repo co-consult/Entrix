@@ -1,0 +1,1011 @@
+// src/modules/venues/services/venues.service.ts
+/**
+ * Service de gestion des lieux
+ * 
+ * Responsabilités :
+ * - CRUD des lieux (venues)
+ * - Recherche et filtrage
+ * - Recherche géographique
+ * - Validation des données
+ * - Gestion du cache
+ * - Statistiques des lieux
+ * 
+ * @author Entrix Development Team
+ * @version 1.0.0
+ */
+
+import { 
+  Injectable, 
+  NotFoundException, 
+  BadRequestException,
+  ConflictException,
+  ForbiddenException
+} from '@nestjs/common';
+
+// Services partagés
+import { PrismaService } from '../../../shared/prisma/prisma.service';
+import { RedisService } from '../../../shared/redis/redis.service';
+import { LoggerService } from '../../../shared/logger/logger.service';
+import { BullmqService } from '../../../shared/bullmq/bullmq.service';
+
+// Types et interfaces
+import { IVenuesService, VenueWithRelations, VenueSearchFilters, PaginatedResponse, VenueStatistics, GeoSearchParams, VenueIncludeOptions, DateRange, SortOptions } from '../interfaces/venues.interface';
+import { CreateVenueData, UpdateVenueData, VenueSortField } from '../interfaces/venues.interface';
+
+// DTOs
+import { CreateVenueDto, UpdateVenueDto, VenueSearchDto, VenueGeoSearchDto } from '../dto/venue.dto';
+
+// Constants
+import { 
+  VENUE_ERROR_MESSAGES,
+  VENUE_CACHE_CONFIG,
+  VENUE_AUDIT_EVENTS,
+  VENUE_BUSINESS_RULES,
+  VENUE_VALIDATION_LIMITS
+} from '../constants/venues.constants';
+
+// Prisma types
+import { Prisma, venues } from '@prisma/client';
+
+@Injectable()
+export class VenuesService implements IVenuesService {
+  private readonly logger: LoggerService;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+    private readonly bullmq: BullmqService,
+    logger: LoggerService,
+  ) {
+    this.logger = logger.createChildLogger('VenuesService');
+  }
+
+  // ================================
+  // CRUD OPERATIONS
+  // ================================
+
+  /**
+   * Créer un nouveau lieu
+   */
+  async create(data: CreateVenueDto): Promise<VenueWithRelations> {
+    this.logger.log(`Création d'un nouveau lieu: ${data.name}`);
+
+    try {
+      // Vérifier l'unicité du slug
+      await this.validateSlugUniqueness(data.slug);
+
+      // Valider les coordonnées si fournies
+      if (data.latitude && data.longitude) {
+        this.validateCoordinates(data.latitude, data.longitude);
+      }
+
+      // Valider la capacité
+      this.validateCapacity(data.max_capacity);
+
+      // Créer le lieu
+      const venue = await this.prisma.venues.create({
+        data: {
+          name: data.name,
+          slug: data.slug,
+          address: data.address,
+          city: data.city,
+          postal_code: data.postal_code,
+          country: data.country || 'TN',
+          latitude: data.latitude ? new Prisma.Decimal(data.latitude) : null,
+          longitude: data.longitude ? new Prisma.Decimal(data.longitude) : null,
+          max_capacity: data.max_capacity,
+          description: data.description,
+          images: data.images || [],
+          global_amenities: data.global_amenities || [],
+          primary_owner_id: data.primary_owner_id,
+          primary_manager_id: data.primary_manager_id,
+          //metadata: data.metadata || {},
+        },
+        include: this.getDefaultIncludes(),
+      });
+
+      // Invalider le cache
+      await this.invalidateVenueListCache();
+
+      // Audit log
+      await this.logAuditEvent(VENUE_AUDIT_EVENTS.VENUE_CREATED, venue.id, {
+        venue_name: venue.name,
+        venue_slug: venue.slug,
+        city: venue.city,
+        capacity: venue.max_capacity,
+      });
+
+      this.logger.log(`Lieu créé avec succès: ${venue.id}`);
+
+      return this.transformVenueResponse(venue);
+
+    } catch (error) {
+      this.logger.error(`Erreur lors de la création du lieu: ${error.message}`, error);
+      
+      if (error.code === 'P2002') {
+        throw new ConflictException(VENUE_ERROR_MESSAGES.SLUG_ALREADY_EXISTS);
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Récupérer un lieu par ID
+   */
+  async findById(id: string, options: VenueIncludeOptions = {}): Promise<VenueWithRelations> {
+    this.logger.log(`Récupération du lieu: ${id}`);
+
+    // Vérifier le cache
+    const cacheKey = VENUE_CACHE_CONFIG.KEYS.VENUE(id);
+    const cached = await this.redis.get(cacheKey);
+    if (cached && !options.statistics) {
+      this.logger.log(`Lieu trouvé dans le cache: ${id}`);
+      return JSON.parse(cached);
+    }
+
+    try {
+      const venue = await this.prisma.venues.findUnique({
+        where: { id },
+        include: this.buildIncludeClause(options),
+      });
+
+      if (!venue) {
+        throw new NotFoundException(VENUE_ERROR_MESSAGES.VENUE_NOT_FOUND);
+      }
+
+      const result = this.transformVenueResponse(venue);
+
+      // Ajouter les statistiques si demandées
+      if (options.statistics) {
+        const stats = await this.getBasicStatistics(id);
+        Object.assign(result, stats);
+      }
+
+      // Mettre en cache (sans les statistiques)
+      if (!options.statistics) {
+        await this.redis.setex(cacheKey, VENUE_CACHE_CONFIG.VENUE_DETAILS_TTL, JSON.stringify(result));
+      }
+
+      return result;
+
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.error(`Erreur lors de la récupération du lieu ${id}: ${error.message}`, error);
+      throw new BadRequestException('Erreur lors de la récupération du lieu');
+    }
+  }
+
+  /**
+   * Récupérer un lieu par slug
+   */
+  async findBySlug(slug: string, options: VenueIncludeOptions = {}): Promise<VenueWithRelations> {
+    this.logger.log(`Récupération du lieu par slug: ${slug}`);
+
+    try {
+      const venue = await this.prisma.venues.findUnique({
+        where: { slug },
+        include: this.buildIncludeClause(options),
+      });
+
+      if (!venue) {
+        throw new NotFoundException(VENUE_ERROR_MESSAGES.VENUE_NOT_FOUND);
+      }
+
+      const result = this.transformVenueResponse(venue);
+
+      // Ajouter les statistiques si demandées
+      if (options.statistics) {
+        const stats = await this.getBasicStatistics(venue.id);
+        Object.assign(result, stats);
+      }
+
+      return result;
+
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.error(`Erreur lors de la récupération du lieu par slug ${slug}: ${error.message}`, error);
+      throw new BadRequestException('Erreur lors de la récupération du lieu');
+    }
+  }
+
+  /**
+   * Mettre à jour un lieu
+   */
+  async update(id: string, data: UpdateVenueDto): Promise<VenueWithRelations> {
+    this.logger.log(`Mise à jour du lieu: ${id}`);
+
+    try {
+      // Vérifier que le lieu existe
+      const existingVenue = await this.prisma.venues.findUnique({
+        where: { id },
+      });
+
+      if (!existingVenue) {
+        throw new NotFoundException(VENUE_ERROR_MESSAGES.VENUE_NOT_FOUND);
+      }
+
+      // Vérifier l'unicité du slug si modifié
+      if (data.slug && data.slug !== existingVenue.slug) {
+        await this.validateSlugUniqueness(data.slug, id);
+      }
+
+      // Valider les coordonnées si fournies
+      if (data.latitude && data.longitude) {
+        this.validateCoordinates(data.latitude, data.longitude);
+      }
+
+      // Valider la capacité si modifiée
+      if (data.max_capacity) {
+        this.validateCapacity(data.max_capacity);
+        
+        // Vérifier que la nouvelle capacité est compatible avec les configurations existantes
+        await this.validateVenueCapacityUpdate(id, data.max_capacity);
+      }
+
+      // Préparer les données de mise à jour
+      const updateData: Prisma.venuesUpdateInput = {
+        ...(data.name && { name: data.name }),
+        ...(data.slug && { slug: data.slug }),
+        ...(data.address && { address: data.address }),
+        ...(data.city && { city: data.city }),
+        ...(data.postal_code !== undefined && { postal_code: data.postal_code }),
+        ...(data.country && { country: data.country }),
+        ...(data.latitude && { latitude: new Prisma.Decimal(data.latitude) }),
+        ...(data.longitude && { longitude: new Prisma.Decimal(data.longitude) }),
+        ...(data.max_capacity && { max_capacity: data.max_capacity }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.images && { images: data.images }),
+        ...(data.global_amenities && { global_amenities: data.global_amenities }),
+        ...(data.primary_owner_id !== undefined && { primary_owner_id: data.primary_owner_id }),
+        ...(data.primary_manager_id !== undefined && { primary_manager_id: data.primary_manager_id }),
+        ...(data.default_mapping_id !== undefined && { default_mapping_id: data.default_mapping_id }),
+        ...(data.is_active !== undefined && { is_active: data.is_active }),
+        ...(data.metadata && { metadata: data.metadata }),
+      };
+
+      // Effectuer la mise à jour
+      const venue = await this.prisma.venues.update({
+        where: { id },
+        data: updateData,
+        include: this.getDefaultIncludes(),
+      });
+
+      // Invalider le cache
+      await this.invalidateVenueCache(id);
+      await this.invalidateVenueListCache();
+
+      // Audit log
+      await this.logAuditEvent(VENUE_AUDIT_EVENTS.VENUE_UPDATED, venue.id, {
+        venue_name: venue.name,
+        changes: Object.keys(updateData),
+      });
+
+      this.logger.log(`Lieu mis à jour avec succès: ${id}`);
+
+      return this.transformVenueResponse(venue);
+
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) {
+        throw error;
+      }
+
+      if (error.code === 'P2002') {
+        throw new ConflictException(VENUE_ERROR_MESSAGES.SLUG_ALREADY_EXISTS);
+      }
+
+      this.logger.error(`Erreur lors de la mise à jour du lieu ${id}: ${error.message}`, error);
+      throw new BadRequestException('Erreur lors de la mise à jour du lieu');
+    }
+  }
+
+  /**
+   * Supprimer un lieu
+   */
+  async delete(id: string): Promise<void> {
+    this.logger.log(`Suppression du lieu: ${id}`);
+
+    try {
+      // Vérifier que le lieu existe
+      const venue = await this.prisma.venues.findUnique({
+        where: { id },
+        include: {
+          events: {
+            where: {
+              status: {
+                in: ['DRAFT', 'PUBLISHED', 'CONFIRMED', 'LIVE']
+              }
+            }
+          }
+        }
+      });
+
+      if (!venue) {
+        throw new NotFoundException(VENUE_ERROR_MESSAGES.VENUE_NOT_FOUND);
+      }
+
+      // Vérifier qu'il n'y a pas d'événements actifs
+      if (venue.events.length > 0) {
+        throw new ForbiddenException(VENUE_ERROR_MESSAGES.VENUE_HAS_ACTIVE_EVENTS);
+      }
+
+      // Supprimer le lieu (cascade pour les mappings, zones, etc.)
+      await this.prisma.venues.delete({
+        where: { id },
+      });
+
+      // Invalider le cache
+      await this.invalidateVenueCache(id);
+      await this.invalidateVenueListCache();
+
+      // Audit log
+      await this.logAuditEvent(VENUE_AUDIT_EVENTS.VENUE_DELETED, id, {
+        venue_name: venue.name,
+        venue_slug: venue.slug,
+      });
+
+      this.logger.log(`Lieu supprimé avec succès: ${id}`);
+
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        throw error;
+      }
+
+      this.logger.error(`Erreur lors de la suppression du lieu ${id}: ${error.message}`, error);
+      throw new BadRequestException('Erreur lors de la suppression du lieu');
+    }
+  }
+
+  // ================================
+  // SEARCH & FILTER
+  // ================================
+
+  /**
+   * Rechercher et filtrer les lieux
+   */
+  async search(
+    filters: VenueSearchDto,
+    pagination: { page?: number; limit?: number } = {},
+    sort: SortOptions<VenueSortField> = { field: 'name', direction: 'asc' }
+  ): Promise<PaginatedResponse<VenueWithRelations>> {
+    this.logger.log('Recherche de lieux avec filtres' + { filters, pagination, sort });
+
+    try {
+      const page = pagination.page || 1;
+      const limit = Math.min(pagination.limit || 20, VENUE_VALIDATION_LIMITS.MAX_PAGE_SIZE);
+      const offset = (page - 1) * limit;
+
+      // Construire les filtres Prisma
+      const where = this.buildWhereClause(filters);
+
+      // Construire l'ordre de tri
+      const orderBy = this.buildOrderByClause(sort);
+
+      // Construire les inclusions
+      const include = this.buildIncludeClause({
+        mappings: filters.includeMappings,
+        defaultMapping: filters.includeDefaultMapping,
+        statistics: filters.includeStatistics,
+      });
+
+      // Exécuter la requête avec comptage
+      const [venues, total] = await Promise.all([
+        this.prisma.venues.findMany({
+          where,
+          include,
+          orderBy,
+          skip: offset,
+          take: limit,
+        }),
+        this.prisma.venues.count({ where }),
+      ]);
+
+      // Transformer les résultats
+      const data = venues.map(venue => this.transformVenueResponse(venue));
+
+      // Ajouter les statistiques si demandées
+      if (filters.includeStatistics) {
+        for (const venue of data) {
+          const stats = await this.getBasicStatistics(venue.id);
+          Object.assign(venue, stats);
+        }
+      }
+
+      // Calculer la pagination
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+        },
+      };
+
+    } catch (error) {
+      this.logger.error(`Erreur lors de la recherche de lieux: ${error.message}`, error);
+      throw new BadRequestException('Erreur lors de la recherche');
+    }
+  }
+
+  /**
+   * Recherche géographique
+   */
+  async searchByGeo(
+    params: GeoSearchParams,
+    filters: VenueSearchDto = {},
+    pagination: { page?: number; limit?: number } = {}
+  ): Promise<PaginatedResponse<VenueWithRelations>> {
+    this.logger.log('Recherche géographique de lieux ' + { params, filters, pagination });
+
+    try {
+      const page = pagination.page || 1;
+      const limit = Math.min(pagination.limit || 20, VENUE_VALIDATION_LIMITS.MAX_PAGE_SIZE);
+      const offset = (page - 1) * limit;
+
+      // Valider les coordonnées
+      this.validateCoordinates(params.latitude, params.longitude);
+
+      // Valider le rayon
+      if (params.radiusKm < VENUE_VALIDATION_LIMITS.GEO_RADIUS_MIN || 
+          params.radiusKm > VENUE_VALIDATION_LIMITS.GEO_RADIUS_MAX) {
+        throw new BadRequestException(
+          `Le rayon doit être entre ${VENUE_VALIDATION_LIMITS.GEO_RADIUS_MIN} et ${VENUE_VALIDATION_LIMITS.GEO_RADIUS_MAX} km`
+        );
+      }
+
+      // Construire les filtres de base
+      const baseWhere = this.buildWhereClause(filters);
+
+      // Ajouter le filtre géographique (utilisation de la formule Haversine)
+      const geoWhere = Prisma.sql`
+        (6371 * acos(
+          cos(radians(${params.latitude})) * 
+          cos(radians(latitude::float)) * 
+          cos(radians(longitude::float) - radians(${params.longitude})) + 
+          sin(radians(${params.latitude})) * 
+          sin(radians(latitude::float))
+        )) <= ${params.radiusKm}
+      `;
+
+      // Requête avec distance calculée
+      const venuesWithDistance = await this.prisma.$queryRaw<Array<venues & { distance: number }>>`
+        SELECT *, 
+        (6371 * acos(
+          cos(radians(${params.latitude})) * 
+          cos(radians(latitude::float)) * 
+          cos(radians(longitude::float) - radians(${params.longitude})) + 
+          sin(radians(${params.latitude})) * 
+          sin(radians(latitude::float))
+        )) as distance
+        FROM venues 
+        WHERE ${geoWhere}
+        ${baseWhere ? Prisma.sql`AND ${baseWhere}` : Prisma.empty}
+        ORDER BY distance ASC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+
+      // Compter le total
+      const totalResult = await this.prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(*) as count
+        FROM venues 
+        WHERE ${geoWhere}
+        ${baseWhere ? Prisma.sql`AND ${baseWhere}` : Prisma.empty}
+      `;
+
+      const total = Number(totalResult[0].count);
+
+      // Enrichir les données si nécessaire
+      const data = venuesWithDistance.map(venue => ({
+        ...this.transformVenueResponse(venue),
+        distance: Math.round(venue.distance * 100) / 100, // Arrondir à 2 décimales
+      }));
+
+      // Calculer la pagination
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+        },
+      };
+
+    } catch (error) {
+      this.logger.error(`Erreur lors de la recherche géographique: ${error.message}`, error);
+      throw new BadRequestException('Erreur lors de la recherche géographique');
+    }
+  }
+
+  // ================================
+  // STATISTICS
+  // ================================
+
+  /**
+   * Obtenir les statistiques d'un lieu
+   */
+  async getStatistics(id: string, dateRange?: DateRange): Promise<VenueStatistics> {
+    this.logger.log(`Récupération des statistiques pour le lieu: ${id}`);
+
+    try {
+      // Vérifier que le lieu existe
+      const venue = await this.prisma.venues.findUnique({
+        where: { id },
+      });
+
+      if (!venue) {
+        throw new NotFoundException(VENUE_ERROR_MESSAGES.VENUE_NOT_FOUND);
+      }
+
+      // Construire les filtres de date
+      const dateFilter = dateRange ? {
+        scheduled_start: {
+          gte: dateRange.start,
+          lte: dateRange.end,
+        },
+      } : {};
+
+      // Statistiques des événements
+      const eventStats = await this.prisma.events.aggregate({
+        where: {
+          venue_id: id,
+          ...dateFilter,
+          status: {
+            in: ['CONFIRMED', 'LIVE', 'FINISHED']
+          }
+        },
+        _count: { id: true },
+        _sum: { 
+          estimated_attendance: true,
+          // total_revenue serait dans une table séparée normalement
+        },
+        _avg: { estimated_attendance: true },
+      });
+
+      // Statistiques par catégorie d'événement
+      const categoryStats = await this.prisma.events.groupBy({
+        by: ['category_id'],
+        where: {
+          venue_id: id,
+          ...dateFilter,
+          status: {
+            in: ['CONFIRMED', 'LIVE', 'FINISHED']
+          }
+        },
+        _count: { id: true },
+      });
+
+      // Statistiques mensuelles (derniers 12 mois si pas de dateRange)
+      const monthlyDateFilter = dateRange || {
+        scheduled_start: {
+          gte: new Date(new Date().setFullYear(new Date().getFullYear() - 1)),
+          lte: new Date(),
+        },
+      };
+
+      const monthlyStats = await this.prisma.$queryRaw<Array<{
+        month: string;
+        events: number;
+        attendance: number;
+      }>>`
+        SELECT 
+          TO_CHAR(scheduled_start, 'YYYY-MM') as month,
+          COUNT(*)::integer as events,
+          COALESCE(SUM(estimated_attendance), 0)::integer as attendance
+        FROM events 
+        WHERE venue_id = ${id}
+          AND scheduled_start >= ${monthlyDateFilter.scheduled_start || monthlyDateFilter.start}
+          AND scheduled_start <= ${monthlyDateFilter.scheduled_start || monthlyDateFilter.end}
+          AND status IN ('CONFIRMED', 'LIVE', 'FINISHED')
+        GROUP BY TO_CHAR(scheduled_start, 'YYYY-MM')
+        ORDER BY month ASC
+      `;
+
+      // Calculer le taux d'utilisation
+      const utilizationRate = venue.max_capacity > 0 
+        ? ((eventStats._avg.estimated_attendance || 0) / venue.max_capacity) * 100
+        : 0;
+
+      return {
+        totalEvents: eventStats._count.id,
+        totalTicketsSold: 0, // À calculer depuis la table tickets
+        totalRevenue: 0, // À calculer depuis les commandes
+        averageAttendance: Math.round(eventStats._avg.estimated_attendance || 0),
+        utilizationRate: Math.round(utilizationRate * 100) / 100,
+        popularEventTypes: categoryStats.map(stat => ({
+          category: stat.category_id || 'Non défini',
+          count: stat._count.id,
+          percentage: Math.round((stat._count.id / eventStats._count.id) * 100),
+        })),
+        monthlyStats: monthlyStats.map(stat => ({
+          month: stat.month,
+          events: stat.events,
+          attendance: stat.attendance,
+          revenue: 0, // À calculer
+        })),
+        peakSeasons: [], // À calculer en analysant monthlyStats
+      };
+
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.error(`Erreur lors du calcul des statistiques pour ${id}: ${error.message}`, error);
+      throw new BadRequestException('Erreur lors du calcul des statistiques');
+    }
+  }
+
+  // ================================
+  // VALIDATION
+  // ================================
+
+  /**
+   * Valider la capacité d'un lieu
+   */
+  async validateCapacity(venueId: string): Promise<boolean> {
+    this.logger.log(`Validation de la capacité pour le lieu: ${venueId}`);
+
+    try {
+      const venue = await this.prisma.venues.findUnique({
+        where: { id: venueId },
+        include: {
+          venue_mappings_venue_mappings_venue_idTovenues: {
+            where: { is_active: true },
+            include: {
+              venue_zones: {
+                where: { 
+                  // Pas de filtre parent_zone_id pour inclure toutes les zones
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!venue) {
+        throw new NotFoundException(VENUE_ERROR_MESSAGES.VENUE_NOT_FOUND);
+      }
+
+      // Vérifier chaque configuration
+      for (const mapping of venue.venue_mappings_venue_mappings_venue_idTovenues) {
+        const totalZoneCapacity = mapping.venue_zones.reduce((sum, zone) => sum + zone.capacity, 0);
+        
+        if (totalZoneCapacity > venue.max_capacity) {
+          this.logger.warn(
+            `Configuration ${mapping.name} dépasse la capacité du lieu`,
+            { mapping: mapping.id, zoneCapacity: totalZoneCapacity, venueCapacity: venue.max_capacity }
+          );
+          return false;
+        }
+
+        if (mapping.effective_capacity > venue.max_capacity) {
+          this.logger.warn(
+            `Capacité effective de la configuration ${mapping.name} dépasse celle du lieu`,
+            { mapping: mapping.id, effectiveCapacity: mapping.effective_capacity, venueCapacity: venue.max_capacity }
+          );
+          return false;
+        }
+      }
+
+      return true;
+
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.error(`Erreur lors de la validation de capacité pour ${venueId}: ${error.message}`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Vérifier la disponibilité d'un slug
+   */
+  async checkSlugAvailability(slug: string, excludeId?: string): Promise<boolean> {
+    try {
+      const where: Prisma.venuesWhereInput = { slug };
+      if (excludeId) {
+        where.id = { not: excludeId };
+      }
+
+      const existing = await this.prisma.venues.findFirst({ where });
+      return !existing;
+
+    } catch (error) {
+      this.logger.error(`Erreur lors de la vérification du slug ${slug}: ${error.message}`, error);
+      return false;
+    }
+  }
+
+  // ================================
+  // PRIVATE HELPER METHODS
+  // ================================
+
+  /**
+   * Valider l'unicité du slug
+   */
+  private async validateSlugUniqueness(slug: string, excludeId?: string): Promise<void> {
+    const isAvailable = await this.checkSlugAvailability(slug, excludeId);
+    if (!isAvailable) {
+      throw new ConflictException(VENUE_ERROR_MESSAGES.SLUG_ALREADY_EXISTS);
+    }
+  }
+
+  /**
+   * Valider les coordonnées GPS
+   */
+  private validateCoordinates(latitude: number, longitude: number): void {
+    if (latitude < VENUE_VALIDATION_LIMITS.LATITUDE_MIN || 
+        latitude > VENUE_VALIDATION_LIMITS.LATITUDE_MAX) {
+      throw new BadRequestException(VENUE_ERROR_MESSAGES.INVALID_COORDINATES);
+    }
+
+    if (longitude < VENUE_VALIDATION_LIMITS.LONGITUDE_MIN || 
+        longitude > VENUE_VALIDATION_LIMITS.LONGITUDE_MAX) {
+      throw new BadRequestException(VENUE_ERROR_MESSAGES.INVALID_COORDINATES);
+    }
+  }
+
+  /**
+   * Valider la mise à jour de capacité d'un lieu
+   */
+  private async validateVenueCapacityUpdate(venueId: string, newCapacity: number): Promise<void> {
+    // Vérifier que les configurations existantes sont compatibles
+    const mappings = await this.prisma.venue_mappings.findMany({
+      where: { 
+        venue_id: venueId,
+        is_active: true 
+      },
+      select: { 
+        id: true, 
+        name: true, 
+        effective_capacity: true 
+      }
+    });
+
+    for (const mapping of mappings) {
+      if (mapping.effective_capacity > newCapacity) {
+        throw new BadRequestException(
+          `La configuration "${mapping.name}" a une capacité de ${mapping.effective_capacity} qui dépasse la nouvelle capacité du lieu (${newCapacity})`
+        );
+      }
+    }
+  }
+
+  /**
+   * Construire la clause WHERE pour les filtres
+   */
+  private buildWhereClause(filters: VenueSearchDto): Prisma.venuesWhereInput {
+    const where: Prisma.venuesWhereInput = {};
+
+    if (filters.query) {
+      where.OR = [
+        { name: { contains: filters.query, mode: 'insensitive' } },
+        { description: { contains: filters.query, mode: 'insensitive' } },
+        { address: { contains: filters.query, mode: 'insensitive' } },
+      ];
+    }
+
+    if (filters.city) {
+      where.city = { contains: filters.city, mode: 'insensitive' };
+    }
+
+    if (filters.country) {
+      where.country = filters.country;
+    }
+
+    if (filters.minCapacity !== undefined) {
+      where.max_capacity = { ...where.max_capacity, gte: filters.minCapacity };
+    }
+
+    if (filters.maxCapacity !== undefined) {
+      where.max_capacity = { ...where.max_capacity, lte: filters.maxCapacity };
+    }
+
+    if (filters.amenities && filters.amenities.length > 0) {
+      where.global_amenities = {
+        hasEvery: filters.amenities,
+      };
+    }
+
+    if (filters.isActive !== undefined) {
+      where.is_active = filters.isActive;
+    }
+
+    if (filters.ownerId) {
+      where.primary_owner_id = filters.ownerId;
+    }
+
+    if (filters.managerId) {
+      where.primary_manager_id = filters.managerId;
+    }
+
+    if (filters.hasActiveEvents !== undefined) {
+      if (filters.hasActiveEvents) {
+        where.events = {
+          some: {
+            status: {
+              in: ['DRAFT', 'PUBLISHED', 'CONFIRMED', 'LIVE']
+            }
+          }
+        };
+      } else {
+        where.events = {
+          none: {
+            status: {
+              in: ['DRAFT', 'PUBLISHED', 'CONFIRMED', 'LIVE']
+            }
+          }
+        };
+      }
+    }
+
+    return where;
+  }
+
+  /**
+   * Construire la clause ORDER BY pour le tri
+   */
+  private buildOrderByClause(sort: SortOptions<VenueSortField>): Prisma.venuesOrderByWithRelationInput {
+    const orderBy: Prisma.venuesOrderByWithRelationInput = {};
+    
+    switch (sort.field) {
+      case 'name':
+        orderBy.name = sort.direction;
+        break;
+      case 'city':
+        orderBy.city = sort.direction;
+        break;
+      case 'max_capacity':
+        orderBy.max_capacity = sort.direction;
+        break;
+      case 'created_at':
+        orderBy.created_at = sort.direction;
+        break;
+      case 'updated_at':
+        orderBy.updated_at = sort.direction;
+        break;
+      default:
+        orderBy.name = 'asc';
+    }
+
+    return orderBy;
+  }
+
+  /**
+   * Construire la clause INCLUDE pour les relations
+   */
+  private buildIncludeClause(options: VenueIncludeOptions): Prisma.venuesInclude {
+    const include: Prisma.venuesInclude = {};
+
+    if (options.mappings) {
+      include.venue_mappings_venue_mappings_venue_idTovenues = {
+        where: { is_active: true },
+        orderBy: { name: 'asc' },
+      };
+    }
+
+    if (options.defaultMapping) {
+      include.venue_mappings_venues_default_mapping_idTovenue_mappings = true;
+    }
+
+    if (options.primaryOwner) {
+      include.organizers_venues_primary_owner_idToorganizers = {
+        select: { id: true, name: true },
+      };
+    }
+
+    if (options.primaryManager) {
+      include.organizers_venues_primary_manager_idToorganizers = {
+        select: { id: true, name: true },
+      };
+    }
+
+    return include;
+  }
+
+  /**
+   * Obtenir les inclusions par défaut
+   */
+  private getDefaultIncludes(): Prisma.venuesInclude {
+    return {
+      organizers_venues_primary_owner_idToorganizers: {
+        select: { id: true, name: true },
+      },
+      organizers_venues_primary_manager_idToorganizers: {
+        select: { id: true, name: true },
+      },
+      venue_mappings_venues_default_mapping_idTovenue_mappings: {
+        select: { id: true, name: true, mapping_type: true },
+      },
+    };
+  }
+
+  /**
+   * Transformer la réponse venue
+   */
+  private transformVenueResponse(venue: any): VenueWithRelations {
+    return {
+      ...venue,
+      latitude: venue.latitude ? parseFloat(venue.latitude.toString()) : null,
+      longitude: venue.longitude ? parseFloat(venue.longitude.toString()) : null,
+      primaryOwner: venue.organizers_venues_primary_owner_idToorganizers,
+      primaryManager: venue.organizers_venues_primary_manager_idToorganizers,
+      defaultMapping: venue.venue_mappings_venues_default_mapping_idTovenue_mappings,
+      mappings: venue.venue_mappings_venue_mappings_venue_idTovenues,
+    };
+  }
+
+  /**
+   * Obtenir les statistiques de base
+   */
+  private async getBasicStatistics(venueId: string) {
+    const eventCount = await this.prisma.events.count({
+      where: { 
+        venue_id: venueId,
+        status: { in: ['CONFIRMED', 'LIVE', 'FINISHED'] }
+      }
+    });
+
+    return {
+      totalEvents: eventCount,
+      avgRating: 0, // À calculer depuis les évaluations
+    };
+  }
+
+  /**
+   * Invalider le cache d'un lieu
+   */
+  private async invalidateVenueCache(venueId: string): Promise<void> {
+    const cacheKey = VENUE_CACHE_CONFIG.KEYS.VENUE(venueId);
+    await this.redis.del(cacheKey);
+  }
+
+  /**
+   * Invalider le cache des listes de lieux
+   */
+  private async invalidateVenueListCache(): Promise<void> {
+    const pattern = 'venues:list:*';
+    const keys = await this.redis.keys(pattern);
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
+
+  /**
+   * Enregistrer un événement d'audit
+   */
+  private async logAuditEvent(event: string, venueId: string, data: any): Promise<void> {
+    try {
+      await this.bullmq.addJob('audit-log', {
+        event,
+        resource_type: 'venue',
+        resource_id: venueId,
+        data,
+        timestamp: new Date(),
+      }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+      });
+    } catch (error) {
+      this.logger.error(`Erreur lors de l'enregistrement de l'audit: ${error.message}`, error);
+    }
+  }
+}

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="{{language}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invitation à rejoindre {{groupName}}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 26px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .invitation-from {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .invitation-from h2 {
+            color: #2c3e50;
+            margin: 0 0 5px 0;
+            font-size: 20px;
+        }
+        .invitation-from p {
+            color: #666;
+            margin: 0;
+            font-size: 14px;
+        }
+        .group-info {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border-radius: 8px;
+            padding: 25px;
+            margin: 25px 0;
+            text-align: center;
+        }
+        .group-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .group-info h3 {
+            color: #d84315;
+            margin: 0 0 10px 0;
+            font-size: 22px;
+        }
+        .group-info p {
+            color: #bf360c;
+            margin: 0;
+            font-size: 16px;
+        }
+        .group-details {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .detail-item {
+            text-align: center;
+            flex: 1;
+            margin: 10px;
+            min-width: 120px;
+        }
+        .detail-item .number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4facfe;
+        }
+        .detail-item .label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .personal-message {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        .personal-message h4 {
+            color: #1976d2;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+        .personal-message p {
+            color: #0d47a1;
+            margin: 0;
+            font-style: italic;
+            font-size: 15px;
+        }
+        .role-info {
+            background-color: #f3e5f5;
+            border: 1px solid #e1bee7;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .role-info h4 {
+            color: #7b1fa2;
+            margin: 0 0 5px 0;
+            font-size: 16px;
+        }
+        .role-info p {
+            color: #4a148c;
+            margin: 0;
+            font-size: 14px;
+        }
+        .action-buttons {
+            text-align: center;
+            margin: 40px 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 10px;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn-accept {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        .btn-decline {
+            background-color: #f5f5f5;
+            color: #666;
+            border: 1px solid #ddd;
+        }
+        .group-benefits {
+            margin: 30px 0;
+        }
+        .benefit {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+        }
+        .benefit-icon {
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 16px;
+            color: white;
+        }
+        .benefit-content h5 {
+            margin: 0 0 5px 0;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        .benefit-content p {
+            margin: 0;
+            color: #666;
+            font-size: 13px;
+        }
+        .expiry-notice {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 25px 0;
+            text-align: center;
+        }
+        .expiry-notice p {
+            color: #856404;
+            margin: 0;
+            font-size: 14px;
+        }
+        .footer {
+            background-color: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .footer p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+            .header, .content, .footer {
+                padding: 30px 20px;
+            }
+            .group-details {
+                flex-direction: column;
+            }
+            .detail-item {
+                margin: 5px 0;
+            }
+            .btn {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎉 Invitation à un Groupe</h1>
+            <p>Quelqu'un souhaite partager de super moments avec vous !</p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- Invitation From -->
+            <div class="invitation-from">
+                <div class="avatar">
+                    {{#if inviterAvatar}}
+                        <img src="{{inviterAvatar}}" alt="{{inviterName}}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">
+                    {{else}}
+                        {{firstLetter inviterName}}
+                    {{/if}}
+                </div>
+                <h2>{{inviterName}}</h2>
+                <p>vous invite à rejoindre son groupe</p>
+            </div>
+
+            <!-- Group Info -->
+            <div class="group-info">
+                <div class="group-icon">
+                    {{#eq groupType 'FAMILY'}}👨‍👩‍👧‍👦{{/eq}}
+                    {{#eq groupType 'FRIENDS'}}👥{{/eq}}
+                    {{#eq groupType 'CORPORATE'}}🏢{{/eq}}
+                    {{#eq groupType 'ASSOCIATION'}}🤝{{/eq}}
+                    {{#eq groupType 'TEMPORARY'}}⏱️{{/eq}}
+                    {{#eq groupType 'EDUCATIONAL'}}🎓{{/eq}}
+                </div>
+                <h3>{{groupName}}</h3>
+                {{#if groupDescription}}
+                <p>{{groupDescription}}</p>
+                {{/if}}
+            </div>
+
+            <!-- Group Details -->
+            <div class="group-details">
+                <div class="detail-item">
+                    <div class="number">{{memberCount}}</div>
+                    <div class="label">Membres</div>
+                </div>
+                <div class="detail-item">
+                    <div class="number">{{groupTypeLabel}}</div>
+                    <div class="label">Type</div>
+                </div>
+                {{#if upcomingEvents}}
+                <div class="detail-item">
+                    <div class="number">{{upcomingEvents}}</div>
+                    <div class="label">Événements à venir</div>
+                </div>
+                {{/if}}
+            </div>
+
+            {{#if personalMessage}}
+            <!-- Personal Message -->
+            <div class="personal-message">
+                <h4>💬 Message personnel :</h4>
+                <p>"{{personalMessage}}"</p>
+            </div>
+            {{/if}}
+
+            {{#if proposedRole}}
+            <!-- Role Info -->
+            <div class="role-info">
+                <h4>Votre rôle proposé : {{roleDisplayName proposedRole}}</h4>
+                <p>{{roleDescription proposedRole}}</p>
+            </div>
+            {{/if}}
+
+            <!-- Group Benefits -->
+            <div class="group-benefits">
+                <h3 style="color: #2c3e50; margin: 0 0 20px 0; text-align: center;">Avantages du groupe :</h3>
+                
+                <div class="benefit">
+                    <div class="benefit-icon">💰</div>
+                    <div class="benefit-content">
+                        <h5>Économies Garanties</h5>
+                        <p>Achetez vos billets ensemble et bénéficiez de tarifs préférentiels</p>
+                    </div>
+                </div>
+                
+                <div class="benefit">
+                    <div class="benefit-icon">🎫</div>
+                    <div class="benefit-content">
+                        <h5>Réservations Prioritaires</h5>
+                        <p>Accès privilégié aux ventes de billets avant tout le monde</p>
+                    </div>
+                </div>
+                
+                <div class="benefit">
+                    <div class="benefit-icon">👥</div>
+                    <div class="benefit-content">
+                        <h5>Expérience Partagée</h5>
+                        <p>Vivez vos événements favoris avec vos proches</p>
+                    </div>
+                </div>
+                
+                {{#if groupType 'CORPORATE'}}
+                <div class="benefit">
+                    <div class="benefit-icon">📊</div>
+                    <div class="benefit-content">
+                        <h5>Gestion Centralisée</h5>
+                        <p>Suivi des dépenses et facturation simplifiée pour l'entreprise</p>
+                    </div>
+                </div>
+                {{/if}}
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <a href="{{acceptUrl}}" class="btn btn-accept">✅ Accepter l'Invitation</a>
+                <a href="{{declineUrl}}" class="btn btn-decline">❌ Décliner</a>
+            </div>
+
+            <!-- Expiry Notice -->
+            <div class="expiry-notice">
+                <p>⏰ Cette invitation expire le {{formatDate expiresAt 'DD MMMM YYYY à HH:mm'}}</p>
+            </div>
+
+            <!-- Additional Info -->
+            <div style="margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 6px;">
+                <h4 style="color: #2c3e50; margin: 0 0 15px 0;">❓ Questions Fréquentes</h4>
+                
+                <div style="margin: 10px 0;">
+                    <strong>Puis-je quitter le groupe plus tard ?</strong>
+                    <p style="margin: 5px 0; color: #666; font-size: 14px;">Oui, vous pouvez quitter le groupe à tout moment depuis vos paramètres.</p>
+                </div>
+                
+                <div style="margin: 10px 0;">
+                    <strong>Mes données sont-elles protégées ?</strong>
+                    <p style="margin: 5px 0; color: #666; font-size: 14px;">Absolument ! Seules les informations nécessaires sont partagées avec le groupe.</p>
+                </div>
+                
+                {{#if isPrivateGroup}}
+                <div style="margin: 10px 0;">
+                    <strong>Ce groupe est-il privé ?</strong>
+                    <p style="margin: 5px 0; color: #666; font-size: 14px;">Oui, ce groupe est privé et seuls les membres invités peuvent le rejoindre.</p>
+                </div>
+                {{/if}}
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>Entrix</strong> - Rassembler les gens autour des meilleurs événements</p>
+            <p>📧 Des questions ? Répondez à cet email ou contactez-nous sur <a href="mailto:{{supportEmail}}" style="color: #67C3F3;">{{supportEmail}}</a></p>
+            <p style="font-size: 12px; opacity: 0.8;">
+                Si vous ne souhaitez plus recevoir ces invitations, 
+                <a href="{{unsubscribeUrl}}" style="color: #67C3F3;">cliquez ici</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

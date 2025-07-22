@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="{{language}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👥 Nouveau membre dans {{groupName}}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 30px;
+        }
+        .announcement {
+            background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+            border-radius: 8px;
+            padding: 25px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .announcement h2 {
+            color: #2e7d32;
+            margin: 0 0 15px 0;
+            font-size: 20px;
+        }
+        .member-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .member-details h3 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 18px;
+        }
+        .member-details p {
+            margin: 5px 0 0 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .group-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 25px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .actions {
+            text-align: center;
+            margin: 25px 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            margin: 5px 10px;
+        }
+        .footer {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+            .member-info {
+                flex-direction: column;
+                text-align: center;
+            }
+            .avatar {
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+            .group-stats {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👥 Nouveau Membre !</h1>
+        </div>
+        
+        <div class="content">
+            <div class="announcement">
+                <h2>🎉 Bonne nouvelle !</h2>
+                <p style="color: #388e3c; margin: 0; font-size: 16px;">
+                    Votre groupe <strong>{{groupName}}</strong> s'agrandit !
+                </p>
+            </div>
+
+            <div class="member-info">
+                <div class="avatar">
+                    {{#if newMemberAvatar}}
+                        <img src="{{newMemberAvatar}}" alt="{{newMemberName}}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">
+                    {{else}}
+                        {{firstLetter newMemberName}}
+                    {{/if}}
+                </div>
+                <div class="member-details">
+                    <h3>{{newMemberName}}</h3>
+                    <p>a rejoint le groupe {{#if joinMethod}}{{#eq joinMethod 'INVITATION'}}sur invitation{{else}}{{#eq joinMethod 'REQUEST'}}via une demande{{else}}directement{{/eq}}{{/eq}}{{/if}}</p>
+                    {{#if joinedAt}}
+                    <p style="color: #999;">{{formatDate joinedAt 'DD MMMM YYYY à HH:mm'}}</p>
+                    {{/if}}
+                </div>
+            </div>
+
+            {{#if newMemberRole}}
+            <div style="text-align: center; margin: 20px 0; padding: 15px; background-color: #e3f2fd; border-radius: 6px;">
+                <p style="margin: 0; color: #1976d2;">
+                    <strong>Rôle assigné :</strong> {{roleDisplayName newMemberRole}}
+                </p>
+            </div>
+            {{/if}}
+
+            <div class="group-stats">
+                <div class="stat-item">
+                    <div class="stat-number">{{totalMembers}}</div>
+                    <div class="stat-label">Membres Total</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">{{newMembersThisMonth}}</div>
+                    <div class="stat-label">Nouveaux ce mois</div>
+                </div>
+                {{#if upcomingEvents}}
+                <div class="stat-item">
+                    <div class="stat-number">{{upcomingEvents}}</div>
+                    <div class="stat-label">Événements à venir</div>
+                </div>
+                {{/if}}
+            </div>
+
+            {{#if inviterName}}
+            <div style="background-color: #f0f8ff; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; border-radius: 0 6px 6px 0;">
+                <p style="margin: 0; color: #0d47a1;">
+                    💌 Invité par <strong>{{inviterName}}</strong>
+                </p>
+            </div>
+            {{/if}}
+
+            <div class="actions">
+                <a href="{{groupUrl}}" class="btn">👀 Voir le Groupe</a>
+                {{#if canManageMembers}}
+                <a href="{{groupUrl}}/members" class="btn">👥 Gérer les Membres</a>
+                {{/if}}
+            </div>
+
+            {{#if nextEventSuggestion}}
+            <div style="background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); border-radius: 8px; padding: 20px; margin: 25px 0; text-align: center;">
+                <h4 style="color: #856404; margin: 0 0 10px 0;">🎫 Suggestion d'événement</h4>
+                <p style="color: #856404; margin: 0;">
+                    Pourquoi ne pas organiser votre premier achat groupé pour <strong>{{nextEventSuggestion.name}}</strong> ?
+                </p>
+                {{#if nextEventSuggestion.url}}
+                <a href="{{nextEventSuggestion.url}}" style="color: #856404; text-decoration: underline; font-weight: 600;">Voir l'événement</a>
+                {{/if}}
+            </div>
+            {{/if}}
+
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;">
+                <h4 style="color: #2c3e50; margin: 0 0 15px 0; text-align: center;">💡 Idées pour Bien Accueillir</h4>
+                <ul style="margin: 0; padding-left: 20px; color: #666;">
+                    <li>Envoyez un message de bienvenue dans le chat du groupe</li>
+                    <li>Partagez les prochains événements qui pourraient l'intéresser</li>
+                    <li>Expliquez comment fonctionne votre groupe et ses avantages</li>
+                    {{#if groupRules}}
+                    <li>Rappelez les règles du groupe si nécessaire</li>
+                    {{/if}}
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>Entrix</strong> - Rassembler les gens autour des meilleurs événements</p>
+            <p>📧 <a href="mailto:{{supportEmail}}" style="color: #67C3F3;">{{supportEmail}}</a></p>
+        </div>
+    </div>
+</body>
+</html>

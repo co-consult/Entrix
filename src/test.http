@@ -1,0 +1,36 @@
+### Créer un utilisateur (inscription)
+POST http://localhost:3000/api/v1/users
+Content-Type: application/json
+
+{
+  "email": "john.doe@example.com",
+  "password": "MotdepasseSecurise2024!",
+  "first_name": "John",
+  "last_name": "Doe",
+  "phone": "+21697123456",
+  "avatar": "https://cdn.entrix.tn/avatars/johndoe.jpg",
+  "is_active": true,
+  "email_verified": false,
+  "phone_verified": false,
+  "metadata": {
+    "source": "http-script",
+    "campaign": "test-juillet"
+  }
+}
+
+### Authentifier un utilisateur (login)
+POST http://localhost:3000/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "john.doe@example.com",
+  "password": "MotdepasseSecurise2024!"
+}
+
+### Récupérer mon profil (nécessite un token Bearer)
+GET http://localhost:3000/api/v1/users/me
+Authorization: Bearer {{eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0Mzc1MDlkZi0zZmQ0LTQ2OTMtOTQ3Zi04Y2Q0NWUzZGY2NDUiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwicm9sZXMiOltdLCJpYXQiOjE3NTMxOTMyOTQsImV4cCI6MTc1MzE5NDE5NH0.js5p3zvzItzGzTLmq9WenpHBrRMgV8xGqaxgsfTvxGA}}
+
+### Lister les utilisateurs (nécessite un token Bearer)
+GET http://localhost:3000/api/v1/users?query=john&page=1&limit=10
+Authorization: Bearer {{eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0Mzc1MDlkZi0zZmQ0LTQ2OTMtOTQ3Zi04Y2Q0NWUzZGY2NDUiLCJlbWFpbCI6ImpvaG4uZG9lQGV4YW1wbGUuY29tIiwicm9sZXMiOltdLCJpYXQiOjE3NTMxOTMyOTQsImV4cCI6MTc1MzE5NDE5NH0.js5p3zvzItzGzTLmq9WenpHBrRMgV8xGqaxgsfTvxGA}}

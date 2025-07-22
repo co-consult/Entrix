@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix Scanner - App Mobile</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .screens-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .phone-mockup {
+            position: relative;
+            background: #1a1a1a;
+            border-radius: 40px;
+            padding: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            margin: 0 auto;
+            max-width: 350px;
+        }
+        
+        .phone-screen {
+            background: white;
+            border-radius: 25px;
+            overflow: hidden;
+            position: relative;
+            height: 600px;
+        }
+        
+        .status-bar {
+            background: #000;
+            color: white;
+            padding: 8px 20px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .app-header {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .app-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .app-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .screen-content {
+            padding: 20px;
+            height: calc(100% - 120px);
+            overflow-y: auto;
+        }
+        
+        .login-form {
+            text-align: center;
+            padding-top: 40px;
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            border-radius: 20px;
+            margin: 0 auto 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .scanner-container {
+            text-align: center;
+            padding-top: 20px;
+        }
+        
+        .scanner-viewfinder {
+            width: 250px;
+            height: 250px;
+            background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+                        linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+                        linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+                        linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border: 3px solid #DC143C;
+            border-radius: 15px;
+            margin: 0 auto 20px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .scanner-line {
+            width: 80%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #DC143C, transparent);
+            animation: scan 2s infinite;
+        }
+        
+        @keyframes scan {
+            0%, 100% { transform: translateY(-100px); }
+            50% { transform: translateY(100px); }
+        }
+        
+        .scanner-instructions {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .result-card {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .result-card.denied {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        
+        .result-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .result-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .result-details {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .ticket-info {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .ticket-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .ticket-label {
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .ticket-value {
+            color: #333;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #DC143C;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .event-selector {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .current-event {
+            font-weight: 600;
+            color: #DC143C;
+            margin-bottom: 10px;
+        }
+        
+        .gate-info {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .screen-title {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .screen-title h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .features-list {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .features-list h3 {
+            color: #DC143C;
+            font-size: 24px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        
+        .feature-category {
+            margin-bottom: 30px;
+        }
+        
+        .feature-category h4 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .feature-icon {
+            width: 20px;
+            margin-right: 12px;
+            color: #DC143C;
+        }
+        
+        .feature-text {
+            color: #333;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎫 Entrix Scanner</h1>
+            <p>Application Mobile de Contrôle d'Accès - Android/iOS</p>
+        </div>
+        
+        <!-- Fonctionnalités Principales -->
+        <div class="features-list">
+            <h3>📋 Fonctionnalités Principales</h3>
+            
+            <div class="feature-category">
+                <h4>🔐 Authentification & Sécurité</h4>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Connexion sécurisée avec JWT tokens et biométrie</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Sessions temporaires avec expiration automatique</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Mode offline avec synchronisation différée</span>
+                </div>
+            </div>
+            
+            <div class="feature-category">
+                <h4>📱 Scan QR & Validation</h4>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Scanner QR intégré avec caméra optimisée</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Validation temps réel via API Entrix</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Support saisie manuelle (backup)</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Scan continu pour flux rapide aux entrées</span>
+                </div>
+            </div>
+            
+            <div class="feature-category">
+                <h4>🎪 Gestion des Événements</h4>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Sélection événement actif et point d'accès</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Statistiques temps réel par événement</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Changement d'événement à la volée</span>
+                </div>
+            </div>
+            
+            <div class="feature-category">
+                <h4>🛡️ Contrôle d'Accès Avancé</h4>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Validation zones autorisées par ticket</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Vérification blacklist instantanée</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Gestion entrées/sorties/re-entrées</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Alertes sécurité automatiques</span>
+                </div>
+            </div>
+            
+            <div class="feature-category">
+                <h4>📊 Reporting & Analytics</h4>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Statistiques de scan en temps réel</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Historique des validations et incidents</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✓</span>
+                    <span class="feature-text">Export des données vers dashboard</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Écrans de l'application -->
+        <div class="screens-grid">
+            <!-- Écran 1: Connexion -->
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="status-bar">
+                        <span>🕒 14:30</span>
+                        <span>📶 ••• 🔋 85%</span>
+                    </div>
+                    <div class="app-header">
+                        <div class="app-title">Entrix Scanner</div>
+                        <div class="app-subtitle">Contrôle d'Accès</div>
+                    </div>
+                    <div class="screen-content">
+                        <div class="login-form">
+                            <div class="logo">E</div>
+                            <h2 style="margin-bottom: 30px; color: #333;">Connexion Staff</h2>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Identifiant</label>
+                                <input type="text" class="form-input" placeholder="staff_controller_001" value="controller_001">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Mot de passe</label>
+                                <input type="password" class="form-input" placeholder="••••••••">
+                            </div>
+                            
+                            <button class="btn">Se connecter</button>
+                            
+                            <div style="margin-top: 20px; text-align: center;">
+                                <button style="background: none; border: none; color: #DC143C; text-decoration: underline;">
+                                    🔐 Connexion biométrique
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Écran 2: Sélection Événement -->
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="status-bar">
+                        <span>🕒 14:32</span>
+                        <span>📶 ••• 🔋 85%</span>
+                    </div>
+                    <div class="app-header">
+                        <div class="app-title">Événement Actif</div>
+                        <div class="app-subtitle">Sélection & Configuration</div>
+                    </div>
+                    <div class="screen-content">
+                        <div class="event-selector">
+                            <div class="current-event">🏆 Événement Actuel</div>
+                            <div style="font-size: 18px; font-weight: 600; margin-bottom: 10px;">CA vs EST</div>
+                            <div style="color: #666; margin-bottom: 15px;">15 Février 2025 - 19h00</div>
+                            <div style="background: #e7f5e7; color: #16a34a; padding: 8px; border-radius: 6px; text-align: center; font-size: 14px;">
+                                🟢 Événement Actif
+                            </div>
+                        </div>
+                        
+                        <div class="gate-info">
+                            <div style="font-weight: 600; margin-bottom: 8px;">📍 Point d'Accès</div>
+                            <div style="font-size: 18px; margin-bottom: 5px;">Portail A - Tribune Principale</div>
+                            <div style="font-size: 14px; opacity: 0.9;">Capacité: 5000 personnes/h</div>
+                        </div>
+                        
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-number">1,247</div>
+                                <div class="stat-label">Entrées Validées</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">12</div>
+                                <div class="stat-label">Accès Refusés</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">89%</div>
+                                <div class="stat-label">Taux Occupation</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">145ms</div>
+                                <div class="stat-label">Temps Réponse</div>
+                            </div>
+                        </div>
+                        
+                        <button class="btn">📷 Démarrer le Scan</button>
+                        
+                        <div class="action-buttons">
+                            <button class="btn-secondary">🔄 Changer Événement</button>
+                            <button class="btn-secondary">⚙️ Paramètres</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Écran 3: Scanner QR -->
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="status-bar">
+                        <span>🕒 18:45</span>
+                        <span>📶 ••• 🔋 78%</span>
+                    </div>
+                    <div class="app-header">
+                        <div class="app-title">Scanner QR</div>
+                        <div class="app-subtitle">Contrôle d'Accès - Portail A</div>
+                    </div>
+                    <div class="screen-content">
+                        <div class="scanner-container">
+                            <div class="scanner-viewfinder">
+                                <div class="scanner-line"></div>
+                            </div>
+                            <div class="scanner-instructions">
+                                Pointez la caméra vers le QR code du billet
+                            </div>
+                            
+                            <div style="background: #f0f0f0; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                                <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Dernière validation:</div>
+                                <div style="font-weight: 600; color: #22c55e;">✅ QR-2025-CA-EST-001234</div>
+                                <div style="font-size: 12px; color: #666;">Ahmed Ben Ali - Tribune Nord</div>
+                            </div>
+                            
+                            <button class="btn" style="margin-bottom: 10px;">✏️ Saisie Manuelle</button>
+                            <button class="btn-secondary" style="width: 100%;">📊 Voir Statistiques</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Écran 4: Validation Réussie -->
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="status-bar">
+                        <span>🕒 18:46</span>
+                        <span>📶 ••• 🔋 78%</span>
+                    </div>
+                    <div class="app-header">
+                        <div class="app-title">Résultat Validation</div>
+                        <div class="app-subtitle">Accès Autorisé</div>
+                    </div>
+                    <div class="screen-content">
+                        <div class="result-card">
+                            <div class="result-icon">✅</div>
+                            <div class="result-title">ACCÈS AUTORISÉ</div>
+                            <div class="result-details">Entrée validée avec succès</div>
+                        </div>
+                        
+                        <div class="ticket-info">
+                            <div class="ticket-row">
+                                <span class="ticket-label">Nom:</span>
+                                <span class="ticket-value">Ahmed Ben Ali</span>
+                            </div>
+                            <div class="ticket-row">
+                                <span class="ticket-label">Type:</span>
+                                <span class="ticket-value">Tribune Standard</span>
+                            </div>
+                            <div class="ticket-row">
+                                <span class="ticket-label">Zone:</span>
+                                <span class="ticket-value">Tribune Nord - Secteur A</span>
+                            </div>
+                            <div class="ticket-row">
+                                <span class="ticket-label">Place:</span>
+                                <span class="ticket-value">Rangée 15, Place 12</span>
+                            </div>
+                            <div class="ticket-row">
+                                <span class="ticket-label">QR Code:</span>
+                                <span class="ticket-value">QR-2025-CA-EST-001234</span>
+                            </div>
+                            <div class="ticket-row">
+                                <span class="ticket-label">Temps de réponse:</span>
+                                <span class="ticket-value">145ms</span>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #e7f5e7; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+                            <div style="color: #16a34a; font-weight: 600;">🔓 Tourniquet Ouvert</div>
+                            <div style="color: #22c55e; font-size: 14px;">Personne autorisée à passer</div>
+                        </div>
+                        
+                        <button class="btn">🔄 Scanner Suivant</button>
+                        
+                        <div class="action-buttons">
+                            <button class="btn-secondary">📝 Ajouter Note</button>
+                            <button class="btn-secondary">⚠️ Signaler Incident</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Écran 5: Accès Refusé -->
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="status-bar">
+                        <span>🕒 19:15</span>
+                        <span>📶 ••• 🔋 73%</span>
+                    </div>
+                    <div class="app-header">
+                        <div class="app-title">Résultat Validation</div>
+                        <div class="app-subtitle">Accès Refusé</div>
+                    </div>
+                    <div class="screen-content">
+                        <div class="result-card denied">
+                            <div class="result-icon">❌</div>
+                            <div class="result-title">ACCÈS REFUSÉ</div>
+                            <div class="result-details">Billet déjà utilisé</div>
+                        </div>
+                        
+                        <div class="ticket-info">
+                            <div class="ticket-row">
+                                <span class="ticket-label">QR Code:</span>
+                                <span class="ticket-value">QR-2025-CA-EST-001234</span>
+                            </div>
+                            <div class="ticket-row">
+                                <span class="ticket-label">Raison:</span>
+                                <span class="ticket-value" style="color: #dc2626; font-weight: 600;">ALREADY_USED</span>
+                            </div>
+                            <div class="ticket-row">
+                                <span class="ticket-label">Première entrée:</span>
+                                <span class="ticket-value">18:45 - Portail A</span>
+                            </div>
+                            <div class="ticket-row">
+                                <span class="ticket-label">Contrôleur:</span>
+                                <span class="ticket-value">staff_controller_001</span>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #fee2e2; border: 1px solid #fecaca; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                            <div style="color: #dc2626; font-weight: 600; margin-bottom: 8px;">⚠️ Action Requise</div>
+                            <div style="color: #7f1d1d; font-size: 14px;">
+                                Diriger la personne vers le guichet d'information pour vérification.
+                                Possible tentative de re-entrée non autorisée.
+                            </div>
+                        </div>
+                        
+                        <button class="btn" style="background: #dc2626;">🚫 Refuser l'Accès</button>
+                        
+                        <div class="action-buttons">
+                            <button class="btn-secondary">📞 Appeler Superviseur</button>
+                            <button class="btn-secondary">📝 Rapport Incident</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Écran 6: Tableau de Bord -->
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="status-bar">
+                        <span>🕒 20:30</span>
+                        <span>📶 ••• 🔋 65%</span>
+                    </div>
+                    <div class="app-header">
+                        <div class="app-title">Tableau de Bord</div>
+                        <div class="app-subtitle">Statistiques Temps Réel</div>
+                    </div>
+                    <div class="screen-content">
+                        <div style="background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+                            <div style="font-size: 24px; font-weight: 700; margin-bottom: 5px;">3,847</div>
+                            <div style="font-size: 14px; opacity: 0.9;">Total Entrées Validées</div>
+                        </div>
+                        
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-number">245</div>
+                                <div class="stat-label">Mes Validations</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">7</div>
+                                <div class="stat-label">Refus Aujourd'hui</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">98.5%</div>
+                                <div class="stat-label">Taux Succès</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">132ms</div>
+                                <div class="stat-label">Temps Moyen</div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                            <div style="font-weight: 600; margin-bottom: 10px; color: #333;">📊 Performance du Jour</div>
+                            <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Dernières validations:</div>
+                            <div style="font-size: 12px; color: #333; line-height: 1.6;">
+                                20:29 - ✅ Zone VIP - 89ms<br>
+                                20:27 - ✅ Tribune Nord - 145ms<br>
+                                20:25 - ❌ Billet invalide - 67ms<br>
+                                20:23 - ✅ Tribune Sud - 156ms
+                            </div>
+                        </div>
+                        
+                        <div class="action-buttons">
+                            <button class="btn-secondary">📤 Synchroniser</button>
+                            <button class="btn-secondary">📱 Mode Offline</button>
+                        </div>
+                        
+                        <button class="btn" style="margin-top: 20px;">🔄 Retour au Scanner</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; color: white; margin-top: 40px;">
+            <p style="font-size: 18px; margin-bottom: 10px;">🎯 <strong>Application optimisée pour les contrôleurs d'accès</strong></p>
+            <p style="opacity: 0.9;">Interface intuitive, scan rapide, mode offline, sécurité renforcée</p>
+        </div>
+    </div>
+</body>
+</html>

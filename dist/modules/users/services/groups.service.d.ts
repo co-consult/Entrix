@@ -1,0 +1,41 @@
+import { PrismaService } from '../../../shared/prisma/prisma.service';
+import { RedisService } from '../../../shared/redis/redis.service';
+import { LoggerService } from '../../../shared/logger/logger.service';
+import { BullmqService } from '../../../shared/bullmq/bullmq.service';
+import { UpdateGroupDto, InviteMemberDto } from '../dto';
+import { Group, GroupWithMembers, GroupMember, GroupSearchParams, GroupRole } from '../types';
+import { IGroupService } from '../interfaces';
+export declare class GroupsService implements IGroupService {
+    private readonly prisma;
+    private readonly redis;
+    private readonly bullmq;
+    private readonly logger;
+    constructor(prisma: PrismaService, redis: RedisService, bullmq: BullmqService, loggerService: LoggerService);
+    create(groupData: any, ownerId: string): Promise<Group>;
+    findById(id: string): Promise<GroupWithMembers | null>;
+    findByCode(code: string): Promise<Group | null>;
+    update(id: string, updateData: UpdateGroupDto, userId: string): Promise<Group>;
+    delete(id: string, userId: string): Promise<void>;
+    search(params: GroupSearchParams): Promise<any>;
+    findUserGroups(userId: string, filters?: any): Promise<Group[]>;
+    findPublicGroups(filters?: any): Promise<Group[]>;
+    addMember(groupId: string, userId: string, role: GroupRole, addedBy: string): Promise<GroupMember>;
+    removeMember(groupId: string, userId: string, removedBy: string): Promise<void>;
+    updateMemberRole(groupId: string, userId: string, newRole: GroupRole, updatedBy: string): Promise<GroupMember>;
+    updateMemberPermissions(groupId: string, userId: string, permissions: Partial<any>, updatedBy: string): Promise<GroupMember>;
+    inviteUser(groupId: string, inviteData: InviteMemberDto, invitedBy: string): Promise<any>;
+    acceptInvitation(invitationId: string, userId: string): Promise<GroupMember>;
+    declineInvitation(invitationId: string, userId: string): Promise<void>;
+    hasPermission(groupId: string, userId: string, permission: string): Promise<boolean>;
+    getUserRole(groupId: string, userId: string): Promise<GroupRole | null>;
+    canPerformAction(groupId: string, userId: string, action: string): Promise<{
+        allowed: boolean;
+        reason?: string;
+    }>;
+    getGroupStats(groupId: string): Promise<any>;
+    getOverallStats(filters?: any): Promise<any>;
+    private generateUniqueGroupCode;
+    private checkGroupPermission;
+    private getDefaultPermissionsForRole;
+    private invalidateGroupCaches;
+}

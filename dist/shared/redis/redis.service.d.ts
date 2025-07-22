@@ -1,0 +1,41 @@
+import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
+export declare class RedisService implements OnModuleInit, OnModuleDestroy {
+    private readonly configService;
+    private readonly logger;
+    private client;
+    private metrics;
+    constructor(configService: ConfigService);
+    onModuleInit(): Promise<void>;
+    getClient(): Redis;
+    set(key: string, value: string, ttlSeconds?: number): Promise<'OK'>;
+    get(key: string): Promise<string | null>;
+    del(key: string): Promise<number>;
+    setCache<T>(key: string, value: T, ttlSeconds?: number): Promise<void>;
+    getCache<T>(key: string): Promise<T | null>;
+    delCache(key: string): Promise<number>;
+    acquireLock(key: string, ttlSeconds?: number): Promise<boolean>;
+    releaseLock(key: string): Promise<number>;
+    withLock<T>(key: string, callback: () => Promise<T>, ttlSeconds?: number): Promise<T>;
+    setSession(sessionId: string, data: any, ttlSeconds?: number): Promise<void>;
+    getSession<T>(sessionId: string): Promise<T | null>;
+    delSession(sessionId: string): Promise<number>;
+    increment(key: string, ttlSeconds?: number): Promise<number>;
+    exists(key: string): Promise<boolean>;
+    expire(key: string, ttlSeconds: number): Promise<boolean>;
+    keys(pattern: string): Promise<string[]>;
+    cleanup(pattern: string): Promise<number>;
+    getMetrics(): {
+        hitRate: number;
+        errorRate: number;
+        hits: number;
+        misses: number;
+        errors: number;
+        totalOperations: number;
+    };
+    resetMetrics(): void;
+    ping(): Promise<string>;
+    info(): Promise<string>;
+    onModuleDestroy(): Promise<void>;
+}

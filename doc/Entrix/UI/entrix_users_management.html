@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix Admin - Gestion Utilisateurs</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .admin-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #475569;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            color: #e2e8f0;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(90deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            background: #f8fafc;
+        }
+        
+        .top-bar {
+            background: white;
+            padding: 16px 32px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .breadcrumb {
+            font-size: 14px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        
+        .breadcrumb a {
+            color: #DC143C;
+            text-decoration: none;
+        }
+        
+        .content-area {
+            padding: 32px;
+        }
+        
+        /* Filters Bar */
+        .filters-bar {
+            background: white;
+            padding: 20px 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .search-section {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 48px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .filter-select {
+            padding: 10px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            min-width: 140px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(220, 20, 60, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        .btn-icon {
+            padding: 8px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Users Table */
+        .users-table-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .table-header {
+            padding: 20px 24px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .table-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .table-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .users-table th {
+            background: #f8fafc;
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 600;
+            color: #64748b;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .users-table td {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+        
+        .users-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .user-avatar.admin {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+        }
+        
+        .user-avatar.vip {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+        
+        .user-avatar.staff {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        }
+        
+        .user-details {
+            flex: 1;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+        
+        .user-email {
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .user-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .user-status.active {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        
+        .user-status.inactive {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .user-status.pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .user-role {
+            padding: 4px 8px;
+            background: #f1f5f9;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #475569;
+        }
+        
+        .user-role.admin {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+        
+        .user-role.vip {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .user-role.staff {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+        
+        .user-groups {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        
+        .group-tag {
+            padding: 2px 6px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            font-size: 10px;
+            color: #475569;
+        }
+        
+        .user-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .action-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: #f1f5f9;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 12px;
+        }
+        
+        .action-btn:hover {
+            background: #DC143C;
+            color: white;
+        }
+        
+        .action-btn.delete:hover {
+            background: #ef4444;
+        }
+        
+        /* Pagination */
+        .pagination {
+            padding: 20px 24px;
+            background: #f8fafc;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .pagination-info {
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .pagination-controls {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+        
+        .pagination-btn {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .pagination-btn:hover {
+            border-color: #DC143C;
+            color: #DC143C;
+        }
+        
+        .pagination-btn.active {
+            background: #DC143C;
+            color: white;
+            border-color: #DC143C;
+        }
+        
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Bulk Actions */
+        .bulk-actions {
+            background: #fef2f2;
+            padding: 12px 24px;
+            border-bottom: 1px solid #fecaca;
+            display: none;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .bulk-actions.show {
+            display: flex;
+        }
+        
+        .bulk-info {
+            color: #dc2626;
+            font-weight: 600;
+        }
+        
+        .bulk-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            padding: 24px 24px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #64748b;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+        }
+        
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 8px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .checkbox-item label {
+            font-size: 14px;
+            color: #475569;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+        
+        /* User Profile Panel */
+        .user-profile-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100vh;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .user-profile-panel.open {
+            right: 0;
+        }
+        
+        .profile-header {
+            padding: 24px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .profile-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        
+        .profile-name {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .profile-email {
+            opacity: 0.9;
+            margin-bottom: 16px;
+        }
+        
+        .profile-status-badge {
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .profile-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+        
+        .profile-section {
+            margin-bottom: 32px;
+        }
+        
+        .profile-section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 16px;
+        }
+        
+        .profile-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .profile-item:last-child {
+            border-bottom: none;
+        }
+        
+        .profile-label {
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .profile-value {
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .profile-actions {
+            padding: 24px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        /* Stats Cards Mini */
+        .stats-mini {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-mini {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-mini-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #DC143C;
+            margin-bottom: 4px;
+        }
+        
+        .stat-mini-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .filters-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .users-table-container {
+                overflow-x: auto;
+            }
+            
+            .users-table {
+                min-width: 800px;
+            }
+            
+            .user-profile-panel {
+                width: 100%;
+                right: -100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">E</div>
+                    <span>Entrix Admin</span>
+                </div>
+            </div>
+            
+            <div style="padding: 20px 0;">
+                <a href="#" class="nav-item">
+                    <span>👥</span>
+                    Dashboard Users
+                </a>
+                <a href="#" class="nav-item active">
+                    <span>🙋</span>
+                    Gestion Utilisateurs
+                </a>
+                <a href="#" class="nav-item">
+                    <span>🔐</span>
+                    Rôles & Permissions
+                </a>
+                <a href="#" class="nav-item">
+                    <span>👪</span>
+                    Groupes
+                </a>
+                <a href="#" class="nav-item">
+                    <span>🛡️</span>
+                    Centre Sécurité
+                </a>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div>
+                    <h1 class="page-title">Gestion des Utilisateurs</h1>
+                    <div class="breadcrumb">
+                        <a href="#">Dashboard</a> > <a href="#">Users & Rôles</a> > Gestion Utilisateurs
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Stats Mini -->
+                <div class="stats-mini">
+                    <div class="stat-mini">
+                        <div class="stat-mini-value">24,847</div>
+                        <div class="stat-mini-label">Total Utilisateurs</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="stat-mini-value">18,923</div>
+                        <div class="stat-mini-label">Actifs</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="stat-mini-value">89</div>
+                        <div class="stat-mini-label">Nouveaux (7j)</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="stat-mini-value">3</div>
+                        <div class="stat-mini-label">Sélectionnés</div>
+                    </div>
+                </div>
+                
+                <!-- Filters Bar -->
+                <div class="filters-bar">
+                    <div class="search-section">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-input" placeholder="Rechercher par nom, email, rôle..." id="searchInput">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <select class="filter-select" id="roleFilter">
+                            <option value="">Tous les rôles</option>
+                            <option value="USER">Utilisateurs</option>
+                            <option value="SUBSCRIBER">Abonnés</option>
+                            <option value="VIP">VIP</option>
+                            <option value="STAFF">Staff</option>
+                            <option value="ADMIN">Administrateurs</option>
+                        </select>
+                        
+                        <select class="filter-select" id="statusFilter">
+                            <option value="">Tous les statuts</option>
+                            <option value="active">Actif</option>
+                            <option value="inactive">Inactif</option>
+                            <option value="pending">En attente</option>
+                        </select>
+                        
+                        <select class="filter-select" id="groupFilter">
+                            <option value="">Tous les groupes</option>
+                            <option value="ca_supporters">Supporters CA</option>
+                            <option value="est_supporters">Supporters EST</option>
+                            <option value="vip_members">Membres VIP</option>
+                            <option value="staff_stadium">Staff Stade</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <button class="btn btn-secondary btn-icon" title="Actualiser">
+                            🔄
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportUsers()">
+                            📤 Exporter
+                        </button>
+                        <button class="btn btn-primary" onclick="showNewUserModal()">
+                            ➕ Nouvel Utilisateur
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Users Table -->
+                <div class="users-table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Liste des Utilisateurs</h2>
+                        <div class="table-actions">
+                            <button class="btn btn-secondary" onclick="toggleBulkMode()">
+                                ☑️ Mode Sélection
+                            </button>
+                            <button class="btn btn-secondary" onclick="showImportModal()">
+                                📥 Importer
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Bulk Actions Bar -->
+                    <div class="bulk-actions" id="bulkActions">
+                        <div class="bulk-info">
+                            <span id="selectedCount">3</span> utilisateurs sélectionnés
+                        </div>
+                        <div class="bulk-buttons">
+                            <button class="btn btn-secondary">📧 Envoyer Email</button>
+                            <button class="btn btn-secondary">👪 Ajouter au Groupe</button>
+                            <button class="btn btn-secondary">🔐 Changer Rôle</button>
+                            <button class="btn btn-secondary" style="color: #dc2626;">🗑️ Supprimer</button>
+                        </div>
+                    </div>
+                    
+                    <table class="users-table">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox" id="selectAll" onclick="toggleSelectAll()">
+                                </th>
+                                <th>Utilisateur</th>
+                                <th>Rôle</th>
+                                <th>Statut</th>
+                                <th>Groupes</th>
+                                <th>Dernière Connexion</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="user-checkbox" data-user-id="user_001">
+                                </td>
+                                <td>
+                                    <div class="user-info">
+                                        <div class="user-avatar admin">AM</div>
+                                        <div class="user-details">
+                                            <div class="user-name">Ahmed Mansouri</div>
+                                            <div class="user-email">ahmed.mansouri@entrix.tn</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="user-role admin">Super Admin</span>
+                                </td>
+                                <td>
+                                    <span class="user-status active">Actif</span>
+                                </td>
+                                <td>
+                                    <div class="user-groups">
+                                        <span class="group-tag">Administrateurs</span>
+                                        <span class="group-tag">Staff Technique</span>
+                                    </div>
+                                </td>
+                                <td>Il y a 5 minutes</td>
+                                <td>
+                                    <div class="user-actions">
+                                        <button class="action-btn" title="Voir Profil" onclick="showUserProfile('user_001')">👁️</button>
+                                        <button class="action-btn" title="Éditer" onclick="editUser('user_001')">✏️</button>
+                                        <button class="action-btn" title="Permissions" onclick="managePermissions('user_001')">🔐</button>
+                                        <button class="action-btn delete" title="Supprimer" onclick="deleteUser('user_001')">🗑️</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="user-checkbox" data-user-id="user_002">
+                                </td>
+                                <td>
+                                    <div class="user-info">
+                                        <div class="user-avatar vip">FT</div>
+                                        <div class="user-details">
+                                            <div class="user-name">Fatima Trabelsi</div>
+                                            <div class="user-email">fatima.trabelsi@gmail.com</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="user-role vip">VIP Gold</span>
+                                </td>
+                                <td>
+                                    <span class="user-status active">Actif</span>
+                                </td>
+                                <td>
+                                    <div class="user-groups">
+                                        <span class="group-tag">VIP Members</span>
+                                        <span class="group-tag">Supporters CA</span>
+                                    </div>
+                                </td>
+                                <td>Il y a 2 heures</td>
+                                <td>
+                                    <div class="user-actions">
+                                        <button class="action-btn" title="Voir Profil" onclick="showUserProfile('user_002')">👁️</button>
+                                        <button class="action-btn" title="Éditer" onclick="editUser('user_002')">✏️</button>
+                                        <button class="action-btn" title="Permissions" onclick="managePermissions('user_002')">🔐</button>
+                                        <button class="action-btn delete" title="Supprimer" onclick="deleteUser('user_002')">🗑️</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="user-checkbox" data-user-id="user_003">
+                                </td>
+                                <td>
+                                    <div class="user-info">
+                                        <div class="user-avatar">MK</div>
+                                        <div class="user-details">
+                                            <div class="user-name">Mohamed Khelil</div>
+                                            <div class="user-email">m.khelil@hotmail.com</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="user-role">Subscriber</span>
+                                </td>
+                                <td>
+                                    <span class="user-status active">Actif</span>
+                                </td>
+                                <td>
+                                    <div class="user-groups">
+                                        <span class="group-tag">Supporters EST</span>
+                                        <span class="group-tag">Abonnés Saison</span>
+                                    </div>
+                                </td>
+                                <td>Il y a 1 jour</td>
+                                <td>
+                                    <div class="user-actions">
+                                        <button class="action-btn" title="Voir Profil" onclick="showUserProfile('user_003')">👁️</button>
+                                        <button class="action-btn" title="Éditer" onclick="editUser('user_003')">✏️</button>
+                                        <button class="action-btn" title="Permissions" onclick="managePermissions('user_003')">🔐</button>
+                                        <button class="action-btn delete" title="Supprimer" onclick="deleteUser('user_003')">🗑️</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="user-checkbox" data-user-id="user_004">
+                                </td>
+                                <td>
+                                    <div class="user-info">
+                                        <div class="user-avatar staff">SG</div>
+                                        <div class="user-details">
+                                            <div class="user-name">Salma Gharbi</div>
+                                            <div class="user-email">salma.gharbi@entrix.tn</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="user-role staff">Event Manager</span>
+                                </td>
+                                <td>
+                                    <span class="user-status active">Actif</span>
+                                </td>
+                                <td>
+                                    <div class="user-groups">
+                                        <span class="group-tag">Staff Événements</span>
+                                        <span class="group-tag">Managers</span>
+                                    </div>
+                                </td>
+                                <td>Il y a 30 minutes</td>
+                                <td>
+                                    <div class="user-actions">
+                                        <button class="action-btn" title="Voir Profil" onclick="showUserProfile('user_004')">👁️</button>
+                                        <button class="action-btn" title="Éditer" onclick="editUser('user_004')">✏️</button>
+                                        <button class="action-btn" title="Permissions" onclick="managePermissions('user_004')">🔐</button>
+                                        <button class="action-btn delete" title="Supprimer" onclick="deleteUser('user_004')">🗑️</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="user-checkbox" data-user-id="user_005">
+                                </td>
+                                <td>
+                                    <div class="user-info">
+                                        <div class="user-avatar">YM</div>
+                                        <div class="user-details">
+                                            <div class="user-name">Youssef Mansouri</div>
+                                            <div class="user-email">youssef.m@gmail.com</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="user-role">User</span>
+                                </td>
+                                <td>
+                                    <span class="user-status pending">En attente</span>
+                                </td>
+                                <td>
+                                    <div class="user-groups">
+                                        <span class="group-tag">Nouveaux</span>
+                                    </div>
+                                </td>
+                                <td>Jamais</td>
+                                <td>
+                                    <div class="user-actions">
+                                        <button class="action-btn" title="Voir Profil" onclick="showUserProfile('user_005')">👁️</button>
+                                        <button class="action-btn" title="Éditer" onclick="editUser('user_005')">✏️</button>
+                                        <button class="action-btn" title="Permissions" onclick="managePermissions('user_005')">🔐</button>
+                                        <button class="action-btn delete" title="Supprimer" onclick="deleteUser('user_005')">🗑️</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <!-- Pagination -->
+                    <div class="pagination">
+                        <div class="pagination-info">
+                            Affichage de 1 à 5 sur 24,847 utilisateurs
+                        </div>
+                        <div class="pagination-controls">
+                            <button class="pagination-btn" disabled>« Précédent</button>
+                            <button class="pagination-btn active">1</button>
+                            <button class="pagination-btn">2</button>
+                            <button class="pagination-btn">3</button>
+                            <button class="pagination-btn">...</button>
+                            <button class="pagination-btn">4,970</button>
+                            <button class="pagination-btn">Suivant »</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- User Profile Panel -->
+    <div class="user-profile-panel" id="userProfilePanel">
+        <div class="profile-header">
+            <button style="position: absolute; top: 20px; right: 20px; background: none; border: none; color: white; font-size: 20px; cursor: pointer;" onclick="closeUserProfile()">×</button>
+            <div class="profile-avatar" id="profileAvatar">FT</div>
+            <div class="profile-name" id="profileName">Fatima Trabelsi</div>
+            <div class="profile-email" id="profileEmail">fatima.trabelsi@gmail.com</div>
+            <div class="profile-status-badge" id="profileStatus">VIP Gold • Actif</div>
+        </div>
+        
+        <div class="profile-content">
+            <div class="profile-section">
+                <h3 class="profile-section-title">Informations Générales</h3>
+                <div class="profile-item">
+                    <span class="profile-label">ID Utilisateur</span>
+                    <span class="profile-value">USER_002</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Date d'inscription</span>
+                    <span class="profile-value">15 janvier 2023</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Dernière connexion</span>
+                    <span class="profile-value">Il y a 2 heures</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Adresse IP</span>
+                    <span class="profile-value">41.229.xxx.xxx</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Localisation</span>
+                    <span class="profile-value">Tunis, Tunisie</span>
+                </div>
+            </div>
+            
+            <div class="profile-section">
+                <h3 class="profile-section-title">Activité</h3>
+                <div class="profile-item">
+                    <span class="profile-label">Événements fréquentés</span>
+                    <span class="profile-value">47</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Billets achetés</span>
+                    <span class="profile-value">89</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Montant total dépensé</span>
+                    <span class="profile-value">3,450 TND</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Points fidélité</span>
+                    <span class="profile-value">12,450 pts</span>
+                </div>
+            </div>
+            
+            <div class="profile-section">
+                <h3 class="profile-section-title">Sécurité</h3>
+                <div class="profile-item">
+                    <span class="profile-label">2FA Activé</span>
+                    <span class="profile-value">✅ Oui</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Sessions actives</span>
+                    <span class="profile-value">2 appareils</span>
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Dernière modification MdP</span>
+                    <span class="profile-value">Il y a 3 mois</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="profile-actions">
+            <button class="btn btn-primary" style="width: 100%;">✏️ Éditer Profil</button>
+            <button class="btn btn-secondary" style="width: 100%;">📧 Envoyer Email</button>
+            <button class="btn btn-secondary" style="width: 100%;">🔐 Gérer Permissions</button>
+            <button class="btn btn-secondary" style="width: 100%; color: #dc2626;">🚫 Suspendre Compte</button>
+        </div>
+    </div>
+    
+    <!-- Modal Nouvel Utilisateur -->
+    <div class="modal" id="newUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Créer un Nouvel Utilisateur</h2>
+                <button class="modal-close" onclick="hideModal('newUserModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="newUserForm">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="form-group">
+                            <label class="form-label">Prénom</label>
+                            <input type="text" class="form-input" placeholder="Ahmed">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Nom</label>
+                            <input type="text" class="form-input" placeholder="Ben Ali">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-input" placeholder="ahmed.benali@email.com">
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="form-group">
+                            <label class="form-label">Téléphone</label>
+                            <input type="tel" class="form-input" placeholder="+216 20 123 456">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Date de Naissance</label>
+                            <input type="date" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="form-group">
+                            <label class="form-label">Rôle Principal</label>
+                            <select class="form-select">
+                                <option value="USER">Utilisateur</option>
+                                <option value="SUBSCRIBER">Abonné</option>
+                                <option value="VIP">VIP</option>
+                                <option value="STAFF">Staff</option>
+                                <option value="ADMIN">Administrateur</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Statut Initial</label>
+                            <select class="form-select">
+                                <option value="active">Actif</option>
+                                <option value="pending">En attente</option>
+                                <option value="inactive">Inactif</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Groupes</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="group_ca">
+                                <label for="group_ca">Supporters CA</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="group_est">
+                                <label for="group_est">Supporters EST</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="group_vip">
+                                <label for="group_vip">Membres VIP</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="group_staff">
+                                <label for="group_staff">Staff</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="group_media">
+                                <label for="group_media">Médias</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="group_partners">
+                                <label for="group_partners">Partenaires</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Notifications</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="notif_email" checked>
+                                <label for="notif_email">Notifications Email</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="notif_sms">
+                                <label for="notif_sms">Notifications SMS</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="notif_push" checked>
+                                <label for="notif_push">Notifications Push</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                        <button type="button" class="btn btn-secondary" onclick="hideModal('newUserModal')">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Créer Utilisateur</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Variables globales
+        let selectedUsers = new Set();
+        let bulkMode = false;
+        let currentUser = null;
+        let users = [
+            {
+                id: 'user_001',
+                name: 'Ahmed Mansouri',
+                email: 'ahmed.mansouri@entrix.tn',
+                role: 'Super Admin',
+                status: 'active',
+                groups: ['Administrateurs', 'Staff Technique'],
+                lastLogin: 'Il y a 5 minutes',
+                avatar: 'AM',
+                type: 'admin'
+            },
+            {
+                id: 'user_002',
+                name: 'Fatima Trabelsi',
+                email: 'fatima.trabelsi@gmail.com',
+                role: 'VIP Gold',
+                status: 'active',
+                groups: ['VIP Members', 'Supporters CA'],
+                lastLogin: 'Il y a 2 heures',
+                avatar: 'FT',
+                type: 'vip'
+            },
+            {
+                id: 'user_003',
+                name: 'Mohamed Khelil',
+                email: 'm.khelil@hotmail.com',
+                role: 'Subscriber',
+                status: 'active',
+                groups: ['Supporters EST', 'Abonnés Saison'],
+                lastLogin: 'Il y a 1 jour',
+                avatar: 'MK',
+                type: 'user'
+            },
+            {
+                id: 'user_004',
+                name: 'Salma Gharbi',
+                email: 'salma.gharbi@entrix.tn',
+                role: 'Event Manager',
+                status: 'active',
+                groups: ['Staff Événements', 'Managers'],
+                lastLogin: 'Il y a 30 minutes',
+                avatar: 'SG',
+                type: 'staff'
+            },
+            {
+                id: 'user_005',
+                name: 'Youssef Mansouri',
+                email: 'youssef.m@gmail.com',
+                role: 'User',
+                status: 'pending',
+                groups: ['Nouveaux'],
+                lastLogin: 'Jamais',
+                avatar: 'YM',
+                type: 'user'
+            }
+        ];
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            loadUsers();
+        });
+        
+        function setupEventListeners() {
+            // Search functionality
+            document.getElementById('searchInput').addEventListener('input', handleSearch);
+            
+            // Filters
+            document.getElementById('roleFilter').addEventListener('change', applyFilters);
+            document.getElementById('statusFilter').addEventListener('change', applyFilters);
+            document.getElementById('groupFilter').addEventListener('change', applyFilters);
+            
+            // Form handling
+            document.getElementById('newUserForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                createNewUser();
+            });
+            
+            // Checkbox handling
+            document.addEventListener('change', function(e) {
+                if (e.target.classList.contains('user-checkbox')) {
+                    handleUserSelection(e.target);
+                }
+            });
+            
+            // Close modal when clicking outside
+            window.addEventListener('click', function(e) {
+                if (e.target.classList.contains('modal')) {
+                    e.target.classList.remove('show');
+                }
+            });
+        }
+        
+        // User Management Functions
+        function loadUsers() {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+            
+            users.forEach(user => {
+                const row = createUserRow(user);
+                tbody.appendChild(row);
+            });
+            
+            updateStats();
+        }
+        
+        function createUserRow(user) {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <input type="checkbox" class="user-checkbox" data-user-id="${user.id}">
+                </td>
+                <td>
+                    <div class="user-info">
+                        <div class="user-avatar ${user.type}">${user.avatar}</div>
+                        <div class="user-details">
+                            <div class="user-name">${user.name}</div>
+                            <div class="user-email">${user.email}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="user-role ${user.type}">${user.role}</span>
+                </td>
+                <td>
+                    <span class="user-status ${user.status}">${getStatusLabel(user.status)}</span>
+                </td>
+                <td>
+                    <div class="user-groups">
+                        ${user.groups.map(group => `<span class="group-tag">${group}</span>`).join('')}
+                    </div>
+                </td>
+                <td>${user.lastLogin}</td>
+                <td>
+                    <div class="user-actions">
+                        <button class="action-btn" title="Voir Profil" onclick="showUserProfile('${user.id}')">👁️</button>
+                        <button class="action-btn" title="Éditer" onclick="editUser('${user.id}')">✏️</button>
+                        <button class="action-btn" title="Permissions" onclick="managePermissions('${user.id}')">🔐</button>
+                        <button class="action-btn delete" title="Supprimer" onclick="deleteUser('${user.id}')">🗑️</button>
+                    </div>
+                </td>
+            `;
+            return row;
+        }
+        
+        function getStatusLabel(status) {
+            const labels = {
+                'active': 'Actif',
+                'inactive': 'Inactif',
+                'pending': 'En attente'
+            };
+            return labels[status] || status;
+        }
+        
+        // Search & Filter Functions
+        function handleSearch(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredUsers = users.filter(user => 
+                user.name.toLowerCase().includes(searchTerm) ||
+                user.email.toLowerCase().includes(searchTerm) ||
+                user.role.toLowerCase().includes(searchTerm)
+            );
+            
+            displayFilteredUsers(filteredUsers);
+        }
+        
+        function applyFilters() {
+            const roleFilter = document.getElementById('roleFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+            const groupFilter = document.getElementById('groupFilter').value;
+            
+            let filteredUsers = users;
+            
+            if (roleFilter) {
+                filteredUsers = filteredUsers.filter(user => 
+                    user.role.toUpperCase().includes(roleFilter.toUpperCase())
+                );
+            }
+            
+            if (statusFilter) {
+                filteredUsers = filteredUsers.filter(user => user.status === statusFilter);
+            }
+            
+            if (groupFilter) {
+                filteredUsers = filteredUsers.filter(user => 
+                    user.groups.some(group => group.toLowerCase().includes(groupFilter.toLowerCase()))
+                );
+            }
+            
+            displayFilteredUsers(filteredUsers);
+        }
+        
+        function displayFilteredUsers(filteredUsers) {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+            
+            filteredUsers.forEach(user => {
+                const row = createUserRow(user);
+                tbody.appendChild(row);
+            });
+        }
+        
+        // User Actions
+        function showUserProfile(userId) {
+            const user = users.find(u => u.id === userId);
+            if (!user) return;
+            
+            currentUser = user;
+            
+            // Update profile panel
+            document.getElementById('profileAvatar').textContent = user.avatar;
+            document.getElementById('profileName').textContent = user.name;
+            document.getElementById('profileEmail').textContent = user.email;
+            document.getElementById('profileStatus').textContent = `${user.role} • ${getStatusLabel(user.status)}`;
+            
+            // Show panel
+            document.getElementById('userProfilePanel').classList.add('open');
+        }
+        
+        function closeUserProfile() {
+            document.getElementById('userProfilePanel').classList.remove('open');
+        }
+        
+        function editUser(userId) {
+            const user = users.find(u => u.id === userId);
+            console.log('Édition utilisateur:', user);
+            alert(`Ouverture de l'éditeur pour ${user.name}`);
+        }
+        
+        function managePermissions(userId) {
+            const user = users.find(u => u.id === userId);
+            console.log('Gestion permissions:', user);
+            alert(`Gestion des permissions pour ${user.name}`);
+        }
+        
+        function deleteUser(userId) {
+            const user = users.find(u => u.id === userId);
+            
+            if (confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur ${user.name} ?`)) {
+                users = users.filter(u => u.id !== userId);
+                loadUsers();
+                console.log('Utilisateur supprimé:', user);
+            }
+        }
+        
+        // Bulk Actions
+        function toggleBulkMode() {
+            bulkMode = !bulkMode;
+            const checkboxes = document.querySelectorAll('.user-checkbox, #selectAll');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.style.display = bulkMode ? 'block' : 'none';
+            });
+            
+            if (!bulkMode) {
+                selectedUsers.clear();
+                checkboxes.forEach(checkbox => checkbox.checked = false);
+                updateBulkActions();
+            }
+        }
+        
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.user-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAll.checked;
+                const userId = checkbox.dataset.userId;
+                
+                if (selectAll.checked) {
+                    selectedUsers.add(userId);
+                } else {
+                    selectedUsers.delete(userId);
+                }
+            });
+            
+            updateBulkActions();
+        }
+        
+        function handleUserSelection(checkbox) {
+            const userId = checkbox.dataset.userId;
+            
+            if (checkbox.checked) {
+                selectedUsers.add(userId);
+            } else {
+                selectedUsers.delete(userId);
+            }
+            
+            updateBulkActions();
+            
+            // Update select all checkbox
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.user-checkbox');
+            const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+            
+            selectAll.checked = checkedBoxes.length === checkboxes.length;
+            selectAll.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < checkboxes.length;
+        }
+        
+        function updateBulkActions() {
+            const bulkActions = document.getElementById('bulkActions');
+            const selectedCount = document.getElementById('selectedCount');
+            
+            if (selectedUsers.size > 0) {
+                bulkActions.classList.add('show');
+                selectedCount.textContent = selectedUsers.size;
+            } else {
+                bulkActions.classList.remove('show');
+            }
+        }
+        
+        // Modal Functions
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+        
+        function hideModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+        
+        function showNewUserModal() {
+            showModal('newUserModal');
+        }
+        
+        function showImportModal() {
+            alert('Ouverture de l\'assistant d\'import...');
+        }
+        
+        function createNewUser() {
+            const form = document.getElementById('newUserForm');
+            const formData = new FormData(form);
+            
+            // Simuler la création d'un nouvel utilisateur
+            const newUser = {
+                id: 'user_' + Date.now(),
+                name: formData.get('firstName') + ' ' + formData.get('lastName'),
+                email: formData.get('email'),
+                role: formData.get('role'),
+                status: formData.get('status'),
+                groups: [],
+                lastLogin: 'Jamais',
+                avatar: (formData.get('firstName')[0] + formData.get('lastName')[0]).toUpperCase(),
+                type: formData.get('role').toLowerCase()
+            };
+            
+            users.unshift(newUser);
+            loadUsers();
+            hideModal('newUserModal');
+            form.reset();
+            
+            console.log('Nouvel utilisateur créé:', newUser);
+            alert(`Utilisateur ${newUser.name} créé avec succès!`);
+        }
+        
+        // Export Functions
+        function exportUsers() {
+            const data = {
+                users: users,
+                exportDate: new Date().toISOString(),
+                totalUsers: users.length
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'entrix-users-export.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            console.log('Export utilisateurs:', data);
+        }
+        
+        // Stats Update
+        function updateStats() {
+            const totalUsers = users.length;
+            const activeUsers = users.filter(u => u.status === 'active').length;
+            const newUsers = users.filter(u => u.status === 'pending').length;
+            const selectedCount = selectedUsers.size;
+            
+            // Update mini stats
+            const statElements = document.querySelectorAll('.stat-mini-value');
+            if (statElements.length >= 4) {
+                statElements[0].textContent = totalUsers.toLocaleString();
+                statElements[1].textContent = activeUsers.toLocaleString();
+                statElements[2].textContent = newUsers;
+                statElements[3].textContent = selectedCount;
+            }
+        }
+        
+        // Real-time Updates
+        function startRealTimeUpdates() {
+            setInterval(() => {
+                // Simuler des mises à jour en temps réel
+                console.log('Mise à jour temps réel...');
+                
+                // Simuler de nouveaux utilisateurs
+                if (Math.random() < 0.1) { // 10% de chance
+                    const names = ['Ali Hassan', 'Nour Belgacem', 'Karim Bouaziz', 'Lina Mezghani'];
+                    const randomName = names[Math.floor(Math.random() * names.length)];
+                    const nameParts = randomName.split(' ');
+                    
+                    const newUser = {
+                        id: 'user_' + Date.now(),
+                        name: randomName,
+                        email: `${nameParts[0].toLowerCase()}.${nameParts[1].toLowerCase()}@gmail.com`,
+                        role: 'User',
+                        status: 'pending',
+                        groups: ['Nouveaux'],
+                        lastLogin: 'Jamais',
+                        avatar: nameParts[0][0] + nameParts[1][0],
+                        type: 'user'
+                    };
+                    
+                    users.unshift(newUser);
+                    loadUsers();
+                }
+            }, 30000); // Toutes les 30 secondes
+        }
+        
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'n') {
+                e.preventDefault();
+                showNewUserModal();
+            }
+            
+            if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+            
+            if (e.key === 'Escape') {
+                // Close modals and panels
+                document.querySelectorAll('.modal.show').forEach(modal => {
+                    modal.classList.remove('show');
+                });
+                closeUserProfile();
+            }
+            
+            if (e.ctrlKey && e.key === 'a') {
+                e.preventDefault();
+                if (bulkMode) {
+                    document.getElementById('selectAll').click();
+                }
+            }
+        });
+        
+        // Auto-save selections
+        setInterval(() => {
+            if (selectedUsers.size > 0) {
+                localStorage.setItem('selectedUsers', JSON.stringify([...selectedUsers]));
+            }
+        }, 5000);
+        
+        // Load saved selections
+        function loadSavedSelections() {
+            const saved = localStorage.getItem('selectedUsers');
+            if (saved) {
+                const userIds = JSON.parse(saved);
+                userIds.forEach(id => selectedUsers.add(id));
+                
+                // Update checkboxes
+                userIds.forEach(id => {
+                    const checkbox = document.querySelector(`[data-user-id="${id}"]`);
+                    if (checkbox) checkbox.checked = true;
+                });
+                
+                updateBulkActions();
+            }
+        }
+        
+        // Initialize real-time updates
+        startRealTimeUpdates();
+        
+        // Load saved data
+        setTimeout(loadSavedSelections, 1000);
+        
+        // Responsive handling
+        function handleResize() {
+            if (window.innerWidth < 768) {
+                // Mobile optimizations
+                document.querySelector('.sidebar').classList.remove('mobile-open');
+            }
+        }
+        
+        window.addEventListener('resize', handleResize);
+        
+        console.log('🙋 Gestion Utilisateurs initialisé');
+        console.log('💡 Raccourcis: Ctrl+N (Nouveau), Ctrl+F (Recherche), Ctrl+A (Tout sélectionner), Echap (Fermer)');
+    </script>
+</body>
+</html>

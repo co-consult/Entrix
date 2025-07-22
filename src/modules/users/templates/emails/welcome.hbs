@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="{{language}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenue sur Entrix !</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-message {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .welcome-message h2 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin: 0 0 15px 0;
+        }
+        .welcome-message p {
+            font-size: 16px;
+            color: #666;
+            margin: 0;
+        }
+        .features {
+            margin: 30px 0;
+        }
+        .feature {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+        }
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 18px;
+            color: white;
+        }
+        .feature-content h3 {
+            margin: 0 0 5px 0;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+        .feature-content p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .cta-section {
+            text-align: center;
+            margin: 40px 0;
+            padding: 30px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 8px;
+            color: white;
+        }
+        .cta-section h3 {
+            margin: 0 0 15px 0;
+            font-size: 20px;
+        }
+        .cta-section p {
+            margin: 0 0 20px 0;
+            opacity: 0.9;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: white;
+            color: #f5576c;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .profile-completion {
+            background-color: #e8f5e8;
+            border: 1px solid #c3e6c3;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .profile-completion h3 {
+            color: #2e7d32;
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+        .progress-bar {
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            height: 8px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+            height: 100%;
+            width: {{completionPercentage}}%;
+            transition: width 0.3s ease;
+        }
+        .next-steps {
+            margin: 25px 0;
+        }
+        .next-steps h3 {
+            color: #2c3e50;
+            margin: 0 0 15px 0;
+        }
+        .step {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 3px solid #667eea;
+            background-color: #f8f9fa;
+        }
+        .step-number {
+            background-color: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 12px;
+        }
+        .footer {
+            background-color: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .footer p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 10px;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+            .header, .content, .footer {
+                padding: 30px 20px;
+            }
+            .feature {
+                flex-direction: column;
+                text-align: center;
+            }
+            .feature-icon {
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎉 Bienvenue sur Entrix !</h1>
+            <p>Votre aventure événementielle commence maintenant</p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <div class="welcome-message">
+                <h2>Salut {{firstName}} !</h2>
+                <p>Félicitations ! Vous venez de rejoindre la plus grande plateforme d'événements en Tunisie.</p>
+            </div>
+
+            <!-- Features -->
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-icon">🎫</div>
+                    <div class="feature-content">
+                        <h3>Billets Instantanés</h3>
+                        <p>Réservez vos billets en quelques clics pour tous vos événements favoris</p>
+                    </div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">👥</div>
+                    <div class="feature-content">
+                        <h3>Groupes d'Achat</h3>
+                        <p>Créez ou rejoignez des groupes pour acheter vos billets ensemble et économiser</p>
+                    </div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">⭐</div>
+                    <div class="feature-content">
+                        <h3>Recommandations Personnalisées</h3>
+                        <p>Découvrez des événements qui correspondent parfaitement à vos goûts</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CTA Section -->
+            <div class="cta-section">
+                <h3>Prêt à découvrir votre prochain événement ?</h3>
+                <p>Explorez dès maintenant notre sélection d'événements exceptionnels</p>
+                <a href="{{platformUrl}}/events" class="btn">Découvrir les Événements</a>
+            </div>
+
+            {{#if showProfileCompletion}}
+            <!-- Profile Completion -->
+            <div class="profile-completion">
+                <h3>Complétez votre profil ({{completionPercentage}}%)</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <p>Un profil complet vous permet de recevoir des recommandations personnalisées et de débloquer des fonctionnalités exclusives.</p>
+            </div>
+            {{/if}}
+
+            <!-- Next Steps -->
+            <div class="next-steps">
+                <h3>Vos prochaines étapes :</h3>
+                {{#if emailVerified}}
+                <div class="step">
+                    <div class="step-number">✓</div>
+                    <div>Vérification de votre email ✅</div>
+                </div>
+                {{else}}
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div>Vérifiez votre email en cliquant sur le lien reçu</div>
+                </div>
+                {{/if}}
+                <div class="step">
+                    <div class="step-number">{{#if emailVerified}}2{{else}}2{{/if}}</div>
+                    <div><a href="{{platformUrl}}/profile/complete">Complétez votre profil</a> pour des recommandations personnalisées</div>
+                </div>
+                <div class="step">
+                    <div class="step-number">{{#if emailVerified}}3{{else}}3{{/if}}</div>
+                    <div><a href="{{platformUrl}}/events">Explorez les événements</a> qui vous intéressent</div>
+                </div>
+                <div class="step">
+                    <div class="step-number">{{#if emailVerified}}4{{else}}4{{/if}}</div>
+                    <div><a href="{{platformUrl}}/groups">Créez votre premier groupe</a> avec vos amis</div>
+                </div>
+            </div>
+
+            {{#if incentiveApplied}}
+            <!-- Incentive -->
+            <div style="background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 6px; padding: 20px; margin: 25px 0; text-align: center;">
+                <h3 style="color: #856404; margin: 0 0 10px 0;">🎁 Bonus de Bienvenue !</h3>
+                <p style="color: #856404; margin: 0;">{{incentiveDescription}}</p>
+            </div>
+            {{/if}}
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>Entrix</strong> - Votre passerelle vers les meilleurs événements</p>
+            <div class="social-links">
+                <a href="{{socialLinks.facebook}}">Facebook</a>
+                <a href="{{socialLinks.instagram}}">Instagram</a>
+                <a href="{{socialLinks.twitter}}">Twitter</a>
+            </div>
+            <p>📧 Besoin d'aide ? Répondez à cet email ou contactez-nous sur <a href="mailto:{{supportEmail}}" style="color: #67C3F3;">{{supportEmail}}</a></p>
+            <p style="font-size: 12px; opacity: 0.8;">
+                Si vous ne souhaitez plus recevoir ces emails, 
+                <a href="{{unsubscribeUrl}}" style="color: #67C3F3;">cliquez ici pour vous désabonner</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,72 @@
+export interface CurrentUserData {
+    id: string;
+    email: string;
+    phone?: string;
+    firstName: string;
+    lastName: string;
+    avatar?: string;
+    isActive: boolean;
+    emailVerified: boolean;
+    phoneVerified: boolean;
+    lastLogin?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    profile?: {
+        id: string;
+        userId: string;
+        dateOfBirth?: Date;
+        gender?: 'M' | 'F' | 'OTHER' | 'PREFER_NOT_TO_SAY';
+        address?: string;
+        city?: string;
+        country: string;
+        postalCode?: string;
+        language: string;
+        timezone?: string;
+        notifications: boolean;
+        newsletter: boolean;
+        supporterSince?: Date;
+        favoritePlayer?: string;
+        favoriteTeamId?: string;
+        preferences?: any;
+        emergencyContact?: any;
+        createdAt: Date;
+        updatedAt: Date;
+    };
+    userGroups?: Array<{
+        id: string;
+        userId: string;
+        groupId: string;
+        role: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER';
+        status: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'LEFT';
+        joinedAt: Date;
+        validUntil?: Date;
+        addedBy?: string;
+        metadata?: any;
+    }>;
+    userRoles?: Array<{
+        id: string;
+        userId: string;
+        roleId: string;
+        assignedAt: Date;
+        validUntil?: Date;
+        status: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'LEFT';
+        assignedBy?: string;
+        notes?: string;
+    }>;
+    sessionId?: string;
+    sessionToken?: string;
+    deviceFingerprint?: string;
+    ipAddress?: string;
+    userAgent?: string;
+}
+export declare const CurrentUser: (...dataOrPipes: (import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>> | keyof CurrentUserData)[]) => ParameterDecorator;
+export declare const CurrentUserId: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const CurrentUserEmail: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const CurrentUserFullName: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const IsUserVerified: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const CurrentUserGroups: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const CurrentUserProfile: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare function isUserWithRelations(user: any): user is CurrentUserData & {
+    profile: NonNullable<CurrentUserData['profile']>;
+    userGroups: NonNullable<CurrentUserData['userGroups']>;
+};
