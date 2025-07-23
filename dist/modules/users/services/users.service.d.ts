@@ -3,6 +3,7 @@ import { RedisService } from '../../../shared/redis/redis.service';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { BullmqService } from '../../../shared/bullmq/bullmq.service';
 import { EmailService } from '../../../shared/email/email.service';
+import { HashingService } from '../../../shared/hashing/hashing.service';
 import { UserSearchParams, UserFilters, UserGroupInfo, UserRoleInfo, UserStats } from '../interfaces/user.interface';
 interface CreateUserData {
     email: string;
@@ -80,12 +81,13 @@ export declare class UsersService implements IUserService {
     private readonly redis;
     private readonly bullmq;
     private readonly email;
+    private readonly hashingService;
     private readonly logger;
     private readonly CACHE_PREFIX;
     private readonly SEARCH_CACHE_PREFIX;
     private readonly CACHE_TTL;
     private readonly SEARCH_CACHE_TTL;
-    constructor(prisma: PrismaService, redis: RedisService, bullmq: BullmqService, email: EmailService, loggerService: LoggerService);
+    constructor(prisma: PrismaService, redis: RedisService, bullmq: BullmqService, email: EmailService, hashingService: HashingService, loggerService: LoggerService);
     create(userData: CreateUserData): Promise<User>;
     findById(id: string): Promise<User | null>;
     findByEmail(email: string): Promise<User | null>;
@@ -108,8 +110,9 @@ export declare class UsersService implements IUserService {
     private invalidateUserCache;
     private validateCreateData;
     private isValidEmail;
-    changePassword(id: string, oldPassword: string, newPassword: string): Promise<User>;
-    verifyPassword(email: string, password: string): Promise<boolean>;
     private isValidPhone;
+    verifyPassword(userId: string, password: string): Promise<boolean>;
+    verifyPasswordByEmail(email: string, password: string): Promise<boolean>;
+    changePassword(userId: string, currentPassword: string, newPassword: string): Promise<User>;
 }
 export {};

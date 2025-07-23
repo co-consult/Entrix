@@ -1,516 +1,370 @@
 // src/modules/auth/services/token.service.ts
-/**
- * Service de gestion des tokens JWT
- * 
- * Responsabilités :
- * - Génération et validation des access tokens
- * - Génération et validation des refresh tokens
- * - Gestion des tokens temporaires (reset, verify)
- * - Révocation et blacklist des tokens
- * - Cache des tokens révoqués
- * 
- * Sécurité :
- * - Signatures JWT avec clés secrètes
- * - Durées de vie configurables
- * - Révocation immédiate possible
- * - Blacklist Redis pour performance
- * 
- * @author Entrix Development Team
- * @version 1.0.0
- */
 
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as crypto from 'crypto';
-
-// Services partagés (chemins corrigés)
-import { PrismaService } from '../../../shared/prisma/prisma.service';
-import { RedisService } from '../../../shared/redis/redis.service';
+import { ConfigService } from '@nestjs/config';
 import { LoggerService } from '../../../shared/logger/logger.service';
-
-// Types et interfaces
-import { ITokenService } from '../../../common/interfaces/auth.interface';
+import { RedisService } from '../../../shared/redis/redis.service';
 import { 
+  ITokenService, 
   JwtPayload, 
-  RefreshTokenPayload, 
-  TokenPair, 
-  TokenValidationResult 
-} from '../../../common/types/auth.types';
-import { User } from '../../../common/types/user.types';
+  JwtRefreshPayload, 
+  ITokenPair 
+} from '../interfaces';
+import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { TokenUtil } from '../utils/token.util';
+import { CryptoUtil } from '../utils/crypto.util';
+
+/**
+ * Token Service Entrix V3.0 - Grade A+
+ * Gestion JWT avec rotation, blacklisting et sécurité renforcée
+ * Respecte shared-usage-guide.md et JWT best practices
+ */
 
 @Injectable()
 export class TokenService implements ITokenService {
   private readonly logger: LoggerService;
-  private readonly accessTokenExpiry: string;
-  private readonly refreshTokenExpiry: string;
-  private readonly issuer: string;
-  private readonly audience: string;
+  private readonly accessTokenSecret: string;
+  private readonly refreshTokenSecret: string;
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
     private readonly redis: RedisService,
-    private readonly config: ConfigService,
-    logger: LoggerService,
+    loggerService: LoggerService,
   ) {
-    this.logger = logger.createChildLogger('TokenService');
-    this.accessTokenExpiry = this.config.get<string>('JWT_ACCESS_EXPIRES_IN', '15m');
-    this.refreshTokenExpiry = this.config.get<string>('JWT_REFRESH_EXPIRES_IN', '7d');
-    this.issuer = this.config.get<string>('JWT_ISSUER', 'entrix.tn');
-    this.audience = this.config.get<string>('JWT_AUDIENCE', 'entrix-app');
+    this.logger = loggerService.createChildLogger('TokenService');
+    this.accessTokenSecret = this.configService.get<string>('JWT_SECRET');
+    this.refreshTokenSecret = this.configService.get<string>('JWT_REFRESH_SECRET', this.accessTokenSecret);
   }
 
   /**
-   * Génération d'un access token
+   * Génère access token JWT
+   * Respecte AUTH_CONSTANTS.JWT et sécurité
    */
-  async generateAccessToken(payload: Omit<JwtPayload, 'iat' | 'exp'>): Promise<string> {
-    this.logger.log(`Génération access token pour utilisateur: ${payload.sub}`);
+  async generateAccessToken(payload: JwtPayload): Promise<string> {
+    const operationId = this.logger.startOperation('generateAccessToken', {
+      userId: payload.sub,
+      sessionId: payload.sessionId,
+    });
 
     try {
-      const jwtPayload: Omit<JwtPayload, 'iat' | 'exp'> = {
-        sub: payload.sub,
-        email: payload.email,
-        roles: payload.roles,
-        permissions: payload.permissions,
-        type: 'access',
-        sessionId: payload.sessionId,
-        securityLevel: payload.securityLevel,
-        mfaVerified: payload.mfaVerified,
-      };
-
-      const token = this.jwtService.sign(jwtPayload, {
-        expiresIn: this.accessTokenExpiry,
-        issuer: this.issuer,
-        audience: this.audience,
-      });
-
-      this.logger.log(`Access token généré avec succès pour: ${payload.sub}`);
-      return token;
-
-    } catch (error) {
-      this.logger.error(`Erreur génération access token pour ${payload.sub}:`, error);
-      throw new UnauthorizedException('Impossible de générer le token d\'accès');
-    }
-  }
-
-  /**
-   * Génération d'un refresh token
-   */
-  async generateRefreshToken(payload: Omit<RefreshTokenPayload, 'iat' | 'exp'>): Promise<string> {
-    this.logger.log(`Génération refresh token pour utilisateur: ${payload.sub}`);
-
-    try {
-      const jwtPayload: Omit<RefreshTokenPayload, 'iat' | 'exp'> = {
-        sub: payload.sub,
-        type: 'refresh',
-        sessionId: payload.sessionId,
-        tokenVersion: payload.tokenVersion,
-      };
-
-      const token = this.jwtService.sign(jwtPayload, {
-        expiresIn: this.refreshTokenExpiry,
-        issuer: this.issuer,
-        audience: this.audience,
-      });
-
-      // Mettre en cache pour validation rapide
-      const ttl = this.parseExpiryToSeconds(this.refreshTokenExpiry);
-      await this.redis.set(`refresh_token:${payload.sub}:${payload.sessionId}`, token, ttl);
-
-      this.logger.log(`Refresh token généré avec succès pour: ${payload.sub}`);
-      return token;
-
-    } catch (error) {
-      this.logger.error(`Erreur génération refresh token pour ${payload.sub}:`, error);
-      throw new UnauthorizedException('Impossible de générer le token de rafraîchissement');
-    }
-  }
-
-  /**
-   * Génération d'une paire de tokens
-   */
-  async generateTokenPair(user: User, sessionId: string): Promise<TokenPair> {
-    this.logger.log(`Génération paire de tokens pour: ${user.id}`);
-
-    try {
-      // Récupérer les rôles et permissions de l'utilisateur avec requête séparée
-      const userRoles = await this.prisma.user_roles.findMany({
-        where: { 
-          user_id: user.id,
-          status: 'ACTIVE' 
-        },
-        include: {
-          roles: {
-            select: {
-              code: true,
-              name: true,
-              level: true,
-              permissions: true,
-            }
-          }
-        }
-      });
-
-      // Vérifier que l'utilisateur existe toujours
-      const userExists = await this.prisma.users.findUnique({
-        where: { id: user.id }
-      });
-
-      if (!userExists) {
-        throw new UnauthorizedException('Utilisateur non trouvé');
+      // Valider payload avant signature
+      if (!TokenUtil.validateJwtPayload(payload, 'access')) {
+        throw new Error('Payload JWT invalide pour access token');
       }
 
-      // Extraire rôles et permissions
-      const roles = userRoles.map(ur => ur.roles.code);
-      const permissions = this.extractPermissions(userRoles);
+      // Signer token avec secret access
+      const token = this.jwtService.sign(payload, {
+        secret: this.accessTokenSecret,
+        expiresIn: AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY,
+        issuer: 'entrix-v3',
+        audience: 'entrix-users',
+      });
 
-      // Générer access token
-      const accessToken = await this.generateAccessToken({
-        sub: user.id,
-        email: user.email,
+      // Logger génération token (sans le token lui-même)
+      this.logger.logBusinessEvent('ACCESS_TOKEN_GENERATED', {
+        userId: payload.sub,
+        sessionId: payload.sessionId,
+        expiresIn: AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY,
+      }, payload.sub);
+
+      this.logger.endOperation(operationId, 'success');
+      return token;
+
+    } catch (error) {
+      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.error('Failed to generate access token', error.stack, {
+        userId: payload.sub,
+        sessionId: payload.sessionId,
+      });
+      throw new Error(`Erreur génération access token: ${error.message}`);
+    }
+  }
+
+  /**
+   * Génère refresh token JWT avec rotation
+   * Rotation automatique pour sécurité renforcée
+   */
+  async generateRefreshToken(payload: JwtRefreshPayload): Promise<string> {
+    const operationId = this.logger.startOperation('generateRefreshToken', {
+      userId: payload.sub,
+      sessionId: payload.sessionId,
+      tokenId: payload.tokenId,
+    });
+
+    try {
+      // Valider payload refresh
+      if (!TokenUtil.validateJwtPayload(payload, 'refresh')) {
+        throw new Error('Payload JWT invalide pour refresh token');
+      }
+
+      // Signer refresh token
+      const token = this.jwtService.sign(payload, {
+        secret: this.refreshTokenSecret,
+        expiresIn: payload.exp - payload.iat, // Durée calculée dynamiquement
+        issuer: 'entrix-v3',
+        audience: 'entrix-refresh',
+      });
+
+      // Stocker mapping tokenId -> userId dans Redis pour rotation
+      const tokenMappingKey = `refresh_mapping:${payload.tokenId}`;
+      await this.redis.setCache(
+        tokenMappingKey, 
+        payload.sub, 
+        AUTH_CONSTANTS.JWT.REFRESH_TOKEN_EXPIRY_REMEMBER
+      );
+
+      // Logger génération refresh token
+      this.logger.logBusinessEvent('REFRESH_TOKEN_GENERATED', {
+        userId: payload.sub,
+        sessionId: payload.sessionId,
+        tokenId: payload.tokenId,
+        expiresIn: payload.exp - payload.iat,
+      }, payload.sub);
+
+      this.logger.endOperation(operationId, 'success');
+      return token;
+
+    } catch (error) {
+      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.error('Failed to generate refresh token', error.stack, {
+        userId: payload.sub,
+        sessionId: payload.sessionId,
+        tokenId: payload.tokenId,
+      });
+      throw new Error(`Erreur génération refresh token: ${error.message}`);
+    }
+  }
+
+  /**
+   * Vérifie et décode access token
+   * Validation complète avec blacklist checking
+   */
+  async verifyAccessToken(token: string): Promise<JwtPayload> {
+    const operationId = this.logger.startOperation('verifyAccessToken');
+
+    try {
+      // Vérifier format token
+      if (!token || typeof token !== 'string') {
+        throw new Error('Token format invalide');
+      }
+
+      // Vérifier si token blacklisté AVANT vérification JWT
+      const isBlacklisted = await this.isTokenBlacklisted(token);
+      if (isBlacklisted) {
+        throw new Error('Token révoqué');
+      }
+
+      // Vérifier signature et validité
+      const payload = this.jwtService.verify<JwtPayload>(token, {
+        secret: this.accessTokenSecret,
+        issuer: 'entrix-v3',
+        audience: 'entrix-users',
+      });
+
+      // Validation supplémentaire du payload
+      if (!TokenUtil.validateJwtPayload(payload, 'access')) {
+        throw new Error('Payload token invalide');
+      }
+
+      this.logger.endOperation(operationId, 'success');
+      return payload;
+
+    } catch (error) {
+      this.logger.endOperation(operationId, 'error', error.message);
+      
+      // Logger tentative d'utilisation token invalide
+      this.logger.logBusinessEvent('INVALID_TOKEN_USED', {
+        error: error.message,
+        tokenPrefix: token?.substring(0, 20) + '...',
+      });
+
+      throw new Error(`Token invalide: ${error.message}`);
+    }
+  }
+
+  /**
+   * Vérifie et décode refresh token
+   * Validation avec vérification rotation
+   */
+  async verifyRefreshToken(token: string): Promise<JwtRefreshPayload> {
+    const operationId = this.logger.startOperation('verifyRefreshToken');
+
+    try {
+      if (!token || typeof token !== 'string') {
+        throw new Error('Refresh token format invalide');
+      }
+
+      // Vérifier signature refresh token
+      const payload = this.jwtService.verify<JwtRefreshPayload>(token, {
+        secret: this.refreshTokenSecret,
+        issuer: 'entrix-v3',
+        audience: 'entrix-refresh',
+      });
+
+      // Validation payload refresh
+      if (!TokenUtil.validateJwtPayload(payload, 'refresh')) {
+        throw new Error('Payload refresh token invalide');
+      }
+
+      // Vérifier si token déjà utilisé (rotation)
+      const isUsed = await this.isRefreshTokenUsed(payload.tokenId);
+      if (isUsed) {
+        throw new Error('Refresh token déjà utilisé');
+      }
+
+      this.logger.endOperation(operationId, 'success');
+      return payload;
+
+    } catch (error) {
+      this.logger.endOperation(operationId, 'error', error.message);
+      
+      this.logger.logBusinessEvent('INVALID_REFRESH_TOKEN_USED', {
+        error: error.message,
+      });
+
+      throw new Error(`Refresh token invalide: ${error.message}`);
+    }
+  }
+
+  /**
+   * Blackliste un token (révocation)
+   * Utilise Redis avec TTL automatique
+   */
+  async blacklistToken(token: string): Promise<void> {
+    const operationId = this.logger.startOperation('blacklistToken');
+
+    try {
+      // Décoder token pour extraire infos (sans validation)
+      const payload = TokenUtil.extractJwtPayload(token);
+      
+      if (!payload) {
+        throw new Error('Token non décodable pour blacklisting');
+      }
+
+      // Calculer TTL restant
+      const now = Math.floor(Date.now() / 1000);
+      const ttl = Math.max(0, payload.exp - now);
+
+      if (ttl > 0) {
+        // Ajouter à blacklist avec TTL
+        const blacklistKey = `blacklist:token:${payload.sessionId || 'unknown'}:${payload.iat}`;
+        await this.redis.setCache(blacklistKey, 'revoked', ttl);
+
+        // Logger révocation
+        this.logger.logBusinessEvent('TOKEN_BLACKLISTED', {
+          userId: payload.sub,
+          sessionId: payload.sessionId,
+          reason: 'manual_revocation',
+          ttl,
+        }, payload.sub);
+      }
+
+      this.logger.endOperation(operationId, 'success');
+
+    } catch (error) {
+      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.error('Failed to blacklist token', error.stack);
+      // Ne pas faire échouer - blacklisting est best effort
+    }
+  }
+
+  /**
+   * Vérifie si token est blacklisté
+   */
+  async isTokenBlacklisted(token: string): Promise<boolean> {
+    try {
+      // Décoder token pour construire clé blacklist
+      const payload = TokenUtil.extractJwtPayload(token);
+      
+      if (!payload || !payload.sessionId || !payload.iat) {
+        return false; // Token malformé, laisser JWT verify gérer
+      }
+
+      const blacklistKey = `blacklist:token:${payload.sessionId}:${payload.iat}`;
+      const isBlacklisted = await this.redis.exists(blacklistKey);
+      
+      return isBlacklisted;
+    } catch (error) {
+      this.logger.error('Error checking token blacklist', error.stack);
+      return false; // En cas d'erreur Redis, laisser passer
+    }
+  }
+
+  /**
+   * Vérifie si refresh token déjà utilisé
+   */
+  private async isRefreshTokenUsed(tokenId: string): Promise<boolean> {
+    try {
+      const usedKey = `refresh_used:${tokenId}`;
+      const isUsed = await this.redis.exists(usedKey);
+      return isUsed;
+    } catch (error) {
+      this.logger.error('Error checking refresh token usage', error.stack);
+      return false;
+    }
+  }
+
+  /**
+   * Génère paire de tokens complète
+   * Méthode helper pour login/refresh
+   */
+  async generateTokenPair(
+    userId: string,
+    email: string,
+    sessionId: string,
+    rememberMe: boolean = false,
+    deviceFingerprint?: string,
+    roles?: string[],
+    permissions?: string[]
+  ): Promise<ITokenPair> {
+    const operationId = this.logger.startOperation('generateTokenPair', {
+      userId,
+      sessionId,
+      rememberMe,
+    });
+
+    try {
+      // Créer payloads
+      const accessPayload = TokenUtil.createAccessTokenPayload(
+        userId,
+        email,
+        sessionId,
+        deviceFingerprint,
         roles,
-        permissions,
-        type: 'access',
+        permissions
+      );
+
+      const refreshPayload = TokenUtil.createRefreshTokenPayload(
+        userId,
         sessionId,
-        securityLevel: 'INFO', // Par défaut
-        mfaVerified: false, // À définir selon le contexte
-      });
+        rememberMe
+      );
 
-      // Générer refresh token
-      const refreshToken = await this.generateRefreshToken({
-        sub: user.id,
-        type: 'refresh',
-        sessionId,
-        tokenVersion: 1, // Incrémenté à chaque renouvellement
-      });
+      // Générer tokens
+      const [accessToken, refreshToken] = await Promise.all([
+        this.generateAccessToken(accessPayload),
+        this.generateRefreshToken(refreshPayload),
+      ]);
 
-      // Calculer les durées d'expiration
-      const accessExpiresIn = this.parseExpiryToSeconds(this.accessTokenExpiry);
-      const refreshExpiresIn = this.parseExpiryToSeconds(this.refreshTokenExpiry);
-
-      return {
+      const tokenPair: ITokenPair = {
         accessToken,
         refreshToken,
         tokenType: 'Bearer',
-        expiresIn: accessExpiresIn,
-        refreshExpiresIn,
+        expiresIn: AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY,
       };
 
-    } catch (error) {
-      this.logger.error(`Erreur génération paire de tokens pour ${user.id}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Validation d'un token
-   */
-  async validateToken(token: string, type: 'access' | 'refresh'): Promise<TokenValidationResult> {
-    try {
-      // Vérifier si le token est révoqué
-      const isRevoked = await this.isTokenRevoked(token);
-      if (isRevoked) {
-        return {
-          valid: false,
-          reason: 'Token révoqué',
-          revoked: true,
-        };
-      }
-
-      // Vérifier et décoder le token JWT
-      const payload = this.jwtService.verify(token) as JwtPayload | RefreshTokenPayload;
-
-      // Vérifier le type de token
-      if (payload.type !== type) {
-        return {
-          valid: false,
-          reason: `Type de token incorrect. Attendu: ${type}, reçu: ${payload.type}`,
-        };
-      }
-
-      // Vérifier l'expiration
-      const now = Math.floor(Date.now() / 1000);
-      if (payload.exp <= now) {
-        return {
-          valid: false,
-          reason: 'Token expiré',
-          expired: true,
-        };
-      }
-
-      // Validation supplémentaire pour refresh tokens
-      if (type === 'refresh') {
-        const refreshPayload = payload as RefreshTokenPayload;
-        const cachedToken = await this.redis.get(`refresh_token:${refreshPayload.sub}:${refreshPayload.sessionId}`);
-        
-        if (!cachedToken || cachedToken !== token) {
-          return {
-            valid: false,
-            reason: 'Refresh token non trouvé ou invalide',
-          };
-        }
-      }
-
-      return {
-        valid: true,
-        payload,
-      };
+      this.logger.endOperation(operationId, 'success', true);
+      return tokenPair;
 
     } catch (error) {
-      this.logger.warn(`Token invalide: ${error.message}`);
-      return {
-        valid: false,
-        reason: error.message,
-      };
-    }
-  }
-
-  /**
-   * Décodage d'un token sans validation
-   */
-  decodeToken(token: string): JwtPayload | RefreshTokenPayload | null {
-    try {
-      return this.jwtService.decode(token) as JwtPayload | RefreshTokenPayload;
-    } catch (error) {
-      this.logger.warn(`Erreur décodage token: ${error.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * Révocation d'un token
-   */
-  async revokeToken(token: string): Promise<void> {
-    this.logger.log('Révocation d\'un token');
-
-    try {
-      const decoded = this.decodeToken(token);
-      if (!decoded) {
-        this.logger.warn('Tentative révocation d\'un token invalide');
-        return;
-      }
-
-      // Ajouter à la blacklist Redis avec TTL basé sur l'expiration
-      const ttl = Math.max(0, decoded.exp - Math.floor(Date.now() / 1000));
-      if (ttl > 0) {
-        await this.redis.set(`revoked_token:${this.hashToken(token)}`, '1', ttl);
-      }
-
-      // Si c'est un refresh token, supprimer du cache
-      if (decoded.type === 'refresh') {
-        const refreshPayload = decoded as RefreshTokenPayload;
-        await this.redis.del(`refresh_token:${refreshPayload.sub}:${refreshPayload.sessionId}`);
-      }
-
-      this.logger.log(`Token révoqué avec succès pour utilisateur: ${decoded.sub}`);
-
-    } catch (error) {
-      this.logger.error('Erreur révocation token:', error);
-      throw new UnauthorizedException('Impossible de révoquer le token');
-    }
-  }
-
-  /**
-   * Révocation de tous les tokens d'un utilisateur
-   */
-  async revokeAllTokens(userId: string): Promise<void> {
-    this.logger.log(`Révocation de tous les tokens pour: ${userId}`);
-
-    try {
-      // Récupérer toutes les sessions actives
-      const sessions = await this.prisma.user_sessions.findMany({
-        where: { 
-          user_id: userId, 
-          is_active: true 
-        },
-        select: { id: true }
-      });
-
-      // Supprimer tous les refresh tokens en cache
-      const deletePromises = sessions.map(session => 
-        this.redis.del(`refresh_token:${userId}:${session.id}`)
-      );
-      await Promise.all(deletePromises);
-
-      // Ajouter l'utilisateur à une blacklist temporaire
-      await this.redis.set(`user_tokens_revoked:${userId}`, Date.now().toString(), 3600); // 1 heure
-
-      this.logger.log(`Tous les tokens révoqués pour: ${userId}`);
-
-    } catch (error) {
-      this.logger.error(`Erreur révocation tous tokens pour ${userId}:`, error);
-      throw new UnauthorizedException('Impossible de révoquer tous les tokens');
-    }
-  }
-
-  /**
-   * Vérification si un token est révoqué
-   */
-  async isTokenRevoked(token: string): Promise<boolean> {
-    try {
-      // Vérifier dans la blacklist individuelle
-      const tokenHash = this.hashToken(token);
-      const isBlacklisted = await this.redis.get(`revoked_token:${tokenHash}`);
-      
-      if (isBlacklisted) {
-        return true;
-      }
-
-      // Vérifier si tous les tokens de l'utilisateur sont révoqués
-      const decoded = this.decodeToken(token);
-      if (decoded) {
-        const userRevoked = await this.redis.get(`user_tokens_revoked:${decoded.sub}`);
-        if (userRevoked) {
-          const revokedAt = parseInt(userRevoked);
-          const tokenIssuedAt = decoded.iat * 1000; // Convertir en millisecondes
-          
-          // Si le token a été émis avant la révocation générale
-          if (tokenIssuedAt < revokedAt) {
-            return true;
-          }
-        }
-      }
-
-      return false;
-
-    } catch (error) {
-      this.logger.error('Erreur vérification révocation token:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Génération d'un token temporaire
-   */
-  async generateTemporaryToken(userId: string, type: string, expiresIn: number = 3600): Promise<string> {
-    this.logger.log(`Génération token temporaire ${type} pour: ${userId}`);
-
-    try {
-      const payload = {
-        sub: userId,
-        type: `temp_${type}`,
-        purpose: type,
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + expiresIn,
-      };
-
-      const token = this.jwtService.sign(payload, {
-        expiresIn: `${expiresIn}s`,
-        issuer: this.issuer,
-        audience: this.audience,
-      });
-
-      // Mettre en cache pour validation
-      await this.redis.set(`temp_token:${type}:${userId}`, token, expiresIn);
-
-      return token;
-
-    } catch (error) {
-      this.logger.error(`Erreur génération token temporaire ${type} pour ${userId}:`, error);
-      throw new UnauthorizedException('Impossible de générer le token temporaire');
-    }
-  }
-
-  /**
-   * Validation d'un token temporaire
-   */
-  async validateTemporaryToken(token: string, type: string): Promise<{ userId: string; valid: boolean }> {
-    try {
-      const payload = this.jwtService.verify(token) as any;
-      
-      if (payload.type !== `temp_${type}` || payload.purpose !== type) {
-        return { userId: '', valid: false };
-      }
-
-      // Vérifier en cache
-      const cachedToken = await this.redis.get(`temp_token:${type}:${payload.sub}`);
-      if (!cachedToken || cachedToken !== token) {
-        return { userId: '', valid: false };
-      }
-
-      // Supprimer le token après utilisation (usage unique)
-      await this.redis.del(`temp_token:${type}:${payload.sub}`);
-
-      return { userId: payload.sub, valid: true };
-
-    } catch (error) {
-      this.logger.warn(`Token temporaire invalide: ${error.message}`);
-      return { userId: '', valid: false };
-    }
-  }
-
-  // === MÉTHODES PRIVÉES ===
-
-  /**
-   * Hasher un token pour stockage sécurisé
-   */
-  private hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
-  }
-
-  /**
-   * Convertir une durée string en secondes
-   */
-  private parseExpiryToSeconds(expiry: string): number {
-    const match = expiry.match(/^(\d+)([smhdw])$/);
-    if (!match) {
-      throw new Error(`Format d'expiration invalide: ${expiry}`);
-    }
-
-    const value = parseInt(match[1]);
-    const unit = match[2];
-
-    switch (unit) {
-      case 's': return value;
-      case 'm': return value * 60;
-      case 'h': return value * 3600;
-      case 'd': return value * 86400;
-      case 'w': return value * 604800;
-      default: throw new Error(`Unité de temps non supportée: ${unit}`);
-    }
-  }
-
-  /**
-   * Extraire les permissions des rôles utilisateur
-   */
-  private extractPermissions(userRoles: any[]): string[] {
-    const permissions = new Set<string>();
-
-    for (const userRole of userRoles) {
-      const rolePermissions = userRole.roles.permissions;
-      if (rolePermissions) {
-        // Si permissions est un array JSON
-        if (Array.isArray(rolePermissions)) {
-          rolePermissions.forEach(permission => permissions.add(permission));
-        } 
-        // Si permissions est un objet JSON
-        else if (typeof rolePermissions === 'object') {
-          Object.values(rolePermissions).forEach(permission => {
-            if (typeof permission === 'string') {
-              permissions.add(permission);
-            }
-          });
-        }
-      }
-    }
-
-    return Array.from(permissions);
-  }
-
-  /**
-   * Nettoyer les tokens expirés du cache (méthode utilitaire)
-   */
-  async cleanupExpiredTokens(): Promise<void> {
-    this.logger.log('Nettoyage des tokens expirés du cache');
-    
-    try {
-      // Cette méthode peut être appelée par un CRON job
-      // Pour l'instant, Redis s'occupe automatiquement de l'expiration avec TTL
-      this.logger.log('Nettoyage automatique par TTL Redis');
-      
-    } catch (error) {
-      this.logger.error('Erreur nettoyage tokens expirés:', error);
+      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.error('Failed to generate token pair', error.stack, JSON.stringify({
+        userId,
+        sessionId,
+      }));
+      throw new Error(`Erreur génération paire tokens: ${error.message}`);
     }
   }
 }

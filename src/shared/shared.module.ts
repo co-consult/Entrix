@@ -17,6 +17,7 @@ import { EmailModule } from './email/email.module';
 import { LoggerModule } from './logger/logger.module';
 import { RateLimitingModule } from './rate-limiting/rate-limiting.module';
 import { SwaggerModule } from './swagger/swagger.module';
+import { HashingModule } from './hashing/hashing.module';
 
 // Service imports
 import { PrismaService } from './prisma/prisma.service';
@@ -88,6 +89,7 @@ import { RateLimitingGuard } from './rate-limiting/rate-limiting.guard';
     EmailModule,         // Puis les emails
     RateLimitingModule,  // Puis la protection
     SwaggerModule,       // Enfin la documentation
+    HashingModule,       // Enfin le hashing
   ],
   providers: [
     // Services principaux
@@ -183,6 +185,7 @@ import { RateLimitingGuard } from './rate-limiting/rate-limiting.guard';
     LoggerModule,
     RateLimitingModule,
     SwaggerModule,
+    HashingModule,      
     
     // Services
     PrismaService,

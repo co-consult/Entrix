@@ -1,8 +1,12 @@
-import { AuthService } from '../auth.service';
+import { LoggerService } from '../../../shared/logger/logger.service';
+import { AuthService } from '../services/auth.service';
+import { IUserProfile } from '../interfaces/user.interface';
 declare const LocalStrategy_base: new (...args: any) => any;
 export declare class LocalStrategy extends LocalStrategy_base {
-    private authService;
-    constructor(authService: AuthService);
-    validate(email: string, password: string): Promise<void>;
+    private readonly authService;
+    private readonly logger;
+    constructor(authService: AuthService, loggerService: LoggerService);
+    validate(req: any, email: string, password: string): Promise<IUserProfile>;
+    private extractIpAddress;
 }
 export {};

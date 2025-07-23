@@ -11,242 +11,367 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SecurityService = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("@nestjs/config");
-const redis_service_1 = require("../../../shared/redis/redis.service");
-const email_service_1 = require("../../../shared/email/email.service");
 const logger_service_1 = require("../../../shared/logger/logger.service");
 const prisma_service_1 = require("../../../shared/prisma/prisma.service");
+const redis_service_1 = require("../../../shared/redis/redis.service");
+const risk_scoring_util_1 = require("../utils/risk-scoring.util");
+const geolocation_util_1 = require("../utils/geolocation.util");
+const crypto_util_1 = require("../utils/crypto.util");
+const security_constants_1 = require("../constants/security.constants");
 let SecurityService = class SecurityService {
-    redis;
-    email;
-    logger;
     prisma;
-    config;
-    RATE_LIMIT_PREFIX = 'rate_limit:';
-    SECURITY_EVENT_PREFIX = 'security_event:';
-    FAILED_ATTEMPTS_PREFIX = 'failed_attempts:';
-    ACCOUNT_LOCK_PREFIX = 'account_lock:';
-    constructor(redis, email, logger, prisma, config) {
-        this.redis = redis;
-        this.email = email;
-        this.logger = logger;
+    redis;
+    logger;
+    constructor(prisma, redis, loggerService) {
         this.prisma = prisma;
-        this.config = config;
+        this.redis = redis;
+        this.logger = loggerService.createChildLogger('SecurityService');
     }
-    async assessLoginRisk(userId, ipAddress, userAgent, email) {
-        const factors = [];
-        let score = 0;
-        const isUnusualLocation = await this.checkUnusualLocation(userId, ipAddress);
-        if (isUnusualLocation) {
-            score += 30;
-            factors.push('Localisation inhabituelle');
-        }
-        const isUnknownDevice = await this.checkUnknownDevice(userId, userAgent);
-        if (isUnknownDevice) {
-            score += 25;
-            factors.push('Appareil inconnu');
-        }
-        const failedAttempts = await this.getFailedAttempts(email);
-        if (failedAttempts > 2) {
-            score += 20;
-            factors.push(`${failedAttempts} tentatives échouées récentes`);
-        }
-        const isUnusualTime = await this.checkUnusualTime(userId);
-        if (isUnusualTime) {
-            score += 15;
-            factors.push('Heure de connexion inhabituelle');
-        }
-        const isSuspiciousIp = await this.checkSuspiciousIp(ipAddress);
-        if (isSuspiciousIp) {
-            score += 40;
-            factors.push('Adresse IP suspecte');
-        }
-        let level;
-        if (score >= 80)
-            level = 'CRITICAL';
-        else if (score >= 60)
-            level = 'HIGH';
-        else if (score >= 30)
-            level = 'MEDIUM';
-        else
-            level = 'LOW';
-        const recommendations = this.generateRecommendations(level, factors);
-        return {
-            score,
-            level,
-            factors,
-            recommendations
-        };
-    }
-    async logSecurityEvent(userId, type, description, ipAddress, userAgent, riskScore = 0, metadata) {
-        const event = {
-            id: this.generateEventId(),
+    async assessRisk(userId, deviceInfo) {
+        const operationId = this.logger.startOperation('assessRisk', {
             userId,
-            type,
-            description,
-            ipAddress,
-            userAgent,
-            riskScore,
-            metadata,
-            createdAt: new Date()
-        };
+            ipAddress: deviceInfo.ipAddress,
+        });
         try {
-            const eventKey = `${this.SECURITY_EVENT_PREFIX}${event.id}`;
-            await this.redis.setCache(eventKey, event, 30 * 24 * 60 * 60);
-            const userEventsKey = `${this.SECURITY_EVENT_PREFIX}user:${userId}`;
-            const userEvents = await this.redis.getCache(userEventsKey) || [];
-            userEvents.unshift(event.id);
-            if (userEvents.length > 100) {
-                userEvents.splice(100);
-            }
-            await this.redis.setCache(userEventsKey, userEvents, 30 * 24 * 60 * 60);
-            if (riskScore >= 80) {
-                await this.handleCriticalSecurityEvent(event);
-            }
-            this.logger.log(`Security event logged: ${type} for user ${userId} (risk: ${riskScore})`);
+            const userProfile = await this.getUserBehaviorProfile(userId);
+            const geoInfo = await this.analyzeGeolocation(deviceInfo.ipAddress);
+            const riskAssessment = risk_scoring_util_1.RiskScoringUtil.calculateRiskScore(deviceInfo, userProfile, geoInfo);
+            this.logger.logBusinessEvent('RISK_ASSESSMENT_COMPLETED', {
+                userId,
+                riskScore: riskAssessment.score,
+                factors: Object.keys(riskAssessment.factors).filter(key => riskAssessment.factors[key]),
+                recommendation: riskAssessment.recommendation,
+                ipAddress: deviceInfo.ipAddress,
+            }, userId);
+            this.logger.endOperation(operationId, 'success');
+            return riskAssessment;
         }
         catch (error) {
-            this.logger.error('Failed to log security event:', error);
+            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.error('Risk assessment failed', error.stack, { userId });
+            return {
+                score: 50,
+                factors: {
+                    unknownDevice: true,
+                    newLocation: true,
+                    unusualTime: false,
+                    failedAttempts: 0,
+                    suspiciousIp: false,
+                    multipleSessions: false,
+                },
+                recommendation: 'REQUIRE_MFA',
+                requiresMfa: true,
+            };
         }
     }
-    async recordFailedAttempt(email, ipAddress) {
-        const emailKey = `${this.FAILED_ATTEMPTS_PREFIX}email:${email}`;
-        const ipKey = `${this.FAILED_ATTEMPTS_PREFIX}ip:${ipAddress}`;
-        const emailAttempts = await this.redis.increment(emailKey, 15 * 60);
-        const ipAttempts = await this.redis.increment(ipKey, 15 * 60);
-        const maxAttempts = 5;
-        const locked = emailAttempts >= maxAttempts || ipAttempts >= maxAttempts;
-        if (locked) {
-            await this.lockAccount(email, 'Too many failed login attempts');
-        }
-        return {
-            attempts: Math.max(emailAttempts, ipAttempts),
-            locked
-        };
-    }
-    async clearFailedAttempts(email, ipAddress) {
-        const emailKey = `${this.FAILED_ATTEMPTS_PREFIX}email:${email}`;
-        const ipKey = `${this.FAILED_ATTEMPTS_PREFIX}ip:${ipAddress}`;
-        await this.redis.del(emailKey);
-        await this.redis.del(ipKey);
-    }
-    async isAccountLocked(email) {
-        const lockKey = `${this.ACCOUNT_LOCK_PREFIX}${email}`;
-        return await this.redis.exists(lockKey);
-    }
-    async lockAccount(email, reason) {
-        const lockKey = `${this.ACCOUNT_LOCK_PREFIX}${email}`;
-        const lockData = {
-            email,
-            reason,
-            lockedAt: new Date(),
-            unlockAt: new Date(Date.now() + 30 * 60 * 1000)
-        };
-        await this.redis.setCache(lockKey, lockData, 30 * 60);
-        await this.sendAccountLockNotification(email, reason);
-        this.logger.warn(`Account locked: ${email} - ${reason}`);
-    }
-    async unlockAccount(email) {
-        const lockKey = `${this.ACCOUNT_LOCK_PREFIX}${email}`;
-        await this.redis.del(lockKey);
-        this.logger.log(`Account unlocked: ${email}`);
-    }
-    async getUserSecurityEvents(userId, limit = 20) {
+    async logSecurityEvent(event) {
+        const operationId = this.logger.startOperation('logSecurityEvent', {
+            type: event.type,
+            userId: event.userId,
+        });
         try {
-            const userEventsKey = `${this.SECURITY_EVENT_PREFIX}user:${userId}`;
-            const eventIds = await this.redis.getCache(userEventsKey) || [];
-            const events = [];
-            for (const eventId of eventIds.slice(0, limit)) {
-                const eventKey = `${this.SECURITY_EVENT_PREFIX}${eventId}`;
-                const event = await this.redis.getCache(eventKey);
-                if (event) {
-                    events.push(event);
-                }
-            }
-            return events.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            const eventId = crypto_util_1.CryptoUtil.generateUuid();
+            const enrichedEvent = {
+                ...event,
+                id: eventId,
+                createdAt: new Date(),
+            };
+            await this.storeSecurityEventInDb(enrichedEvent);
+            await this.cacheSecurityEvent(enrichedEvent);
+            await this.analyzeSecurityEvent(enrichedEvent);
+            this.logger.logBusinessEvent('SECURITY_EVENT_LOGGED', {
+                eventId,
+                type: event.type,
+                userId: event.userId,
+                riskScore: event.riskScore,
+                location: event.location,
+            }, event.userId);
+            this.logger.endOperation(operationId, 'success');
+            return enrichedEvent;
         }
         catch (error) {
-            this.logger.error(`Failed to get security events for user ${userId}:`, error);
+            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.error('Failed to log security event', error.stack, {
+                type: event.type,
+                userId: event.userId,
+            });
+            throw new Error(`Erreur logging événement sécurité: ${error.message}`);
+        }
+    }
+    async getSecurityEvents(userId, limit = 20) {
+        const operationId = this.logger.startOperation('getSecurityEvents', {
+            userId,
+            limit,
+        });
+        try {
+            const cachedEvents = await this.getCachedSecurityEvents(userId, limit);
+            if (cachedEvents.length > 0) {
+                this.logger.endOperation(operationId, 'cache_hit');
+                return cachedEvents;
+            }
+            const events = await this.getSecurityEventsFromDb(userId, limit);
+            await this.cacheUserSecurityEvents(userId, events);
+            this.logger.endOperation(operationId, 'db_hit');
+            return events;
+        }
+        catch (error) {
+            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.error('Failed to get security events', error.stack, { userId });
             return [];
         }
     }
-    async checkUnusualLocation(userId, ipAddress) {
-        return false;
-    }
-    async checkUnknownDevice(userId, userAgent) {
-        return false;
-    }
-    async getFailedAttempts(email) {
-        const emailKey = `${this.FAILED_ATTEMPTS_PREFIX}email:${email}`;
-        const value = await this.redis.get(emailKey);
-        return value ? parseInt(value, 10) : 0;
-    }
-    async checkUnusualTime(userId) {
-        return false;
-    }
-    async checkSuspiciousIp(ipAddress) {
-        return false;
-    }
-    generateRecommendations(level, factors) {
-        const recommendations = [];
-        if (level === 'CRITICAL' || level === 'HIGH') {
-            recommendations.push('Activer la double authentification');
-            recommendations.push('Vérifier l\'activité récente du compte');
-        }
-        if (factors.includes('Localisation inhabituelle')) {
-            recommendations.push('Confirmer la localisation par email');
-        }
-        if (factors.includes('Appareil inconnu')) {
-            recommendations.push('Vérifier l\'appareil utilisé');
-        }
-        return recommendations;
-    }
-    async handleCriticalSecurityEvent(event) {
+    async checkSuspiciousActivity(userId) {
+        const operationId = this.logger.startOperation('checkSuspiciousActivity', { userId });
         try {
-            await this.email.sendMail({
-                to: 'security@entrix.tn',
-                subject: `🚨 Alerte sécurité critique - ${event.type}`,
-                template: 'security-alert',
-                context: {
-                    event,
-                    timestamp: event.createdAt.toISOString(),
-                    severity: 'CRITICAL'
-                }
-            });
-            this.logger.error(`CRITICAL SECURITY EVENT: ${event.type} for user ${event.userId}`);
+            const recentEvents = await this.getRecentSecurityEvents(userId, 24);
+            const suspiciousPatterns = this.analyzeSuspiciousPatterns(recentEvents);
+            const suspicionScore = this.calculateSuspicionScore(suspiciousPatterns);
+            const isSuspicious = suspicionScore >= security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.ALERT_THRESHOLD;
+            if (isSuspicious) {
+                await this.logSecurityEvent({
+                    type: 'SUSPICIOUS_ACTIVITY',
+                    userId,
+                    ipAddress: 'system',
+                    userAgent: 'security_analysis',
+                    location: 'System',
+                    riskScore: suspicionScore,
+                    description: 'Activité suspecte détectée par analyse automatique',
+                    metadata: { patterns: suspiciousPatterns },
+                    resolved: false,
+                });
+            }
+            this.logger.endOperation(operationId, 'success');
+            return isSuspicious;
         }
         catch (error) {
-            this.logger.error('Failed to handle critical security event:', error);
+            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.error('Failed to check suspicious activity', error.stack, { userId });
+            return false;
         }
     }
-    async sendAccountLockNotification(email, reason) {
+    async blockSuspiciousIp(ip, duration) {
+        const operationId = this.logger.startOperation('blockSuspiciousIp', {
+            ip,
+            duration,
+        });
         try {
-            await this.email.sendMail({
-                to: email,
-                subject: '🔒 Votre compte a été temporairement verrouillé',
-                template: 'account-locked',
-                context: {
-                    reason,
-                    unlockTime: '30 minutes',
-                    supportEmail: 'support@entrix.tn'
-                }
+            const blockKey = `blocked_ip:${ip}`;
+            const blockData = {
+                ip,
+                blockedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                reason: 'suspicious_activity',
+            };
+            await this.redis.setCache(blockKey, blockData, duration);
+            this.logger.logBusinessEvent('IP_BLOCKED', {
+                ip,
+                duration,
+                reason: 'suspicious_activity',
+                expiresAt: blockData.expiresAt,
             });
+            this.logger.endOperation(operationId, 'success');
         }
         catch (error) {
-            this.logger.error(`Failed to send account lock notification to ${email}:`, error);
+            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.error('Failed to block suspicious IP', error.stack, { ip });
         }
     }
-    generateEventId() {
-        return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    async getUserBehaviorProfile(userId) {
+        try {
+            const profileKey = `behavior_profile:${userId}`;
+            let profile = await this.redis.getCache(profileKey);
+            if (!profile) {
+                profile = await this.buildBehaviorProfile(userId);
+                await this.redis.setCache(profileKey, profile, 3600);
+            }
+            return profile;
+        }
+        catch (error) {
+            this.logger.error('Failed to get user behavior profile', error.stack, { userId });
+            return {
+                userId,
+                commonLocations: [],
+                commonDevices: [],
+                typicalLoginTimes: [],
+                averageSessionDuration: 3600,
+                recentFailedAttempts: 0,
+                activeSessions: 0,
+            };
+        }
+    }
+    async buildBehaviorProfile(userId) {
+        try {
+            const recentSessions = await this.prisma.user_sessions.findMany({
+                where: {
+                    user_id: userId,
+                    created_at: {
+                        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                    },
+                },
+                orderBy: { created_at: 'desc' },
+                take: 100,
+            });
+            const profile = {
+                userId,
+                commonLocations: this.extractCommonLocations(recentSessions),
+                commonDevices: this.extractCommonDevices(recentSessions),
+                typicalLoginTimes: this.extractTypicalLoginTimes(recentSessions),
+                averageSessionDuration: this.calculateAverageSessionDuration(recentSessions),
+                recentFailedAttempts: await this.getRecentFailedAttempts(userId),
+                activeSessions: await this.getActiveSessionsCount(userId),
+            };
+            return profile;
+        }
+        catch (error) {
+            this.logger.error('Failed to build behavior profile', error.stack, { userId });
+            throw error;
+        }
+    }
+    async analyzeGeolocation(ipAddress) {
+        try {
+            return {
+                country: 'TN',
+                countryCode: 'TN',
+                city: 'Tunis',
+                region: 'Tunis',
+                coordinates: [36.8065, 10.1815],
+                timezone: 'Africa/Tunis',
+                isp: 'Unknown ISP',
+                isVpn: false,
+                isTor: false,
+                isDatacenter: false,
+                riskScore: geolocation_util_1.GeolocationUtil.calculateGeoRiskScore({
+                    countryCode: 'TN',
+                    isVpn: false,
+                    isTor: false,
+                    isDatacenter: false,
+                }),
+            };
+        }
+        catch (error) {
+            this.logger.error('Geolocation analysis failed', error.stack, { ipAddress });
+            return null;
+        }
+    }
+    extractCommonLocations(sessions) {
+        const locations = sessions
+            .map(s => s.geolocation?.country)
+            .filter(Boolean);
+        const locationCounts = locations.reduce((acc, loc) => {
+            acc[loc] = (acc[loc] || 0) + 1;
+            return acc;
+        }, {});
+        return Object.entries(locationCounts)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3)
+            .map(([loc]) => loc);
+    }
+    extractCommonDevices(sessions) {
+        const devices = sessions
+            .map(s => s.device_fingerprint)
+            .filter(Boolean);
+        return [...new Set(devices)].slice(0, 3);
+    }
+    extractTypicalLoginTimes(sessions) {
+        const hours = sessions.map(s => new Date(s.created_at).getHours());
+        const hourCounts = hours.reduce((acc, hour) => {
+            acc[hour] = (acc[hour] || 0) + 1;
+            return acc;
+        }, {});
+        return Object.entries(hourCounts)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 8)
+            .map(([hour]) => parseInt(hour));
+    }
+    calculateAverageSessionDuration(sessions) {
+        const completedSessions = sessions.filter(s => !s.is_active);
+        if (completedSessions.length === 0)
+            return 3600;
+        const totalDuration = completedSessions.reduce((acc, session) => {
+            const duration = new Date(session.updated_at).getTime() - new Date(session.created_at).getTime();
+            return acc + duration;
+        }, 0);
+        return Math.floor(totalDuration / completedSessions.length / 1000);
+    }
+    async getRecentFailedAttempts(userId) {
+        return 0;
+    }
+    async getActiveSessionsCount(userId) {
+        try {
+            const count = await this.prisma.user_sessions.count({
+                where: {
+                    user_id: userId,
+                    is_active: true,
+                    expires_at: { gt: new Date() },
+                },
+            });
+            return count;
+        }
+        catch (error) {
+            return 0;
+        }
+    }
+    async storeSecurityEventInDb(event) {
+    }
+    async cacheSecurityEvent(event) {
+        try {
+            const eventKey = `security_event:${event.id}`;
+            await this.redis.setCache(eventKey, event, 24 * 60 * 60);
+        }
+        catch (error) {
+            this.logger.error('Failed to cache security event', error.stack);
+        }
+    }
+    async analyzeSecurityEvent(event) {
+    }
+    async getCachedSecurityEvents(userId, limit) {
+        return [];
+    }
+    async getSecurityEventsFromDb(userId, limit) {
+        return [];
+    }
+    async cacheUserSecurityEvents(userId, events) {
+    }
+    async getRecentSecurityEvents(userId, hours) {
+        return [];
+    }
+    analyzeSuspiciousPatterns(events) {
+        const patterns = [];
+        const failedLogins = events.filter(e => e.type === 'LOGIN_FAILED').length;
+        if (failedLogins > 10)
+            patterns.push('excessive_failed_logins');
+        const uniqueIps = new Set(events.map(e => e.ipAddress)).size;
+        if (uniqueIps > 5)
+            patterns.push('multiple_ip_addresses');
+        const highRiskEvents = events.filter(e => e.riskScore > 70).length;
+        if (highRiskEvents > 3)
+            patterns.push('high_risk_activities');
+        return patterns;
+    }
+    calculateSuspicionScore(patterns) {
+        let score = 0;
+        patterns.forEach(pattern => {
+            switch (pattern) {
+                case 'excessive_failed_logins':
+                    score += 30;
+                    break;
+                case 'multiple_ip_addresses':
+                    score += 25;
+                    break;
+                case 'high_risk_activities':
+                    score += 35;
+                    break;
+                default: score += 10;
+            }
+        });
+        return Math.min(100, score);
     }
 };
 exports.SecurityService = SecurityService;
 exports.SecurityService = SecurityService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [redis_service_1.RedisService,
-        email_service_1.EmailService,
-        logger_service_1.LoggerService,
-        prisma_service_1.PrismaService,
-        config_1.ConfigService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        redis_service_1.RedisService,
+        logger_service_1.LoggerService])
 ], SecurityService);
 //# sourceMappingURL=security.service.js.map

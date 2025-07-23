@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SessionsController = void 0;
 const common_1 = require("@nestjs/common");
@@ -54,6 +55,6 @@ __decorate([
 ], SessionsController.prototype, "list", null);
 exports.SessionsController = SessionsController = __decorate([
     (0, common_1.Controller)('auth/sessions'),
-    __metadata("design:paramtypes", [session_service_1.SessionsService])
+    __metadata("design:paramtypes", [typeof (_a = typeof session_service_1.SessionsService !== "undefined" && session_service_1.SessionsService) === "function" ? _a : Object])
 ], SessionsController);
 //# sourceMappingURL=sessions.controller.js.map

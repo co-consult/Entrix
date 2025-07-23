@@ -1,30 +1,32 @@
+import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
-import { LoggerService } from '../../../shared/logger/logger.service';
-export interface UserSession {
-    id: string;
-    userId: string;
-    ipAddress: string;
-    userAgent: string;
-    isActive: boolean;
-    lastActivityAt: Date;
-    createdAt: Date;
-    expiresAt: Date;
-}
-export declare class SessionsService {
+import { ISessionService, IUserSession, IDeviceInfo, ITokenPair } from '../interfaces';
+import { TokenService } from './token.service';
+export declare class SessionService implements ISessionService {
     private readonly prisma;
     private readonly redis;
+    private readonly tokenService;
     private readonly logger;
-    private readonly SESSION_PREFIX;
-    private readonly USER_SESSIONS_PREFIX;
-    private readonly SESSION_DURATION;
-    constructor(prisma: PrismaService, redis: RedisService, logger: LoggerService);
-    createSession(userId: string, ipAddress: string, userAgent: string): Promise<UserSession>;
-    getSession(sessionId: string): Promise<UserSession | null>;
-    updateSessionActivity(sessionId: string): Promise<void>;
-    revokeSession(sessionId: string): Promise<void>;
-    revokeAllUserSessions(userId: string): Promise<void>;
-    getUserSessions(userId: string): Promise<UserSession[]>;
+    constructor(prisma: PrismaService, redis: RedisService, tokenService: TokenService, loggerService: LoggerService);
+    createSession(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<IUserSession>;
+    validateSession(sessionToken: string): Promise<IUserSession | null>;
+    refreshSession(refreshToken: string): Promise<ITokenPair>;
+    revokeSession(sessionId: string): Promise<boolean>;
+    revokeAllUserSessions(userId: string): Promise<number>;
+    getUserActiveSessions(userId: string): Promise<IUserSession[]>;
     cleanupExpiredSessions(): Promise<number>;
-    validateAndRefreshSession(sessionId: string): Promise<UserSession | null>;
+    private enforceSessionLimits;
+    private isSessionValid;
+    private cacheSession;
+    private getSessionFromCache;
+    private expireSession;
+    private isRememberMeSession;
+    private extendSession;
+    private markRefreshTokenAsUsed;
+    private removeSessionFromCache;
+    private blacklistSessionTokens;
+    private clearUserSessionsFromCache;
+    private cleanupExpiredSessionsFromCache;
+    private cleanupExpiredSessionsAsync;
 }

@@ -48,6 +48,7 @@ const email_module_1 = require("./email/email.module");
 const logger_module_1 = require("./logger/logger.module");
 const rate_limiting_module_1 = require("./rate-limiting/rate-limiting.module");
 const swagger_module_1 = require("./swagger/swagger.module");
+const hashing_module_1 = require("./hashing/hashing.module");
 const prisma_service_1 = require("./prisma/prisma.service");
 const redis_service_1 = require("./redis/redis.service");
 const bullmq_service_1 = require("./bullmq/bullmq.service");
@@ -119,6 +120,7 @@ exports.SharedModule = SharedModule = __decorate([
             email_module_1.EmailModule,
             rate_limiting_module_1.RateLimitingModule,
             swagger_module_1.SwaggerModule,
+            hashing_module_1.HashingModule,
         ],
         providers: [
             prisma_service_1.PrismaService,
@@ -189,6 +191,7 @@ exports.SharedModule = SharedModule = __decorate([
             logger_module_1.LoggerModule,
             rate_limiting_module_1.RateLimitingModule,
             swagger_module_1.SwaggerModule,
+            hashing_module_1.HashingModule,
             prisma_service_1.PrismaService,
             redis_service_1.RedisService,
             bullmq_service_1.BullmqService,

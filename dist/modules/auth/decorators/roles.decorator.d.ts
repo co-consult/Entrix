@@ -1,0 +1,12 @@
+export declare const ROLES_KEY = "roles";
+export declare const PERMISSIONS_KEY = "permissions";
+export declare const REQUIRE_ALL_ROLES_KEY = "requireAllRoles";
+export declare const REQUIRE_ALL_PERMISSIONS_KEY = "requireAllPermissions";
+export declare const Roles: (...roles: string[]) => import("@nestjs/common").CustomDecorator<string>;
+export declare const Permissions: (...permissions: string[]) => import("@nestjs/common").CustomDecorator<string>;
+export declare const RequireAllRoles: (...roles: string[]) => void;
+export declare const RequireAllPermissions: (...permissions: string[]) => void;
+export declare const AdminOnly: () => import("@nestjs/common").CustomDecorator<string>;
+export declare const OrganizerOnly: () => import("@nestjs/common").CustomDecorator<string>;
+export declare const SuperAdminOnly: () => import("@nestjs/common").CustomDecorator<string>;
+export declare const ModeratorOrAdmin: () => import("@nestjs/common").CustomDecorator<string>;

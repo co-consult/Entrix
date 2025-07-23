@@ -14,7 +14,7 @@ import { RedisService } from '../../../shared/redis/redis.service';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { BullmqService } from '../../../shared/bullmq/bullmq.service';
 import { EmailService } from '../../../shared/email/email.service';
-import * as bcrypt from 'bcrypt';
+import { HashingService } from '../../../shared/hashing/hashing.service'; 
 
 // DTOs
 import { CreateUserDto } from '../dto/users/create-user.dto';
@@ -162,6 +162,7 @@ export class UsersService implements IUserService {
     private readonly redis: RedisService,
     private readonly bullmq: BullmqService,
     private readonly email: EmailService,
+    private readonly hashingService: HashingService,
     loggerService: LoggerService,
   ) {
     this.logger = loggerService.createChildLogger('UsersService');
@@ -199,7 +200,7 @@ export class UsersService implements IUserService {
       this.validateCreateData(userData);
 
       // Hasher le mot de passe (password existe maintenant dans CreateUserData)
-      const hashedPassword = await bcrypt.hash(userData.password, 12);
+      const hashedPassword = await this.hashingService.hashPassword(userData.password);
 
       // Créer l'utilisateur avec les champs EXACTS du schema.prisma
       const newUser = await this.prisma.users.create({
@@ -457,7 +458,7 @@ export class UsersService implements IUserService {
 
       // Si un nouveau mot de passe est fourni, le hasher (password existe dans UpdateUserData)
       if (updateData.password) {
-        prismaUpdateData.password = await bcrypt.hash(updateData.password, 12);
+        prismaUpdateData.password = await this.hashingService.hashPassword(updateData.password);
       }
 
       const updatedUser = await this.prisma.users.update({
@@ -1284,129 +1285,144 @@ export class UsersService implements IUserService {
   }
 
   /**
-   * Change le mot de passe d'un utilisateur
-   */
-  async changePassword(id: string, oldPassword: string, newPassword: string): Promise<User> {
-    const operationId = this.logger.startOperation('changePassword', { userId: id });
-
-    try {
-      // Récupérer l'utilisateur avec son mot de passe actuel
-      const user = await this.prisma.users.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          password: true,
-          email: true
-        }
-      });
-
-      if (!user) {
-        throw new NotFoundException('Utilisateur introuvable');
-      }
-
-      // Vérifier l'ancien mot de passe
-      const isValidPassword = await bcrypt.compare(oldPassword, user.password);
-      if (!isValidPassword) {
-        throw new BadRequestException('Mot de passe actuel incorrect');
-      }
-
-      // Vérifier que le nouveau mot de passe est différent
-      if (oldPassword === newPassword) {
-        throw new BadRequestException('Le nouveau mot de passe doit être différent de l\'ancien');
-      }
-
-      // Valider le nouveau mot de passe
-      if (newPassword.length < 8) {
-        throw new BadRequestException('Le nouveau mot de passe doit contenir au moins 8 caractères');
-      }
-
-      // Hasher et mettre à jour le mot de passe
-      const hashedPassword = await bcrypt.hash(newPassword, 12);
-      
-      // Mettre à jour directement avec Prisma car password n'est pas dans UpdateUserData
-      const updatedUser = await this.prisma.users.update({
-        where: { id },
-        data: { password: hashedPassword },
-        include: {
-          user_profiles: true,
-          user_groups_user_groups_user_idTousers: {
-            where: { status: 'ACTIVE' },
-            include: {
-              groups: true
-            }
-          },
-          user_roles_user_roles_user_idTousers: {
-            where: { status: 'ACTIVE' },
-            include: {
-              roles: true
-            }
-          }
-        }
-      });
-
-      // Invalider le cache
-      await this.invalidateUserCache(id);
-
-      // Log événement sécurité
-      this.logger.logSecurityEvent('PASSWORD_CHANGED', id);
-      
-      this.logger.endOperation('changePassword', operationId, true);
-      return this.transformUserFromPrisma(updatedUser);
-
-    } catch (error) {
-      this.logger.logErrorEvent(
-        error as Error,
-        'UsersService.changePassword',
-        id
-      );
-      this.logger.endOperation('changePassword', operationId, false);
-      throw error;
-    }
-  }
-
-  /**
-   * Vérifie le mot de passe d'un utilisateur
-   */
-  async verifyPassword(email: string, password: string): Promise<boolean> {
-    const operationId = this.logger.startOperation('verifyPassword', { email });
-
-    try {
-      const user = await this.prisma.users.findUnique({
-        where: { email },
-        select: {
-          id: true,
-          password: true,
-          is_active: true
-        }
-      });
-
-      if (!user || !user.is_active) {
-        this.logger.endOperation('verifyPassword', operationId, false);
-        return false;
-      }
-
-      const isValid = await bcrypt.compare(password, user.password);
-      
-      this.logger.endOperation('verifyPassword', operationId, true);
-      return isValid;
-
-    } catch (error) {
-      this.logger.logErrorEvent(
-        error as Error,
-        'UsersService.verifyPassword',
-        undefined,
-        JSON.stringify({ email })
-      );
-      this.logger.endOperation('verifyPassword', operationId, false);
-      throw error;
-    }
-  }
-
-  /**
    * Valide un numéro de téléphone
    */
   private isValidPhone(phone: string): boolean {
     const phoneRegex = /^\+?[1-9]\d{1,14}$/;
     return phoneRegex.test(phone.replace(/\s/g, ''));
   }
+
+  /**
+ * Vérifie le mot de passe d'un utilisateur
+ * @param userId ID de l'utilisateur
+ * @param password Mot de passe en clair à vérifier
+ * @returns true si le mot de passe est correct
+ */
+async verifyPassword(userId: string, password: string): Promise<boolean> {
+  this.logger.log(`Verifying password for user: ${userId}`);
+  
+  try {
+    // Récupérer l'utilisateur avec le password depuis Prisma
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: { 
+        id: true, 
+        password: true, 
+        is_active: true 
+      }
+    });
+
+    if (!user) {
+      this.logger.warn(`User not found for password verification: ${userId}`);
+      return false;
+    }
+
+    if (!user.is_active) {
+      this.logger.warn(`Inactive user attempted password verification: ${userId}`);
+      return false;
+    }
+
+    // 🔍 DEBUG temporaire
+    console.log('🔍 DEBUG - UserId :', userId);
+    console.log('🔍 DEBUG - Password input:', password);
+    console.log('🔍 DEBUG - Hash from DB:', user.password);
+    console.log('🔍 DEBUG - Password length:', password.length);
+    console.log('🔍 DEBUG - Hash length:', user.password.length);
+    
+    const isValid = await this.hashingService.compare(password, user.password);
+    
+    console.log('🔍 DEBUG - bcrypt.compare result:', isValid);
+  
+    
+    this.logger.log(`Password verification for user ${userId}: ${isValid ? 'SUCCESS' : 'FAILED'}`);
+    
+    return isValid;
+
+  } catch (error) {
+    this.logger.error(`Error verifying password for user ${userId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Vérifie le mot de passe d'un utilisateur par email
+ * @param email Email de l'utilisateur
+ * @param password Mot de passe en clair à vérifier
+ * @returns true si le mot de passe est correct
+ */
+async verifyPasswordByEmail(email: string, password: string): Promise<boolean> {
+  this.logger.log(`Verifying password for email: ${email}`);
+  
+  try {
+    // Récupérer l'utilisateur avec le password depuis Prisma
+    const user = await this.prisma.users.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { 
+        id: true, 
+        email: true,
+        password: true, 
+        is_active: true 
+      }
+    });
+
+    if (!user) {
+      this.logger.warn(`User not found for password verification: ${email}`);
+      return false;
+    }
+
+    if (!user.is_active) {
+      this.logger.warn(`Inactive user attempted password verification: ${email}`);
+      return false;
+    }
+    const hashedPassword = await this.hashingService.hashPassword(password);
+    console.log('🔍 DEBUG - Email:', email);
+    console.log('🔍 DEBUG - Password input:', password);
+    console.log('🔍 DEBUG - hashedPassword:', hashedPassword);
+    console.log('🔍 DEBUG - Hash from DB:', user.password); 
+    console.log('🔍 DEBUG - Password length:', password.length);
+    console.log('🔍 DEBUG - Hash length:', user.password.length);
+    
+    const isValid = await this.hashingService.compare(password, user.password);
+    
+    console.log('🔍 DEBUG - bcrypt.compare result:', isValid);
+    
+    this.logger.log(`Password verification for user ${user.id} (${email}): ${isValid ? 'SUCCESS' : 'FAILED'}`);
+    
+    return isValid;
+
+  } catch (error) {
+    this.logger.error(`Error verifying password for email ${email}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Change le mot de passe d'un utilisateur
+ * @param userId ID de l'utilisateur
+ * @param currentPassword Mot de passe actuel
+ * @param newPassword Nouveau mot de passe
+ * @returns L'utilisateur mis à jour
+ */
+async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<User> {
+  this.logger.log(`Changing password for user: ${userId}`);
+
+  // Vérifier le mot de passe actuel
+  const isCurrentPasswordValid = await this.verifyPassword(userId, currentPassword);
+  if (!isCurrentPasswordValid) {
+    throw new BadRequestException('Current password is incorrect');
+  }
+
+  // Hasher le nouveau mot de passe
+  const hashedNewPassword = await this.hashingService.hashPassword(newPassword);
+
+  // Mettre à jour en base
+  const updatedUser = await this.update(userId, {
+    password: hashedNewPassword
+  });
+
+  this.logger.log(`Password changed successfully for user: ${userId}`);
+  
+  return updatedUser;
+}
+
 }

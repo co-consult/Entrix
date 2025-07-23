@@ -13,118 +13,89 @@ exports.MfaRequiredGuard = void 0;
 const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
 const logger_service_1 = require("../../../shared/logger/logger.service");
-const mfa_service_1 = require("../services/mfa.service");
+const redis_service_1 = require("../../../shared/redis/redis.service");
+const auth_exceptions_1 = require("../exceptions/auth.exceptions");
+const require_mfa_decorator_1 = require("../decorators/require-mfa.decorator");
 let MfaRequiredGuard = class MfaRequiredGuard {
     reflector;
-    mfaService;
+    redis;
     logger;
-    constructor(reflector, mfaService, logger) {
+    constructor(reflector, redis, loggerService) {
         this.reflector = reflector;
-        this.mfaService = mfaService;
-        this.logger = logger.createChildLogger('MfaRequiredGuard');
+        this.redis = redis;
+        this.logger = loggerService.createChildLogger('MfaRequiredGuard');
     }
     async canActivate(context) {
         const request = context.switchToHttp().getRequest();
+        const user = request.user;
+        const requireMfa = this.reflector.getAllAndOverride(require_mfa_decorator_1.REQUIRE_MFA_KEY, [
+            context.getHandler(),
+            context.getClass(),
+        ]);
+        if (!requireMfa || !user) {
+            return true;
+        }
+        const operationId = this.logger.startOperation('mfaRequiredGuard', {
+            userId: user.id,
+            path: request.url,
+        });
         try {
-            const user = request.user;
-            if (!user) {
-                this.logger.warn(`Tentative d'accès à une ressource MFA sans authentification sur ${request.url}`);
-                throw new common_1.UnauthorizedException('Authentification requise');
-            }
-            const isMfaRequired = this.reflector.get('mfa-required', context.getHandler()) ||
-                this.reflector.get('mfa-required', context.getClass());
-            if (isMfaRequired === false) {
+            const mfaValidated = await this.isMfaValidatedInSession(user.id, request.sessionId);
+            if (mfaValidated) {
+                this.logger.endOperation(operationId, 'success', true);
                 return true;
             }
-            const authContext = request.authContext;
-            if (!authContext) {
-                this.logger.warn(`Contexte d'authentification manquant pour ${user.id} sur ${request.url}`);
-                throw new common_1.UnauthorizedException('Contexte d\'authentification invalide');
-            }
-            if (authContext.mfaVerified) {
-                this.logger.log(`Accès MFA autorisé pour ${user.id} sur ${request.url}`);
-                return true;
-            }
-            const mfaConfig = await this.mfaService.getUserMfaConfig(user.id);
-            if (!mfaConfig || !mfaConfig.enabled) {
-                this.logger.warn(`MFA requis mais non configuré pour ${user.id} sur ${request.url}`);
-                throw new common_1.ForbiddenException({
-                    error: 'MFA_REQUIRED',
-                    message: 'L\'authentification multi-facteurs est requise pour accéder à cette ressource',
-                    action: 'SETUP_MFA',
-                    user: {
-                        id: user.id,
-                        email: user.email,
-                    }
-                });
-            }
-            this.logger.warn(`MFA configuré mais non validé pour ${user.id} sur ${request.url}`);
-            throw new common_1.ForbiddenException({
-                error: 'MFA_VERIFICATION_REQUIRED',
-                message: 'Veuillez valider votre authentification multi-facteurs',
-                action: 'VERIFY_MFA',
-                mfaMethod: mfaConfig.method,
-                user: {
-                    id: user.id,
-                    email: user.email,
-                }
-            });
+            this.logger.warn('MFA required but not validated', JSON.stringify({
+                userId: user.id,
+                path: request.url,
+            }));
+            const challengeToken = await this.generateMfaChallenge(user.id);
+            const availableMethods = await this.getAvailableMfaMethods(user.id);
+            this.logger.logBusinessEvent('MFA_CHALLENGE_REQUIRED', {
+                userId: user.id,
+                path: request.url,
+                methods: availableMethods,
+            }, user.id);
+            this.logger.endOperation(operationId, 'mfa_required', false);
+            throw new auth_exceptions_1.MfaRequiredException(challengeToken, availableMethods, 300);
         }
         catch (error) {
-            this.logger.error(`Erreur dans MfaRequiredGuard pour ${request.url}:`, error);
-            if (error instanceof common_1.UnauthorizedException || error instanceof common_1.ForbiddenException) {
-                throw error;
-            }
-            throw new common_1.ForbiddenException('Vérification MFA échouée');
+            this.logger.endOperation(operationId, 'error', error.message);
+            throw error;
         }
     }
-    isHighSensitivityRoute(request) {
-        const url = request.url;
-        const method = request.method;
-        const criticalPatterns = [
-            /\/admin\/.*/,
-            /\/users\/.*\/delete/,
-            /\/payments\/.*/,
-            /\/sensitive\/.*/,
-            /\/export\/.*/,
-        ];
-        const criticalActions = ['DELETE', 'PUT'];
-        if (criticalPatterns.some(pattern => pattern.test(url))) {
-            return true;
+    async isMfaValidatedInSession(userId, sessionId) {
+        try {
+            const mfaKey = `mfa_validated:${userId}:${sessionId}`;
+            const isValidated = await this.redis.exists(mfaKey);
+            return isValidated;
         }
-        if (criticalActions.includes(method) && url.includes('/users/')) {
-            return true;
-        }
-        return false;
-    }
-    doesUserRoleRequireMfa(user) {
-        const mfaRequiredRoles = ['ADMIN', 'SUPER_ADMIN', 'FINANCIAL_MANAGER', 'ORGANIZER_ADMIN'];
-        return user.roles.some(role => mfaRequiredRoles.includes(role.code));
-    }
-    isMfaValidationFresh(authContext) {
-        if (!authContext.mfaVerifiedAt) {
+        catch (error) {
+            this.logger.error('Error checking MFA validation status', error.stack);
             return false;
         }
-        const maxMfaAge = 2 * 60 * 60 * 1000;
-        const mfaAge = Date.now() - new Date(authContext.mfaVerifiedAt).getTime();
-        return mfaAge <= maxMfaAge;
     }
-    async getAvailableMfaMethods(userId) {
+    async generateMfaChallenge(userId) {
         try {
-            const mfaConfig = await this.mfaService.getUserMfaConfig(userId);
-            return mfaConfig ? [mfaConfig.method] : ['SMS', 'EMAIL'];
+            const challengeToken = `mfa_challenge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const challengeKey = `mfa_challenge:${challengeToken}`;
+            await this.redis.setCache(challengeKey, userId, 300);
+            return challengeToken;
         }
         catch (error) {
-            this.logger.error(`Erreur récupération méthodes MFA pour ${userId}:`, error);
-            return ['SMS'];
+            this.logger.error('Error generating MFA challenge', error.stack);
+            throw new common_1.UnauthorizedException('Erreur génération challenge MFA');
         }
+    }
+    async getAvailableMfaMethods(userId) {
+        return ['SMS_OTP', 'EMAIL_OTP', 'TOTP_APP'];
     }
 };
 exports.MfaRequiredGuard = MfaRequiredGuard;
 exports.MfaRequiredGuard = MfaRequiredGuard = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [core_1.Reflector,
-        mfa_service_1.MfaService,
+        redis_service_1.RedisService,
         logger_service_1.LoggerService])
 ], MfaRequiredGuard);
 //# sourceMappingURL=mfa-required.guard.js.map

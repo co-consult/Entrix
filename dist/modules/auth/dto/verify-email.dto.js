@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ResendVerificationEmailDto = exports.VerifyEmailDto = void 0;
 const class_validator_1 = require("class-validator");
+const class_transformer_1 = require("class-transformer");
 const swagger_1 = require("@nestjs/swagger");
 class VerifyEmailDto {
     token;
@@ -19,7 +20,7 @@ exports.VerifyEmailDto = VerifyEmailDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
         description: 'Token de vérification reçu par email',
-        example: 'abc123def456ghi789jkl012mno345pqr678',
+        example: 'b8lMhZhdeZEaqHcHkTWKXTFfQc1Q4tPU',
         minLength: 32,
         maxLength: 128,
     }),
@@ -50,17 +51,15 @@ __decorate([
         example: 'user@example.com',
         format: 'email',
     }),
-    (0, class_validator_1.IsString)({
-        message: 'L\'email doit être une chaîne de caractères'
+    (0, class_validator_1.IsEmail)({}, {
+        message: 'L\'adresse email doit être valide'
     }),
     (0, class_validator_1.IsNotEmpty)({
         message: 'L\'email est requis'
     }),
+    (0, class_transformer_1.Transform)(({ value }) => value?.toLowerCase().trim()),
     (0, class_validator_1.MaxLength)(255, {
         message: 'L\'email ne peut pas dépasser 255 caractères'
-    }),
-    (0, class_validator_1.Matches)(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, {
-        message: 'L\'adresse email doit être valide'
     }),
     __metadata("design:type", String)
 ], ResendVerificationEmailDto.prototype, "email", void 0);

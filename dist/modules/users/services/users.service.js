@@ -1,32 +1,9 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
 };
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
@@ -39,23 +16,25 @@ const redis_service_1 = require("../../../shared/redis/redis.service");
 const logger_service_1 = require("../../../shared/logger/logger.service");
 const bullmq_service_1 = require("../../../shared/bullmq/bullmq.service");
 const email_service_1 = require("../../../shared/email/email.service");
-const bcrypt = __importStar(require("bcrypt"));
+const hashing_service_1 = require("../../../shared/hashing/hashing.service");
 const bullmq_constants_1 = require("../../../shared/bullmq/bullmq.constants");
 let UsersService = class UsersService {
     prisma;
     redis;
     bullmq;
     email;
+    hashingService;
     logger;
     CACHE_PREFIX = 'user:';
     SEARCH_CACHE_PREFIX = 'users:search:';
     CACHE_TTL = 3600;
     SEARCH_CACHE_TTL = 300;
-    constructor(prisma, redis, bullmq, email, loggerService) {
+    constructor(prisma, redis, bullmq, email, hashingService, loggerService) {
         this.prisma = prisma;
         this.redis = redis;
         this.bullmq = bullmq;
         this.email = email;
+        this.hashingService = hashingService;
         this.logger = loggerService.createChildLogger('UsersService');
     }
     async create(userData) {
@@ -75,7 +54,7 @@ let UsersService = class UsersService {
                 throw new common_1.ConflictException('Un utilisateur avec cet email existe déjà');
             }
             this.validateCreateData(userData);
-            const hashedPassword = await bcrypt.hash(userData.password, 12);
+            const hashedPassword = await this.hashingService.hashPassword(userData.password);
             const newUser = await this.prisma.users.create({
                 data: {
                     email: userData.email,
@@ -260,7 +239,7 @@ let UsersService = class UsersService {
                 metadata: updateData.metadata
             };
             if (updateData.password) {
-                prismaUpdateData.password = await bcrypt.hash(updateData.password, 12);
+                prismaUpdateData.password = await this.hashingService.hashPassword(updateData.password);
             }
             const updatedUser = await this.prisma.users.update({
                 where: { id },
@@ -841,89 +820,93 @@ let UsersService = class UsersService {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     }
-    async changePassword(id, oldPassword, newPassword) {
-        const operationId = this.logger.startOperation('changePassword', { userId: id });
-        try {
-            const user = await this.prisma.users.findUnique({
-                where: { id },
-                select: {
-                    id: true,
-                    password: true,
-                    email: true
-                }
-            });
-            if (!user) {
-                throw new common_1.NotFoundException('Utilisateur introuvable');
-            }
-            const isValidPassword = await bcrypt.compare(oldPassword, user.password);
-            if (!isValidPassword) {
-                throw new common_1.BadRequestException('Mot de passe actuel incorrect');
-            }
-            if (oldPassword === newPassword) {
-                throw new common_1.BadRequestException('Le nouveau mot de passe doit être différent de l\'ancien');
-            }
-            if (newPassword.length < 8) {
-                throw new common_1.BadRequestException('Le nouveau mot de passe doit contenir au moins 8 caractères');
-            }
-            const hashedPassword = await bcrypt.hash(newPassword, 12);
-            const updatedUser = await this.prisma.users.update({
-                where: { id },
-                data: { password: hashedPassword },
-                include: {
-                    user_profiles: true,
-                    user_groups_user_groups_user_idTousers: {
-                        where: { status: 'ACTIVE' },
-                        include: {
-                            groups: true
-                        }
-                    },
-                    user_roles_user_roles_user_idTousers: {
-                        where: { status: 'ACTIVE' },
-                        include: {
-                            roles: true
-                        }
-                    }
-                }
-            });
-            await this.invalidateUserCache(id);
-            this.logger.logSecurityEvent('PASSWORD_CHANGED', id);
-            this.logger.endOperation('changePassword', operationId, true);
-            return this.transformUserFromPrisma(updatedUser);
-        }
-        catch (error) {
-            this.logger.logErrorEvent(error, 'UsersService.changePassword', id);
-            this.logger.endOperation('changePassword', operationId, false);
-            throw error;
-        }
+    isValidPhone(phone) {
+        const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+        return phoneRegex.test(phone.replace(/\s/g, ''));
     }
-    async verifyPassword(email, password) {
-        const operationId = this.logger.startOperation('verifyPassword', { email });
+    async verifyPassword(userId, password) {
+        this.logger.log(`Verifying password for user: ${userId}`);
         try {
             const user = await this.prisma.users.findUnique({
-                where: { email },
+                where: { id: userId },
                 select: {
                     id: true,
                     password: true,
                     is_active: true
                 }
             });
-            if (!user || !user.is_active) {
-                this.logger.endOperation('verifyPassword', operationId, false);
+            if (!user) {
+                this.logger.warn(`User not found for password verification: ${userId}`);
                 return false;
             }
-            const isValid = await bcrypt.compare(password, user.password);
-            this.logger.endOperation('verifyPassword', operationId, true);
+            if (!user.is_active) {
+                this.logger.warn(`Inactive user attempted password verification: ${userId}`);
+                return false;
+            }
+            console.log('🔍 DEBUG - UserId :', userId);
+            console.log('🔍 DEBUG - Password input:', password);
+            console.log('🔍 DEBUG - Hash from DB:', user.password);
+            console.log('🔍 DEBUG - Password length:', password.length);
+            console.log('🔍 DEBUG - Hash length:', user.password.length);
+            const isValid = await this.hashingService.compare(password, user.password);
+            console.log('🔍 DEBUG - bcrypt.compare result:', isValid);
+            this.logger.log(`Password verification for user ${userId}: ${isValid ? 'SUCCESS' : 'FAILED'}`);
             return isValid;
         }
         catch (error) {
-            this.logger.logErrorEvent(error, 'UsersService.verifyPassword', undefined, JSON.stringify({ email }));
-            this.logger.endOperation('verifyPassword', operationId, false);
-            throw error;
+            this.logger.error(`Error verifying password for user ${userId}:`, error);
+            return false;
         }
     }
-    isValidPhone(phone) {
-        const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-        return phoneRegex.test(phone.replace(/\s/g, ''));
+    async verifyPasswordByEmail(email, password) {
+        this.logger.log(`Verifying password for email: ${email}`);
+        try {
+            const user = await this.prisma.users.findUnique({
+                where: { email: email.toLowerCase() },
+                select: {
+                    id: true,
+                    email: true,
+                    password: true,
+                    is_active: true
+                }
+            });
+            if (!user) {
+                this.logger.warn(`User not found for password verification: ${email}`);
+                return false;
+            }
+            if (!user.is_active) {
+                this.logger.warn(`Inactive user attempted password verification: ${email}`);
+                return false;
+            }
+            const hashedPassword = await this.hashingService.hashPassword(password);
+            console.log('🔍 DEBUG - Email:', email);
+            console.log('🔍 DEBUG - Password input:', password);
+            console.log('🔍 DEBUG - hashedPassword:', hashedPassword);
+            console.log('🔍 DEBUG - Hash from DB:', user.password);
+            console.log('🔍 DEBUG - Password length:', password.length);
+            console.log('🔍 DEBUG - Hash length:', user.password.length);
+            const isValid = await this.hashingService.compare(password, user.password);
+            console.log('🔍 DEBUG - bcrypt.compare result:', isValid);
+            this.logger.log(`Password verification for user ${user.id} (${email}): ${isValid ? 'SUCCESS' : 'FAILED'}`);
+            return isValid;
+        }
+        catch (error) {
+            this.logger.error(`Error verifying password for email ${email}:`, error);
+            return false;
+        }
+    }
+    async changePassword(userId, currentPassword, newPassword) {
+        this.logger.log(`Changing password for user: ${userId}`);
+        const isCurrentPasswordValid = await this.verifyPassword(userId, currentPassword);
+        if (!isCurrentPasswordValid) {
+            throw new common_1.BadRequestException('Current password is incorrect');
+        }
+        const hashedNewPassword = await this.hashingService.hashPassword(newPassword);
+        const updatedUser = await this.update(userId, {
+            password: hashedNewPassword
+        });
+        this.logger.log(`Password changed successfully for user: ${userId}`);
+        return updatedUser;
     }
 };
 exports.UsersService = UsersService;
@@ -933,6 +916,7 @@ exports.UsersService = UsersService = __decorate([
         redis_service_1.RedisService,
         bullmq_service_1.BullmqService,
         email_service_1.EmailService,
+        hashing_service_1.HashingService,
         logger_service_1.LoggerService])
 ], UsersService);
 //# sourceMappingURL=users.service.js.map

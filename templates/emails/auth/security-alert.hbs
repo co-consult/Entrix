@@ -1,0 +1,130 @@
+{{!-- src/modules/auth/templates/security-alert.hbs --}}
+{{!-- Template email alerte sécurité Entrix V3.0 --}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerte sécurité - Entrix</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background: linear-gradient(135deg, #e55039 0%, #c44569 100%); color: white; padding: 40px 30px; text-align: center; }
+        .content { padding: 40px 30px; }
+        .button { display: inline-block; background: linear-gradient(135deg, #e55039 0%, #c44569 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        .alert { background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .footer { background-color: #f8f9fa; padding: 20px 30px; text-align: center; color: #6c757d; font-size: 14px; }
+        .details-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .details-table th, .details-table td { padding: 10px; text-align: left; border-bottom: 1px solid #dee2e6; }
+        .details-table th { background-color: #f8f9fa; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚨 Alerte Sécurité</h1>
+            <p>Activité inhabituelle détectée</p>
+        </div>
+        
+        <div class="content">
+            <h2>Attention {{firstName}} !</h2>
+            
+            <div class="alert">
+                <strong>🔍 Activité suspecte détectée</strong>
+                <p>Nous avons détecté une {{eventType}} inhabituelle sur votre compte Entrix.</p>
+            </div>
+            
+            <h3>📋 Détails de l'événement</h3>
+            <table class="details-table">
+                <tr>
+                    <th>Type d'événement</th>
+                    <td>{{eventTypeLabel}}</td>
+                </tr>
+                <tr>
+                    <th>Date et heure</th>
+                    <td>{{eventDate}}</td>
+                </tr>
+                <tr>
+                    <th>Adresse IP</th>
+                    <td>{{ipAddress}}</td>
+                </tr>
+                <tr>
+                    <th>Localisation</th>
+                    <td>{{location}}</td>
+                </tr>
+                <tr>
+                    <th>Appareil</th>
+                    <td>{{deviceInfo}}</td>
+                </tr>
+                <tr>
+                    <th>Score de risque</th>
+                    <td>{{riskScore}}/100 ({{riskLevel}})</td>
+                </tr>
+            </table>
+            
+            {{
+#if
+ securityFactors}}
+            <h3>⚠️ Facteurs de risque identifiés</h3>
+            <ul>
+                {{
+#each
+ securityFactors}}
+                <li>{{this}}</li>
+                {{
+/each
+}}
+            </ul>
+            {{
+/if
+}}
+            
+            <h3>🛡️ Actions recommandées</h3>
+            {{
+#if
+ actionTaken}}
+            <p><strong>✅ Action automatique :</strong> {{actionTaken}}</p>
+            {{
+/if
+}}
+            
+            <p>Si cette activité vient de vous :</p>
+            <ul>
+                <li>Aucune action requise</li>
+                <li>Marquez cet appareil comme fiable si souhaité</li>
+            </ul>
+            
+            <p>Si cette activité ne vient <strong>PAS</strong> de vous :</p>
+            <ol>
+                <li><strong>Changez immédiatement votre mot de passe</strong></li>
+                <li>Vérifiez et révoquée les sessions suspectes</li>
+                <li>Activez l'authentification à deux facteurs</li>
+                <li>Contactez notre support</li>
+            </ol>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{securityUrl}}" class="button">Sécuriser mon compte</a>
+            </div>
+            
+            {{
+#if
+ wasBlocked}}
+            <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <strong>🚫 Connexion bloquée</strong>
+                <p>Cette tentative de connexion a été automatiquement bloquée. Si c'était vous, <a href="{{unblockUrl}}">cliquez ici pour débloquer</a>.</p>
+            </div>
+            {{
+/if
+}}
+        </div>
+        
+        <div class="footer">
+            <p>Entrix - Votre sécurité est notre priorité</p>
+            <p><strong>Support 24/7 :</strong> <a href="{{supportUrl}}">Contactez-nous immédiatement</a></p>
+            <p style="font-size: 12px;">
+                Cet email ne peut pas être une tentative de phishing - Vérifiez l'expéditeur | <a href="{{platformUrl}}">entrix.tn</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

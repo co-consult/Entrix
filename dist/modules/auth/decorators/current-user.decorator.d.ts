@@ -1,0 +1,10 @@
+import { IUserProfile } from '../interfaces/user.interface';
+export declare const IS_PUBLIC_KEY = "isPublic";
+export declare const TRUST_DEVICE_KEY = "trustDevice";
+export declare const CurrentUser: (...dataOrPipes: (keyof IUserProfile | import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>>)[]) => ParameterDecorator;
+export declare const CurrentUserId: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const CurrentUserEmail: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const UserRoles: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const UserPermissions: (...dataOrPipes: unknown[]) => ParameterDecorator;
+export declare const Public: () => import("@nestjs/common").CustomDecorator<string>;
+export declare const RequireTrustedDevice: () => import("@nestjs/common").CustomDecorator<string>;

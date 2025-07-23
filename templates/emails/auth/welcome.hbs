@@ -1,0 +1,98 @@
+{{!-- src/modules/auth/templates/welcome.hbs --}}
+{{!-- Template email de bienvenue Entrix V3.0 --}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenue sur Entrix</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; }
+        .content { padding: 40px 30px; }
+        .button { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        .footer { background-color: #f8f9fa; padding: 20px 30px; text-align: center; color: #6c757d; font-size: 14px; }
+        .divider { height: 1px; background-color: #e9ecef; margin: 30px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Bienvenue sur Entrix !</h1>
+            <p>Votre plateforme de billetterie événementielle</p>
+        </div>
+        
+        <div class="content">
+            <h2>Bonjour {{firstName}} {{lastName}} !</h2>
+            
+            <p>Félicitations ! Votre compte Entrix a été créé avec succès. Vous faites maintenant partie de la communauté des passionnés d'événements en Tunisie.</p>
+            
+            {{
+#if
+ emailVerificationRequired}}
+            <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <strong>📧 Vérification requise</strong>
+                <p>Pour sécuriser votre compte, veuillez confirmer votre adresse email :</p>
+                <a href="{{verificationLink}}" class="button">Vérifier mon email</a>
+                <p style="font-size: 12px; margin-top: 10px;">Ce lien expire dans 24 heures.</p>
+            </div>
+            {{
+/if
+}}
+            
+            {{
+#if
+ onboarding.incentiveApplied}}
+            <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <strong>🎁 Bonus de bienvenue</strong>
+                <p>Génial ! Votre {{onboarding.incentiveType}} de {{onboarding.incentiveValue}}% a été appliqué.</p>
+                {{
+#if
+ onboarding.migratedTickets}}
+                <p>✅ {{onboarding.migratedTickets}} ticket(s) transféré(s) depuis votre session anonyme.</p>
+                {{
+/if
+}}
+            </div>
+            {{
+/if
+}}
+            
+            <div class="divider"></div>
+            
+            <h3>🚀 Prochaines étapes</h3>
+            <ul>
+                <li><strong>Explorez</strong> les événements populaires en Tunisie</li>
+                <li><strong>Suivez</strong> vos équipes et organisateurs préférés</li>
+                <li><strong>Réservez</strong> vos places en quelques clics</li>
+                <li><strong>Partagez</strong> vos événements avec vos amis</li>
+            </ul>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{platformUrl}}/events" class="button">Découvrir les événements</a>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <h3>🔐 Sécurité de votre compte</h3>
+            <p>Votre compte est protégé par :</p>
+            <ul>
+                <li>Chiffrement de niveau bancaire</li>
+                <li>Authentification à deux facteurs (recommandée)</li>
+                <li>Surveillance des connexions suspectes</li>
+            </ul>
+            
+            <p><a href="{{platformUrl}}/account/security">Configurez votre sécurité</a></p>
+        </div>
+        
+        <div class="footer">
+            <p>Entrix - La billetterie qui vous ressemble</p>
+            <p>Tunis, Tunisie | <a href="{{platformUrl}}">entrix.tn</a></p>
+            <p style="font-size: 12px;">
+                Si vous n'avez pas créé ce compte, <a href="{{supportUrl}}">contactez notre support</a>.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

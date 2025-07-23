@@ -8,26 +8,32 @@ export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
     login(dto: LoginDto): Promise<{
-        mfaRequired: boolean;
-        method: string;
-        accessToken?: undefined;
-        refreshToken?: undefined;
-    } | {
         accessToken: string;
         refreshToken: string;
-        mfaRequired?: undefined;
-        method?: undefined;
+        user: {
+            id: string;
+            email: string;
+            firstName: string;
+            lastName: string;
+        };
+        session: {
+            id: any;
+        };
     }>;
     register(dto: RegisterDto): Promise<{
         id: string;
         email: string;
+        message: string;
     }>;
-    resetPassword(dto: ResetPasswordDto): Promise<void>;
+    resetPassword(dto: ResetPasswordDto): Promise<{
+        message: string;
+    }>;
     confirmResetPassword(dto: ConfirmResetPasswordDto): Promise<{
         message: string;
     }>;
     verifyEmail(dto: VerifyEmailDto): Promise<{
         message: string;
+        verified: boolean;
     }>;
     mfaLogin(dto: MfaLoginDto & {
         email: string;

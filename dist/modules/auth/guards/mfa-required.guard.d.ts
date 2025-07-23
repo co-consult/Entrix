@@ -1,15 +1,14 @@
 import { CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { LoggerService } from '../../../shared/logger/logger.service';
-import { MfaService } from '../services/mfa.service';
+import { RedisService } from '../../../shared/redis/redis.service';
 export declare class MfaRequiredGuard implements CanActivate {
-    private reflector;
-    private mfaService;
+    private readonly reflector;
+    private readonly redis;
     private readonly logger;
-    constructor(reflector: Reflector, mfaService: MfaService, logger: LoggerService);
+    constructor(reflector: Reflector, redis: RedisService, loggerService: LoggerService);
     canActivate(context: ExecutionContext): Promise<boolean>;
-    private isHighSensitivityRoute;
-    private doesUserRoleRequireMfa;
-    private isMfaValidationFresh;
+    private isMfaValidatedInSession;
+    private generateMfaChallenge;
     private getAvailableMfaMethods;
 }

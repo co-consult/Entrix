@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d, _e, _f;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
@@ -48,35 +49,35 @@ __decorate([
     (0, common_1.Post)('login'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [login_dto_1.LoginDto]),
+    __metadata("design:paramtypes", [typeof (_a = typeof login_dto_1.LoginDto !== "undefined" && login_dto_1.LoginDto) === "function" ? _a : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
     (0, common_1.Post)('register'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [register_dto_1.RegisterDto]),
+    __metadata("design:paramtypes", [typeof (_b = typeof register_dto_1.RegisterDto !== "undefined" && register_dto_1.RegisterDto) === "function" ? _b : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "register", null);
 __decorate([
     (0, common_1.Post)('reset-password'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [reset_password_dto_1.ResetPasswordDto]),
+    __metadata("design:paramtypes", [typeof (_c = typeof reset_password_dto_1.ResetPasswordDto !== "undefined" && reset_password_dto_1.ResetPasswordDto) === "function" ? _c : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "resetPassword", null);
 __decorate([
     (0, common_1.Post)('confirm-reset-password'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [reset_password_dto_1.ConfirmResetPasswordDto]),
+    __metadata("design:paramtypes", [typeof (_d = typeof reset_password_dto_1.ConfirmResetPasswordDto !== "undefined" && reset_password_dto_1.ConfirmResetPasswordDto) === "function" ? _d : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "confirmResetPassword", null);
 __decorate([
     (0, common_1.Post)('verify-email'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [verify_email_dto_1.VerifyEmailDto]),
+    __metadata("design:paramtypes", [typeof (_e = typeof verify_email_dto_1.VerifyEmailDto !== "undefined" && verify_email_dto_1.VerifyEmailDto) === "function" ? _e : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "verifyEmail", null);
 __decorate([

@@ -18,9 +18,10 @@ class RefreshTokenDto {
 exports.RefreshTokenDto = RefreshTokenDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'Refresh token JWT pour renouveler l\'access token',
-        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        pattern: '^[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]*$',
+        description: 'Token de rafraîchissement JWT pour obtenir un nouveau token d\'accès',
+        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NTY3ODkwIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
+        minLength: 10,
+        maxLength: 2048,
     }),
     (0, class_validator_1.IsString)({
         message: 'Le refresh token doit être une chaîne de caractères'
@@ -30,9 +31,6 @@ __decorate([
     }),
     (0, class_validator_1.MaxLength)(2048, {
         message: 'Le refresh token ne peut pas dépasser 2048 caractères'
-    }),
-    (0, class_validator_1.Matches)(/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/, {
-        message: 'Le refresh token doit être au format JWT valide'
     }),
     __metadata("design:type", String)
 ], RefreshTokenDto.prototype, "refreshToken", void 0);

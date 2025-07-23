@@ -1,96 +1,59 @@
-export interface AuthSession {
-    id: string;
-    userId: string;
-    token: string;
-    createdAt: Date;
-    expiresAt: Date;
-    ipAddress?: string;
-    userAgent?: string;
-    isActive: boolean;
-    revokedAt?: Date;
-    revokedBy?: string;
-}
-export interface AuthTokenPayload {
-    userId: string;
+import { MfaProvider } from '../constants/auth.constants';
+import { IUserProfile, ILoginRequest, IRegisterRequest } from './user.interface';
+import { ISessionInfo, ITokenPair } from './session.interface';
+import { IMfaChallenge } from './mfa.interface';
+export interface JwtPayload {
+    sub: string;
     email: string;
-    roles: string[];
-    provider: string;
     iat: number;
     exp: number;
-    sessionId?: string;
-    mfaEnabled?: boolean;
+    aud: string;
+    iss: string;
+    sessionId: string;
+    deviceFingerprint?: string;
+    roles?: string[];
+    permissions?: string[];
 }
-export interface MFASecret {
-    userId: string;
-    secret: string;
-    enabled: boolean;
-    createdAt: Date;
-    lastUsed?: Date;
-    backupCodes?: string[];
+export interface JwtRefreshPayload {
+    sub: string;
+    sessionId: string;
+    tokenId: string;
+    iat: number;
+    exp: number;
+    aud: string;
+    iss: string;
 }
-export interface MFAVerification {
-    userId: string;
-    code: string;
-    expiresAt: Date;
-    attempts: number;
-    verified: boolean;
+export interface ILoginResult {
+    success: boolean;
+    user?: IUserProfile;
+    tokens?: ITokenPair;
+    session?: ISessionInfo;
+    mfaRequired?: IMfaChallenge;
+    meta?: {
+        riskScore: number;
+        requiresMfa: boolean;
+        ipGeolocation: string;
+    };
 }
-export interface PasswordResetRequest {
-    userId: string;
-    token: string;
-    requestedAt: Date;
-    expiresAt: Date;
-    used: boolean;
-    usedAt?: Date;
-    ipAddress?: string;
+export interface IRegisterResult {
+    success: boolean;
+    user?: IUserProfile;
+    tokens?: ITokenPair;
+    verification?: {
+        emailSent: boolean;
+        verificationRequired: boolean;
+    };
+    onboarding?: {
+        incentiveApplied: boolean;
+        incentiveType: string;
+        incentiveValue: number;
+        migratedTickets: number;
+    };
 }
-export interface AuthApiKey {
-    id: string;
-    userId: string;
-    key: string;
-    label: string;
-    createdAt: Date;
-    expiresAt?: Date;
-    lastUsedAt?: Date;
-    isActive: boolean;
-    revokedAt?: Date;
-    revokedBy?: string;
-    scopes: string[];
-    description?: string;
-}
-export interface BlacklistEntry {
-    id: string;
-    userId?: string;
-    token?: string;
-    reason: string;
-    createdAt: Date;
-    expiresAt?: Date;
-    revokedBy?: string;
-}
-export interface AuthEmailVerification {
-    userId: string;
-    email: string;
-    token: string;
-    requestedAt: Date;
-    expiresAt: Date;
-    verified: boolean;
-    verifiedAt?: Date;
-}
-export interface AuthProviderProfile {
-    provider: string;
-    providerId: string;
-    email?: string;
-    displayName?: string;
-    avatarUrl?: string;
-    linkedAt: Date;
-}
-export interface AuthAuditLog {
-    id: string;
-    userId?: string;
-    action: string;
-    ipAddress?: string;
-    userAgent?: string;
-    status: 'SUCCESS' | 'FAILURE';
-    details?: any;
-    createdAt: Date;
+export interface IAuthService {
+    login(loginData: ILoginRequest): Promise<ILoginResult>;
+    register(registerData: IRegisterRequest): Promise<IRegisterResult>;
+    logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
+    validateUser(email: string, password: string): Promise<IUserProfile | null>;
+    verifyMfa(challengeToken: string, code: string, method: MfaProvider): Promise<ILoginResult>;
 }
