@@ -1,14 +1,14 @@
 import { ITokenPair, ISessionInfo } from '../../interfaces/session.interface';
 import { IUserProfile } from '../../interfaces/user.interface';
 import { IMfaChallenge } from '../../interfaces/mfa.interface';
-export declare class UserProfileDto implements Omit<IUserProfile, 'created_at' | 'updated_at' | 'email_verified' | 'phone_verified' | 'last_login'> {
+export declare class UserProfileDto implements Omit<IUserProfile, 'createdAt' | 'updatedAt' | 'emailVerified' | 'phoneVerified' | 'lastLogin'> {
     id: string;
     email: string;
-    first_name: string;
-    last_name: string;
+    firstName: string;
+    lastName: string;
     phone: string | null;
     avatar: string | null;
-    is_active: boolean;
+    isActive: boolean;
     emailVerified?: boolean;
     phoneVerified?: boolean;
     lastLoginAt?: string;
@@ -52,4 +52,7 @@ export declare class LoginResponseDto {
         requiresMfa: boolean;
         ipGeolocation: string;
     };
+}
+export declare class UserProfileMapper {
+    static toDto(userProfile: IUserProfile): UserProfileDto;
 }

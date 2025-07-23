@@ -6,7 +6,6 @@ import { IAuthService, ILoginResult, IRegisterResult, ILoginRequest, IRegisterRe
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
-import { UsersService } from '../../users/services/users.service';
 export declare class AuthService implements IAuthService {
     private readonly prisma;
     private readonly redis;
@@ -14,9 +13,8 @@ export declare class AuthService implements IAuthService {
     private readonly tokenService;
     private readonly sessionService;
     private readonly securityService;
-    private readonly usersService;
     private readonly logger;
-    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, securityService: SecurityService, usersService: UsersService, loggerService: LoggerService);
+    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, securityService: SecurityService, loggerService: LoggerService);
     login(loginData: ILoginRequest, context?: {
         ipAddress: string;
         userAgent: string;
@@ -29,10 +27,12 @@ export declare class AuthService implements IAuthService {
         deviceFingerprint?: string;
     }): Promise<IUserProfile | null>;
     logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
-    private handleFailedLogin;
+    verifyMfa(challengeToken: string, code: string, method: any): Promise<ILoginResult>;
+    private validateUserSecurity;
     private updateLastLogin;
-    private generateMfaChallenge;
-    private generateEmailVerificationToken;
+    private validatePasswordStrength;
+    private handleFailedLogin;
+    private initiateMfaChallenge;
     private processOnboardingSecret;
-    private shouldRequireEmailVerification;
+    private generateEmailVerificationToken;
 }

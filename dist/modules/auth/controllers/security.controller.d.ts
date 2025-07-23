@@ -82,7 +82,7 @@ export declare class SecurityController {
             activeSessions: number;
             recentEvents: number;
             recommendations: string[];
-            lastSecurityUpdate: Date;
+            lastSecurityUpdate: any;
         };
     }>;
     private verifyDeviceCode;

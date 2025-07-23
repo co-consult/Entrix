@@ -51,9 +51,17 @@ export interface IRegisterResult {
     };
 }
 export interface IAuthService {
-    login(loginData: ILoginRequest): Promise<ILoginResult>;
+    login(loginData: ILoginRequest, context?: {
+        ipAddress: string;
+        userAgent: string;
+        deviceFingerprint?: string;
+    }): Promise<ILoginResult>;
     register(registerData: IRegisterRequest): Promise<IRegisterResult>;
     logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
-    validateUser(email: string, password: string): Promise<IUserProfile | null>;
+    validateUser(email: string, password: string, context?: {
+        ipAddress: string;
+        userAgent: string;
+        deviceFingerprint?: string;
+    }): Promise<IUserProfile | null>;
     verifyMfa(challengeToken: string, code: string, method: MfaProvider): Promise<ILoginResult>;
 }

@@ -1,6 +1,28 @@
 export interface IUserProfile {
     id: string;
     email: string;
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+    avatar: string | null;
+    isActive: boolean;
+    emailVerified: Date | null;
+    phoneVerified: Date | null;
+    lastLogin: Date | null;
+    metadata: any | null;
+    createdAt: Date;
+    updatedAt: Date;
+    roles?: string[];
+    permissions?: string[];
+    subscription?: {
+        tier: 'FREE' | 'PREMIUM' | 'VIP';
+        expiresAt?: string;
+    };
+    preferences?: any;
+}
+export interface IUserDbRecord {
+    id: string;
+    email: string;
     first_name: string;
     last_name: string;
     phone: string | null;
@@ -12,13 +34,7 @@ export interface IUserProfile {
     metadata: any | null;
     created_at: Date;
     updated_at: Date;
-    roles?: string[];
-    permissions?: string[];
-    subscription?: {
-        tier: 'FREE' | 'PREMIUM' | 'VIP';
-        expiresAt?: string;
-    };
-    preferences?: any;
+    password: string;
 }
 export interface ILoginRequest {
     email: string;
@@ -41,11 +57,16 @@ export interface IRegisterRequest {
 export interface ICreateUserData {
     email: string;
     password: string;
-    first_name: string;
-    last_name: string;
+    firstName: string;
+    lastName: string;
     phone?: string;
-    is_active?: boolean;
-    email_verified?: Date | null;
-    phone_verified?: Date | null;
+    isActive?: boolean;
+    emailVerified?: Date | null;
+    phoneVerified?: Date | null;
     metadata?: any;
+}
+export declare class UserMapper {
+    static fromDb(dbRecord: IUserDbRecord): IUserProfile;
+    static toDb(userData: ICreateUserData): Omit<IUserDbRecord, 'id' | 'created_at' | 'updated_at'>;
+    static fromRegisterRequest(registerData: IRegisterRequest): ICreateUserData;
 }

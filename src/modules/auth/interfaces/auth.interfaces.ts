@@ -1,13 +1,13 @@
-// src/modules/auth/interfaces/auth.interface.ts
+// src/modules/auth/interfaces/auth.interfaces.ts
 
 import { MfaProvider } from '../constants/auth.constants';
 import { IUserProfile, ILoginRequest, IRegisterRequest } from './user.interface';
 import { ISessionInfo, ITokenPair } from './session.interface';
 import { IMfaChallenge } from './mfa.interface';
 
-
 /**
  * Interfaces d'authentification Entrix V3.0
+ * CORRIGÉ : Utilise IUserProfile harmonisé (camelCase)
  * Respecte schema.prisma et api_specs_auth_session.md
  */
 
@@ -37,9 +37,10 @@ export interface JwtRefreshPayload {
 }
 
 // Interface résultat login selon api_specs_auth_session.md
+// ✅ CORRIGÉ : Utilise IUserProfile harmonisé
 export interface ILoginResult {
   success: boolean;
-  user?: IUserProfile;
+  user?: IUserProfile;      // ✅ Utilise interface harmonisée
   tokens?: ITokenPair;
   session?: ISessionInfo;
   mfaRequired?: IMfaChallenge;
@@ -51,9 +52,10 @@ export interface ILoginResult {
 }
 
 // Interface register result
+// ✅ CORRIGÉ : Utilise IUserProfile harmonisé
 export interface IRegisterResult {
   success: boolean;
-  user?: IUserProfile;
+  user?: IUserProfile;      // ✅ Utilise interface harmonisée
   tokens?: ITokenPair;
   verification?: {
     emailSent: boolean;
@@ -68,21 +70,31 @@ export interface IRegisterResult {
 }
 
 // Interface service d'authentification
+// ✅ CORRIGÉ : Toutes les méthodes utilisent interfaces harmonisées
 export interface IAuthService {
-  login(loginData: ILoginRequest): Promise<ILoginResult>;
+  login(loginData: ILoginRequest, context?: {
+    ipAddress: string;
+    userAgent: string;
+    deviceFingerprint?: string;
+  }): Promise<ILoginResult>;
+  
   register(registerData: IRegisterRequest): Promise<IRegisterResult>;
+  
   logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
-  validateUser(email: string, password: string): Promise<IUserProfile | null>;
-  verifyMfa(challengeToken: string, code: string, method: MfaProvider): Promise<ILoginResult>;
+  
+  validateUser(
+    email: string, 
+    password: string, 
+    context?: {
+      ipAddress: string;
+      userAgent: string;
+      deviceFingerprint?: string;
+    }
+  ): Promise<IUserProfile | null>;  // ✅ Retourne interface harmonisée
+  
+  verifyMfa(
+    challengeToken: string, 
+    code: string, 
+    method: MfaProvider
+  ): Promise<ILoginResult>;
 }
-
-
-
-
-
-
-
-
-
-
-

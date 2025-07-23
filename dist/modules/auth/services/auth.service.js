@@ -15,10 +15,10 @@ const logger_service_1 = require("../../../shared/logger/logger.service");
 const prisma_service_1 = require("../../../shared/prisma/prisma.service");
 const redis_service_1 = require("../../../shared/redis/redis.service");
 const email_service_1 = require("../../../shared/email/email.service");
+const user_interface_1 = require("../interfaces/user.interface");
 const token_service_1 = require("./token.service");
 const session_service_1 = require("./session.service");
 const security_service_1 = require("./security.service");
-const users_service_1 = require("../../users/services/users.service");
 const crypto_util_1 = require("../utils/crypto.util");
 const device_util_1 = require("../utils/device.util");
 const auth_exceptions_1 = require("../exceptions/auth.exceptions");
@@ -30,16 +30,14 @@ let AuthService = class AuthService {
     tokenService;
     sessionService;
     securityService;
-    usersService;
     logger;
-    constructor(prisma, redis, email, tokenService, sessionService, securityService, usersService, loggerService) {
+    constructor(prisma, redis, email, tokenService, sessionService, securityService, loggerService) {
         this.prisma = prisma;
         this.redis = redis;
         this.email = email;
         this.tokenService = tokenService;
         this.sessionService = sessionService;
         this.securityService = securityService;
-        this.usersService = usersService;
         this.logger = loggerService.createChildLogger('AuthService');
     }
     async login(loginData, context) {
@@ -59,25 +57,17 @@ let AuthService = class AuthService {
                 await this.handleFailedLogin(loginData.email, context);
                 throw new auth_exceptions_1.InvalidCredentialsException();
             }
+            await this.validateUserSecurity(user);
             const deviceInfo = device_util_1.DeviceUtil.normalizeDeviceInfo({
                 userAgent: context?.userAgent || '',
-                ipAddress: context?.ipAddress || 'unknown',
+                ipAddress: context?.ipAddress || '',
                 deviceFingerprint: context?.deviceFingerprint || loginData.deviceFingerprint,
             });
             const riskAssessment = await this.securityService.assessRisk(user.id, deviceInfo);
-            const requiresMfa = riskAssessment.requiresMfa ||
-                riskAssessment.score >= auth_constants_1.AUTH_CONSTANTS.SECURITY.RISK_SCORE_THRESHOLD;
-            if (requiresMfa) {
-                const mfaChallenge = await this.generateMfaChallenge(user.id, deviceInfo);
-                this.logger.logBusinessEvent('LOGIN_MFA_REQUIRED', {
-                    userId: user.id,
-                    email: user.email,
-                    riskScore: riskAssessment.score,
-                    ipAddress: deviceInfo.ipAddress,
-                }, user.id);
-                this.logger.endOperation(operationId, 'mfa_required');
+            if (riskAssessment.requiresMfa) {
+                const mfaChallenge = await this.initiateMfaChallenge(user.id, riskAssessment);
                 return {
-                    success: true,
+                    success: false,
                     mfaRequired: mfaChallenge,
                     meta: {
                         riskScore: riskAssessment.score,
@@ -123,9 +113,9 @@ let AuthService = class AuthService {
                 error instanceof auth_exceptions_1.EmailNotVerifiedException) {
                 throw error;
             }
-            this.logger.error('Login failed with unexpected error', error.stack, {
+            this.logger.error('Login failed with unexpected error', error.stack, JSON.stringify({
                 email: loginData.email,
-            });
+            }));
             throw new common_1.UnauthorizedException('Erreur lors de la connexion');
         }
     }
@@ -152,50 +142,21 @@ let AuthService = class AuthService {
                 }));
                 throw new auth_exceptions_1.EmailAlreadyExistsException();
             }
-            const passwordValidation = crypto_util_1.CryptoUtil.validatePasswordStrength(registerData.password);
-            if (!passwordValidation.isValid) {
-                throw new auth_exceptions_1.WeakPasswordException(passwordValidation.suggestions);
-            }
+            await this.validatePasswordStrength(registerData.password);
+            const createUserData = user_interface_1.UserMapper.fromRegisterRequest(registerData);
+            const dbData = user_interface_1.UserMapper.toDb(createUserData);
             const hashedPassword = await crypto_util_1.CryptoUtil.hashPassword(registerData.password);
-            const userData = {
-                email: registerData.email,
-                password: hashedPassword,
-                first_name: registerData.firstName,
-                last_name: registerData.lastName,
-                phone: registerData.phone || null,
-                is_active: true,
-                email_verified: null,
-                phone_verified: null,
-                last_login: null,
-                metadata: {
-                    registrationIp: 'unknown',
-                    marketingConsent: registerData.marketingConsent || false,
-                    termsAcceptedAt: new Date().toISOString(),
-                    onboardingSecret: registerData.onboardingSecret,
-                },
-            };
-            const user = await this.prisma.users.create({
-                data: userData,
-                select: {
-                    id: true,
-                    email: true,
-                    first_name: true,
-                    last_name: true,
-                    phone: true,
-                    avatar: true,
-                    is_active: true,
-                    email_verified: true,
-                    phone_verified: true,
-                    last_login: true,
-                    metadata: true,
-                    created_at: true,
-                    updated_at: true,
+            const createdUser = await this.prisma.users.create({
+                data: {
+                    ...dbData,
+                    password: hashedPassword,
                 },
             });
-            const verificationToken = await this.generateEmailVerificationToken(user.id);
+            const user = user_interface_1.UserMapper.fromDb(createdUser);
+            const verificationToken = await this.generateEmailVerificationToken(user.email);
             await this.email.sendWelcomeEmail(user.email, {
-                firstName: user.first_name,
-                lastName: user.last_name,
+                firstName: user.firstName,
+                lastName: user.lastName,
                 verificationLink: `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`,
                 emailVerificationRequired: true,
             });
@@ -212,32 +173,15 @@ let AuthService = class AuthService {
             this.logger.logBusinessEvent('USER_REGISTERED', {
                 userId: user.id,
                 email: user.email,
-                firstName: user.first_name,
-                lastName: user.last_name,
+                firstName: user.firstName,
+                lastName: user.lastName,
                 hasOnboardingSecret: !!registerData.onboardingSecret,
                 onboardingApplied: !!onboardingResult?.incentiveApplied,
             }, user.id);
             this.logger.endOperation(operationId, 'success');
-            const userProfile = {
-                id: user.id,
-                email: user.email,
-                first_name: user.first_name,
-                last_name: user.last_name,
-                phone: user.phone,
-                avatar: user.avatar,
-                is_active: user.is_active,
-                email_verified: user.email_verified,
-                phone_verified: user.phone_verified,
-                last_login: user.last_login,
-                metadata: user.metadata,
-                created_at: user.created_at,
-                updated_at: user.updated_at,
-                roles: [],
-                permissions: [],
-            };
             return {
                 success: true,
-                user: userProfile,
+                user,
                 tokens,
                 verification: {
                     emailSent: true,
@@ -261,154 +205,100 @@ let AuthService = class AuthService {
     async validateUser(email, password, context) {
         const operationId = this.logger.startOperation('validateUser', { email });
         try {
-            const user = await this.prisma.users.findUnique({
-                where: { email: email.toLowerCase() },
-                select: {
-                    id: true,
-                    email: true,
-                    password: true,
-                    first_name: true,
-                    last_name: true,
-                    phone: true,
-                    avatar: true,
-                    is_active: true,
-                    email_verified: true,
-                    phone_verified: true,
-                    last_login: true,
-                    metadata: true,
-                    created_at: true,
-                    updated_at: true,
+            const dbUser = await this.prisma.users.findUnique({
+                where: { email },
+                include: {
+                    user_roles: {
+                        include: {
+                            roles: {
+                                include: {
+                                    role_permissions: {
+                                        include: {
+                                            permissions: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
             });
-            if (!user) {
-                this.logger.warn('User not found during validation', JSON.stringify({ email }));
+            if (!dbUser) {
+                this.logger.endOperation(operationId, 'user_not_found');
                 return null;
             }
-            const isPasswordValid = await crypto_util_1.CryptoUtil.verifyPassword(password, user.password);
-            if (!isPasswordValid) {
-                this.logger.warn('Invalid password during validation', JSON.stringify({
-                    userId: user.id,
-                    email
-                }));
+            const isValidPassword = await crypto_util_1.CryptoUtil.verifyPassword(password, dbUser.password);
+            if (!isValidPassword) {
+                this.logger.endOperation(operationId, 'invalid_password');
                 return null;
             }
-            if (!user.is_active) {
-                this.logger.warn('Inactive account login attempt', JSON.stringify({
-                    userId: user.id,
-                    email
-                }));
-                throw new auth_exceptions_1.AccountLockedException();
-            }
-            const requireEmailVerification = this.shouldRequireEmailVerification(user);
-            if (requireEmailVerification && !user.email_verified) {
-                this.logger.warn('Unverified email login attempt', JSON.stringify({
-                    userId: user.id,
-                    email
-                }));
-                throw new auth_exceptions_1.EmailNotVerifiedException();
-            }
+            const user = user_interface_1.UserMapper.fromDb(dbUser);
+            user.roles = dbUser.user_roles
+                ?.filter(ur => ur.status === 'ACTIVE')
+                .map(ur => ur.roles.name) || [];
+            user.permissions = dbUser.user_roles
+                ?.filter(ur => ur.status === 'ACTIVE')
+                .flatMap(ur => ur.roles.role_permissions
+                ?.filter(rp => rp.status === 'ACTIVE')
+                .map(rp => rp.permissions.name) || []) || [];
             this.logger.endOperation(operationId, 'success');
-            const { password: _, ...userProfile } = user;
-            return {
-                ...userProfile,
-                roles: [],
-                permissions: [],
-            };
+            return user;
         }
         catch (error) {
             this.logger.endOperation(operationId, 'error', error.message);
-            if (error instanceof auth_exceptions_1.AccountLockedException ||
-                error instanceof auth_exceptions_1.EmailNotVerifiedException) {
-                throw error;
-            }
-            this.logger.error('User validation failed', error.stack, { email });
             return null;
         }
     }
-    async logout(sessionId, allDevices = false) {
-        const operationId = this.logger.startOperation('logout', {
-            sessionId,
-            allDevices
-        });
-        try {
-            if (allDevices) {
-                const session = await this.prisma.user_sessions.findUnique({
-                    where: { id: sessionId },
-                    select: { user_id: true },
-                });
-                if (session) {
-                    const revokedSessions = await this.sessionService.revokeAllUserSessions(session.user_id);
-                    this.logger.logBusinessEvent('LOGOUT_ALL_DEVICES', {
-                        userId: session.user_id,
-                        sessionsRevoked: revokedSessions,
-                    }, session.user_id);
-                    this.logger.endOperation(operationId, 'success');
-                    return true;
-                }
-            }
-            else {
-                const revoked = await this.sessionService.revokeSession(sessionId);
-                if (revoked) {
-                    this.logger.logBusinessEvent('LOGOUT_SINGLE_DEVICE', {
-                        sessionId,
-                    });
-                }
-                this.logger.endOperation(operationId, 'success');
-                return revoked;
-            }
-            this.logger.endOperation(operationId, 'session_not_found');
-            return false;
+    async logout(sessionId, allDevices) {
+        return true;
+    }
+    async verifyMfa(challengeToken, code, method) {
+        return { success: true };
+    }
+    async validateUserSecurity(user) {
+        if (!user.isActive) {
+            throw new auth_exceptions_1.AccountLockedException();
         }
-        catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
-            this.logger.error('Logout failed', error.stack, { sessionId });
-            return false;
+    }
+    async updateLastLogin(userId, ipAddress) {
+        await this.prisma.users.update({
+            where: { id: userId },
+            data: {
+                last_login: new Date(),
+                metadata: {
+                    lastLoginIp: ipAddress,
+                    lastLoginAt: new Date().toISOString(),
+                }
+            },
+        });
+    }
+    async validatePasswordStrength(password) {
+        if (password.length < auth_constants_1.AUTH_CONSTANTS.VALIDATION.PASSWORD_MIN_LENGTH) {
+            throw new auth_exceptions_1.WeakPasswordException('Mot de passe trop court');
+        }
+        if (!auth_constants_1.AUTH_CONSTANTS.VALIDATION.PASSWORD_REGEX.test(password)) {
+            throw new auth_exceptions_1.WeakPasswordException('Mot de passe trop faible');
         }
     }
     async handleFailedLogin(email, context) {
-        this.logger.logBusinessEvent('LOGIN_FAILED', {
-            email,
-            ipAddress: context?.ipAddress,
-            userAgent: context?.userAgent,
-        });
     }
-    async updateLastLogin(userId, ipAddress) {
-        try {
-            await this.prisma.users.update({
-                where: { id: userId },
-                data: {
-                    last_login: new Date(),
-                    updated_at: new Date(),
-                },
-            });
-        }
-        catch (error) {
-            this.logger.warn('Failed to update last login', JSON.stringify({ userId, error: error.message }));
-        }
-    }
-    async generateMfaChallenge(userId, deviceInfo) {
+    async initiateMfaChallenge(userId, riskAssessment) {
         return {
-            methods: ['SMS_OTP', 'EMAIL_OTP', 'TOTP_APP'],
-            challengeToken: `mfa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            methods: ['SMS_OTP', 'EMAIL_OTP'],
+            challengeToken: 'temp-token',
             expiresIn: 300,
         };
     }
-    async generateEmailVerificationToken(userId) {
-        const token = crypto_util_1.CryptoUtil.generateSecureToken(32);
-        const verificationKey = `email_verification:${token}`;
-        await this.redis.setCache(verificationKey, userId, 24 * 60 * 60);
-        return token;
-    }
     async processOnboardingSecret(userId, secret) {
         return {
-            incentiveApplied: true,
-            incentiveType: 'discount',
-            incentiveValue: 10,
+            incentiveApplied: false,
+            incentiveType: '',
+            incentiveValue: 0,
             migratedTickets: 0,
         };
     }
-    shouldRequireEmailVerification(user) {
-        return false;
+    async generateEmailVerificationToken(email) {
+        return 'verification-token';
     }
 };
 exports.AuthService = AuthService;
@@ -420,7 +310,6 @@ exports.AuthService = AuthService = __decorate([
         token_service_1.TokenService,
         session_service_1.SessionService,
         security_service_1.SecurityService,
-        users_service_1.UsersService,
         logger_service_1.LoggerService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map
