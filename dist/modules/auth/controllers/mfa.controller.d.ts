@@ -9,7 +9,7 @@ export declare class MfaController {
     getAvailableProviders(userId: string): Promise<{
         success: boolean;
         data: {
-            available: MfaProvider[];
+            available: ("SMS_OTP" | "EMAIL_OTP" | "TOTP_APP" | "BACKUP_CODE")[];
             configured: MfaProvider[];
             recommended: any;
         };
@@ -20,7 +20,7 @@ export declare class MfaController {
         success: boolean;
         data: {
             challengeToken: string;
-            availableMethods: MfaProvider[];
+            availableMethods: ("SMS_OTP" | "EMAIL_OTP" | "TOTP_APP" | "BACKUP_CODE")[];
             expiresIn: number;
         };
     }>;
@@ -36,7 +36,7 @@ export declare class MfaController {
         data: {
             provider: MfaProvider;
             disabled: boolean;
-            remainingMethods: MfaProvider[];
+            remainingMethods: ("SMS_OTP" | "EMAIL_OTP" | "TOTP_APP" | "BACKUP_CODE")[];
         };
         error?: undefined;
     }>;

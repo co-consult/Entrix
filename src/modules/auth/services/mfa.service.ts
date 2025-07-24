@@ -1,34 +1,59 @@
 // src/modules/auth/services/mfa.service.ts
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
 import { EmailService } from '../../../shared/email/email.service';
 import { 
-  IMfaService, 
-  IMfaSetup, 
-  IMfaVerification, 
-  MfaProvider 
-} from '../interfaces';
-import { CryptoUtil } from '../utils/crypto.util';
-import { MFA_CONSTANTS } from '../constants/mfa.constants';
-import { 
+  IMfaService,
+  IMfaSetup,
+  IMfaVerification,
+  IMfaChallenge
+} from '../interfaces/mfa.interface';
+import { MfaProvider } from '../constants/auth.constants';
+import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import {
   UnsupportedMfaProviderException,
   MfaAlreadySetupException,
-  InvalidMfaCodeException,
-  MfaChallengeExpiredException
+  MfaChallengeExpiredException,
+  InvalidBackupCodeException
 } from '../exceptions/mfa.exceptions';
+import { 
+  InvalidMfaCodeException 
+} from '../exceptions/auth.exceptions';
+import { TooManyRequestsException } from '../exceptions/too-many-requests.exception';
+import { CryptoUtil } from '../utils/crypto.util';
+import { SecurityUtil } from '../utils/security.util';
+import * as crypto from 'crypto';
+import * as speakeasy from 'speakeasy';
+import * as qrcode from 'qrcode';
+
+/**
+ * Interface pour les données de challenge MFA
+ */
+interface MfaChallengeData {
+  userId: string;
+  methods: MfaProvider[];
+  deviceFingerprint?: string;
+  createdAt: string;
+  expiresAt: string;
+}
 
 /**
  * MFA Service Entrix V3.0 - Grade A+
- * Gestion Multi-Factor Authentication complète
- * Respecte api_specs_auth_session.md et standards sécurité
+ * Multi-Factor Authentication complet
+ * Respecte api_specs_auth_session.md et sécurité renforcée
  */
 
 @Injectable()
 export class MfaService implements IMfaService {
   private readonly logger: LoggerService;
+  private readonly MFA_CODE_LENGTH = 6;
+  private readonly OTP_EXPIRY = 300; // 5 minutes
+  private readonly CHALLENGE_EXPIRY = 300; // 5 minutes
+  private readonly MAX_ATTEMPTS = 5;
+  private readonly RATE_LIMIT_WINDOW = 300; // 5 minutes
 
   constructor(
     private readonly prisma: PrismaService,
@@ -40,359 +65,434 @@ export class MfaService implements IMfaService {
   }
 
   /**
-   * Configure MFA pour utilisateur
-   * Respecte MFA_CONSTANTS et providers supportés
+   * Configure MFA pour un utilisateur
+   * Respecte schema.prisma et sécurité
    */
   async setupMfa(userId: string, provider: MfaProvider): Promise<IMfaSetup> {
-    const operationId = this.logger.startOperation('setupMfa', {
-      userId,
-      provider,
-    });
+    const operationId = this.logger.startOperation('setupMfa', { userId, provider });
 
     try {
-      // 1. Valider provider supporté
-      if (!this.isSupportedProvider(provider)) {
-        throw new UnsupportedMfaProviderException(provider);
-      }
+      this.logger.info('Setting up MFA for user', JSON.stringify({ 
+        userId, 
+        provider 
+      }));
 
-      // 2. Vérifier utilisateur existe et actif
-      const user = await this.getUserForMfa(userId);
+      // 1. Vérifier utilisateur selon schema.prisma
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: { 
+          id: true, 
+          email: true, 
+          first_name: true,
+          last_name: true,
+          is_active: true,
+          email_verified: true
+        }
+      });
+
       if (!user) {
-        throw new Error('Utilisateur introuvable ou inactif');
+        throw new BadRequestException('Utilisateur introuvable');
       }
 
-      // 3. Vérifier si MFA déjà configuré pour ce provider
-      const existingMfa = await this.getUserMfaConfig(userId, provider);
-      if (existingMfa) {
-        throw new MfaAlreadySetupException(provider);
+      if (!user.is_active) {
+        throw new BadRequestException('Compte utilisateur inactif');
       }
 
-      // 4. Générer configuration selon provider
-      const mfaSetup = await this.generateMfaSetup(userId, provider, user);
+      if (!user.email_verified) {
+        throw new BadRequestException('Email non vérifié - vérification requise avant MFA');
+      }
 
-      // 5. Stocker configuration temporaire (en attente validation)
-      await this.storePendingMfaSetup(userId, provider, mfaSetup);
+      // 2. Générer setup selon le provider
+      let mfaSetup: IMfaSetup;
 
-      // 6. Logger setup MFA
-      this.logger.logBusinessEvent('MFA_SETUP_INITIATED', {
-        userId,
+      switch (provider) {
+        case 'TOTP_APP':
+          mfaSetup = await this.setupTotpApp(userId, user.email);
+          break;
+          
+        case 'SMS_OTP':
+          mfaSetup = await this.setupSmsOtp(userId);
+          break;
+          
+        case 'EMAIL_OTP':
+          mfaSetup = await this.setupEmailOtp(userId);
+          break;
+          
+        default:
+          throw new BadRequestException(`Provider MFA non supporté: ${provider}`);
+      }
+
+      // 3. Générer codes de récupération
+      const backupCodes = this.generateBackupCodes();
+      await this.storeBackupCodes(userId, backupCodes);
+
+      // 4. Logger événement sécurité
+      this.logger.logSecurityEvent('MFA_SETUP_INITIATED', userId, undefined, undefined, {
         provider,
-        email: user.email,
-      }, userId);
+        setupCompleted: false
+      });
 
-      this.logger.endOperation(operationId, 'success');
-      return mfaSetup;
+      this.logger.endOperation('setupMfa', operationId, true);
+
+      return {
+        ...mfaSetup,
+        backupCodes
+      };
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      
-      if (error instanceof UnsupportedMfaProviderException ||
-          error instanceof MfaAlreadySetupException) {
-        throw error;
-      }
-
-      this.logger.error('MFA setup failed', error.stack, { userId, provider });
-      throw new Error(`Erreur configuration MFA: ${error.message}`);
+      this.logger.endOperation('setupMfa', operationId, false);
+      this.logger.error('MFA setup failed', error.stack, 'MfaService.setupMfa', JSON.stringify({
+        userId,
+        provider,
+        error: error.message
+      }));
+      throw error;
     }
   }
 
   /**
-   * Vérifie code MFA
-   * Gestion tous providers avec rate limiting
+   * Vérifie code MFA avec sécurité renforcée
    */
   async verifyMfa(verification: IMfaVerification): Promise<boolean> {
-    const operationId = this.logger.startOperation('verifyMfa', {
+    const operationId = this.logger.startOperation('verifyMfa', { 
       method: verification.method,
-      challengeToken: verification.challengeToken.substring(0, 8) + '...',
+      hasChallengeToken: !!verification.challengeToken
     });
 
     try {
-      // 1. Valider challenge token
+      // 1. Valider token de challenge
       const challengeData = await this.validateChallengeToken(verification.challengeToken);
       if (!challengeData) {
         throw new MfaChallengeExpiredException();
       }
 
-      // 2. Vérifier rate limiting
-      await this.checkMfaRateLimit(challengeData.userId, verification.method);
+      const { userId } = challengeData;
 
-      // 3. Vérifier code selon provider
-      const isValidCode = await this.verifyMfaCode(
-        challengeData.userId,
+      // 2. Vérifier rate limiting
+      await this.checkRateLimit(userId, verification.method);
+
+      // 3. Vérifier le code selon la méthode
+      const isCodeValid = await this.verifyMfaCode(
+        userId,
         verification.method,
         verification.code
       );
 
-      if (!isValidCode) {
-        await this.incrementMfaFailureCount(challengeData.userId, verification.method);
-        throw new InvalidMfaCodeException();
+      if (!isCodeValid) {
+        await this.handleFailedMfaAttempt(userId, verification.method);
+        
+        // Calculer essais restants
+        const currentAttempts = await this.redis.getCache<number>(`mfa_attempts:${userId}:${verification.method}`) || 0;
+        const attemptsRemaining = Math.max(0, this.MAX_ATTEMPTS - currentAttempts);
+        
+        throw new InvalidMfaCodeException(attemptsRemaining);
       }
 
       // 4. Marquer challenge comme utilisé
       await this.markChallengeAsUsed(verification.challengeToken);
 
-      // 5. Marquer device comme fiable si demandé
+      // 5. Device trust si demandé
       if (verification.trustDevice && challengeData.deviceFingerprint) {
-        await this.trustDevice(challengeData.userId, challengeData.deviceFingerprint);
+        await this.trustDevice(userId, challengeData.deviceFingerprint);
       }
 
-      // 6. Logger succès MFA
-      this.logger.logBusinessEvent('MFA_VERIFICATION_SUCCESS', {
-        userId: challengeData.userId,
+      // 6. Logger succès
+      this.logger.logSecurityEvent('MFA_VERIFICATION_SUCCESS', userId, undefined, undefined, {
         method: verification.method,
-        deviceTrusted: !!verification.trustDevice,
-      }, challengeData.userId);
+        deviceTrusted: !!verification.trustDevice
+      });
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('verifyMfa', operationId, true);
       return true;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      
-      if (error instanceof MfaChallengeExpiredException ||
-          error instanceof InvalidMfaCodeException) {
-        throw error;
-      }
-
-      this.logger.error('MFA verification failed', error.stack);
-      throw new Error(`Erreur vérification MFA: ${error.message}`);
+      this.logger.endOperation('verifyMfa', operationId, false);
+      this.logger.error('MFA verification failed', error.stack, 'MfaService.verifyMfa', JSON.stringify({
+        method: verification.method,
+        error: error.message
+      }));
+      throw error;
     }
   }
 
   /**
-   * Désactive MFA pour utilisateur
+   * Désactive MFA pour un utilisateur
    */
   async disableMfa(userId: string, provider: MfaProvider): Promise<boolean> {
-    const operationId = this.logger.startOperation('disableMfa', {
-      userId,
-      provider,
-    });
+    const operationId = this.logger.startOperation('disableMfa', { userId, provider });
 
     try {
-      // 1. Vérifier MFA existe
-      const mfaConfig = await this.getUserMfaConfig(userId, provider);
-      if (!mfaConfig) {
-        this.logger.endOperation(operationId, 'not_found');
-        return false;
+      // 1. Supprimer configuration MFA selon provider
+      switch (provider) {
+        case 'TOTP_APP':
+          await this.redis.delCache(`mfa_totp_secret:${userId}`);
+          break;
+          
+        case 'SMS_OTP':
+          await this.redis.delCache(`mfa_sms_enabled:${userId}`);
+          break;
+          
+        case 'EMAIL_OTP':
+          await this.redis.delCache(`mfa_email_enabled:${userId}`);
+          break;
       }
 
-      // 2. Supprimer configuration MFA
-      await this.removeMfaConfig(userId, provider);
+      // 2. Supprimer codes de récupération
+      await this.redis.delCache(`mfa_backup_codes:${userId}`);
 
-      // 3. Révoquer codes de récupération si backup codes
-      if (provider === 'BACKUP_CODE') {
-        await this.revokeBackupCodes(userId);
-      }
+      // 3. Nettoyer challenges actifs
+      await this.cleanupUserChallenges(userId);
 
-      // 4. Logger désactivation
-      this.logger.logBusinessEvent('MFA_DISABLED', {
-        userId,
+      // 4. Logger événement sécurité
+      this.logger.logSecurityEvent('MFA_DISABLED', userId, undefined, undefined, {
         provider,
-      }, userId);
+        disabledAt: new Date().toISOString()
+      });
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('disableMfa', operationId, true);
       return true;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('MFA disable failed', error.stack, { userId, provider });
-      return false;
+      this.logger.endOperation('disableMfa', operationId, false);
+      this.logger.error('MFA disable failed', error.stack, 'MfaService.disableMfa', JSON.stringify({
+        userId,
+        provider,
+        error: error.message
+      }));
+      throw error;
     }
   }
 
   /**
-   * Récupère providers MFA disponibles pour utilisateur
+   * Retourne providers MFA disponibles pour un utilisateur
    */
   async getAvailableProviders(userId: string): Promise<MfaProvider[]> {
     const operationId = this.logger.startOperation('getAvailableProviders', { userId });
 
     try {
-      const user = await this.getUserForMfa(userId);
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: { 
+          phone: true,
+          email: true,
+          email_verified: true,
+          phone_verified: true
+        }
+      });
+
       if (!user) {
-        return [];
+        throw new BadRequestException('Utilisateur introuvable');
       }
 
-      const availableProviders: MfaProvider[] = [];
+      const providers: MfaProvider[] = [];
 
-      // SMS_OTP si téléphone vérifié
-      if (user.phone_verified) {
-        availableProviders.push('SMS_OTP');
-      }
+      // TOTP toujours disponible
+      providers.push('TOTP_APP');
 
-      // EMAIL_OTP toujours disponible si email vérifié
+      // Email OTP si email vérifié
       if (user.email_verified) {
-        availableProviders.push('EMAIL_OTP');
+        providers.push('EMAIL_OTP');
       }
 
-      // TOTP_APP toujours disponible
-      availableProviders.push('TOTP_APP');
-
-      // BACKUP_CODE si TOTP configuré
-      const hasTotpSetup = await this.getUserMfaConfig(userId, 'TOTP_APP');
-      if (hasTotpSetup) {
-        availableProviders.push('BACKUP_CODE');
+      // SMS OTP si téléphone vérifié
+      if (user.phone && user.phone_verified) {
+        providers.push('SMS_OTP');
       }
 
-      this.logger.endOperation(operationId, 'success');
-      return availableProviders;
+      this.logger.endOperation('getAvailableProviders', operationId, true);
+      return providers;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Failed to get available MFA providers', error.stack, { userId });
-      return [];
+      this.logger.endOperation('getAvailableProviders', operationId, false);
+      this.logger.error('Get available providers failed', error.stack, 'MfaService.getAvailableProviders');
+      throw error;
     }
   }
 
   /**
-   * Détermine si MFA requis selon score risque
+   * Détermine si MFA est requis selon score de risque
    */
   async requiresMfa(userId: string, riskScore: number): Promise<boolean> {
-    const operationId = this.logger.startOperation('requiresMfa', {
-      userId,
-      riskScore,
+    const operationId = this.logger.startOperation('requiresMfa', { userId, riskScore });
+
+    try {
+      // 1. Vérifier si utilisateur a MFA configuré
+      const hasMfaConfigured = await this.userHasMfaConfigured(userId);
+      if (!hasMfaConfigured) {
+        this.logger.endOperation('requiresMfa', operationId, true);
+        return false; // Pas de MFA configuré
+      }
+
+      // 2. Seuils de risque selon AUTH_CONSTANTS
+      const requiresMfa = riskScore >= AUTH_CONSTANTS.RISK_LEVELS.MEDIUM.min;
+
+      this.logger.endOperation('requiresMfa', operationId, true);
+      return requiresMfa;
+
+    } catch (error) {
+      this.logger.endOperation('requiresMfa', operationId, false);
+      this.logger.error('Requires MFA check failed', error.stack, 'MfaService.requiresMfa');
+      return true; // Erreur = MFA requis par sécurité
+    }
+  }
+
+  /**
+   * Génère challenge MFA
+   */
+  async generateMfaChallenge(
+    userId: string, 
+    availableMethods: MfaProvider[],
+    deviceFingerprint?: string
+  ): Promise<IMfaChallenge> {
+    const operationId = this.logger.startOperation('generateMfaChallenge', { 
+      userId, 
+      methodsCount: availableMethods.length 
     });
 
     try {
-      // 1. Vérifier si utilisateur organisateur (MFA obligatoire)
-      const userRoles = await this.getUserRoles(userId);
-      const isOrganizer = userRoles.some(role => role.includes('organizer'));
+      // 1. Générer token de challenge unique
+      const challengeToken = crypto.randomBytes(32).toString('hex');
 
-      if (isOrganizer) {
-        this.logger.endOperation(operationId, 'organizer_required');
-        return true;
-      }
+      // 2. Stocker données de challenge
+      const challengeData: MfaChallengeData = {
+        userId,
+        methods: availableMethods,
+        deviceFingerprint,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + this.CHALLENGE_EXPIRY * 1000).toISOString()
+      };
 
-      // 2. Vérifier score de risque
-      const requiresMfaByRisk = riskScore >= 40; // Seuil configurable
+      await this.redis.setCache(
+        `mfa_challenge:${challengeToken}`,
+        challengeData,
+        this.CHALLENGE_EXPIRY
+      );
 
-      // 3. Vérifier si MFA configuré
-      const availableProviders = await this.getAvailableProviders(userId);
-      const hasMfaSetup = availableProviders.length > 0;
+      // 3. Envoyer codes OTP si méthodes demandées
+      await this.sendOtpCodes(userId, availableMethods);
 
-      const required = requiresMfaByRisk && hasMfaSetup;
+      this.logger.endOperation('generateMfaChallenge', operationId, true);
 
-      this.logger.endOperation(operationId, 'success');
-      return required;
+      return {
+        methods: availableMethods,
+        challengeToken,
+        expiresIn: this.CHALLENGE_EXPIRY
+      };
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Failed to determine MFA requirement', error.stack, { userId });
-      return false;
+      this.logger.endOperation('generateMfaChallenge', operationId, false);
+      this.logger.error('Generate MFA challenge failed', error.stack, 'MfaService.generateMfaChallenge');
+      throw error;
     }
+  }
+
+  // ============================================================================
+  // MÉTHODES PRIVÉES
+  // ============================================================================
+
+  /**
+   * Configure TOTP App (Google Authenticator, Authy, etc.)
+   */
+  private async setupTotpApp(userId: string, email: string): Promise<IMfaSetup> {
+    const secret = speakeasy.generateSecret({
+      name: `Entrix (${email})`,
+      issuer: 'Entrix V3.0',
+      length: 32
+    });
+
+    // Stocker secret temporairement (sera confirmé après premier code valide)
+    await this.redis.setCache(`mfa_totp_temp:${userId}`, secret.base32, 900); // 15 minutes
+
+    // Générer QR Code
+    const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url || '');
+
+    return {
+      provider: 'TOTP_APP',
+      secret: secret.base32,
+      qrCode: qrCodeUrl
+    };
   }
 
   /**
-   * Méthodes helper privées
+   * Configure SMS OTP
    */
+  private async setupSmsOtp(userId: string): Promise<IMfaSetup> {
+    // Marquer SMS MFA comme configuré
+    await this.redis.setCache(`mfa_sms_enabled:${userId}`, true, 0); // Pas d'expiration
 
-  private isSupportedProvider(provider: MfaProvider): boolean {
-    return Object.keys(MFA_CONSTANTS.PROVIDERS).includes(provider);
+    return {
+      provider: 'SMS_OTP'
+    };
   }
 
-  private async getUserForMfa(userId: string): Promise<any> {
-    try {
-      return await this.prisma.users.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          email: true,
-          phone: true,
-          first_name: true,
-          last_name: true,
-          is_active: true,
-          email_verified: true,
-          phone_verified: true,
-        },
-      });
-    } catch (error) {
-      this.logger.error('Failed to get user for MFA', error.stack, { userId });
+  /**
+   * Configure Email OTP
+   */
+  private async setupEmailOtp(userId: string): Promise<IMfaSetup> {
+    // Marquer Email MFA comme configuré
+    await this.redis.setCache(`mfa_email_enabled:${userId}`, true, 0); // Pas d'expiration
+
+    return {
+      provider: 'EMAIL_OTP'
+    };
+  }
+
+  /**
+   * Génère codes de récupération
+   */
+  private generateBackupCodes(): string[] {
+    const codes: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+      codes.push(code);
+    }
+    return codes;
+  }
+
+  /**
+   * Stocke codes de récupération
+   */
+  private async storeBackupCodes(userId: string, codes: string[]): Promise<void> {
+    await this.redis.setCache(`mfa_backup_codes:${userId}`, codes, 0); // Pas d'expiration
+  }
+
+  /**
+   * Valide token de challenge
+   */
+  private async validateChallengeToken(challengeToken: string): Promise<MfaChallengeData | null> {
+    if (!challengeToken) {
       return null;
     }
-  }
 
-  private async getUserMfaConfig(userId: string, provider: MfaProvider): Promise<any> {
-    try {
-      // Logique simplifiée - dans un vrai système, il y aurait une table mfa_configs
-      const cacheKey = `mfa_config:${userId}:${provider}`;
-      const config = await this.redis.getCache(cacheKey);
-      return config;
-    } catch (error) {
-      this.logger.error('Failed to get user MFA config', error.stack, { userId, provider });
-      return null;
+    const data = await this.redis.getCache<MfaChallengeData>(`mfa_challenge:${challengeToken}`);
+    
+    // Vérifier que les données sont valides
+    if (data && data.userId && data.methods) {
+      return data;
     }
+    
+    return null;
   }
 
-  private async generateMfaSetup(userId: string, provider: MfaProvider, user: any): Promise<IMfaSetup> {
-    switch (provider) {
-      case 'SMS_OTP':
-        return {
-          provider,
-          setupInstructions: `Un code sera envoyé au ${this.maskPhone(user.phone)}`,
-        };
-
-      case 'EMAIL_OTP':
-        return {
-          provider,
-          setupInstructions: `Un code sera envoyé à ${this.maskEmail(user.email)}`,
-        };
-
-      case 'TOTP_APP':
-        const secret = CryptoUtil.generateSecureToken(16);
-        const qrCodeData = this.generateTotpQrCode(user.email, secret);
-        return {
-          provider,
-          secret,
-          qrCode: qrCodeData,
-          setupInstructions: 'Scannez le QR code avec votre app d\'authentification',
-        };
-
-      case 'BACKUP_CODE':
-        const backupCodes = CryptoUtil.generateBackupCodes(
-          MFA_CONSTANTS.BACKUP_CODES.COUNT,
-          MFA_CONSTANTS.BACKUP_CODES.LENGTH
-        );
-        return {
-          provider,
-          backupCodes,
-          setupInstructions: 'Conservez ces codes en lieu sûr',
-        };
-
-      default:
-        throw new UnsupportedMfaProviderException(provider);
-    }
-  }
-
-  private async storePendingMfaSetup(userId: string, provider: MfaProvider, setup: IMfaSetup): Promise<void> {
-    try {
-      const pendingKey = `mfa_pending:${userId}:${provider}`;
-      await this.redis.setCache(pendingKey, setup, 3600); // 1 heure
-    } catch (error) {
-      this.logger.error('Failed to store pending MFA setup', error.stack, { userId, provider });
-    }
-  }
-
-  private async validateChallengeToken(challengeToken: string): Promise<any> {
-    try {
-      const challengeKey = `mfa_challenge:${challengeToken}`;
-      const challengeData = await this.redis.getCache(challengeKey);
-      return challengeData;
-    } catch (error) {
-      this.logger.error('Failed to validate challenge token', error.stack);
-      return null;
-    }
-  }
-
-  private async checkMfaRateLimit(userId: string, method: MfaProvider): Promise<void> {
-    const rateLimitKey = `mfa_rate_limit:${userId}:${method}`;
+  /**
+   * Vérifie rate limiting pour MFA
+   */
+  private async checkRateLimit(userId: string, method: MfaProvider): Promise<void> {
+    const rateLimitKey = `mfa_attempts:${userId}:${method}`;
     const attempts = await this.redis.getCache<number>(rateLimitKey) || 0;
 
-    if (attempts >= 5) { // 5 tentatives par 5 minutes
-      throw new Error('Trop de tentatives MFA. Réessayez dans 5 minutes.');
+    if (attempts >= this.MAX_ATTEMPTS) {
+      throw new TooManyRequestsException(
+        'Trop de tentatives MFA. Réessayez dans 5 minutes.'
+      );
     }
 
-    await this.redis.setCache(rateLimitKey, attempts + 1, 300); // 5 minutes
+    await this.redis.setCache(rateLimitKey, attempts + 1, this.RATE_LIMIT_WINDOW);
   }
 
+  /**
+   * Vérifie code MFA selon la méthode
+   */
   private async verifyMfaCode(userId: string, method: MfaProvider, code: string): Promise<boolean> {
     switch (method) {
       case 'SMS_OTP':
@@ -410,39 +510,69 @@ export class MfaService implements IMfaService {
     }
   }
 
+  /**
+   * Vérifie code OTP (SMS/Email)
+   */
   private async verifyOtpCode(userId: string, method: MfaProvider, code: string): Promise<boolean> {
     try {
       const otpKey = `mfa_otp:${userId}:${method}`;
       const storedCode = await this.redis.getCache<string>(otpKey);
       
       if (storedCode === code) {
-        await this.redis.deleteCache(otpKey); // Code à usage unique
+        await this.redis.delCache(otpKey); // Code à usage unique
         return true;
       }
       return false;
     } catch (error) {
-      this.logger.error('OTP verification failed', error.stack);
+      this.logger.error('OTP verification failed', error.stack, 'MfaService.verifyOtpCode');
       return false;
     }
   }
 
+  /**
+   * Vérifie code TOTP
+   */
   private async verifyTotpCode(userId: string, code: string): Promise<boolean> {
     try {
-      // TODO: Implémenter vérification TOTP avec bibliothèque crypto
-      // Vérifier code contre secret TOTP stocké
-      return code.length === 6 && /^\d+$/.test(code);
+      const secret = await this.redis.getCache<string>(`mfa_totp_secret:${userId}`) ||
+                     await this.redis.getCache<string>(`mfa_totp_temp:${userId}`);
+                     
+      if (!secret) {
+        return false;
+      }
+
+      const isValid = speakeasy.totp.verify({
+        secret,
+        encoding: 'base32',
+        token: code,
+        window: 1 // Permettre ±30 secondes
+      });
+
+      // Si code temporaire valide, le confirmer définitivement
+      if (isValid) {
+        const tempSecret = await this.redis.getCache<string>(`mfa_totp_temp:${userId}`);
+        if (tempSecret) {
+          await this.redis.setCache(`mfa_totp_secret:${userId}`, tempSecret, 0);
+          await this.redis.delCache(`mfa_totp_temp:${userId}`);
+        }
+      }
+
+      return isValid;
     } catch (error) {
-      this.logger.error('TOTP verification failed', error.stack);
+      this.logger.error('TOTP verification failed', error.stack, 'MfaService.verifyTotpCode');
       return false;
     }
   }
 
+  /**
+   * Vérifie code de récupération
+   */
   private async verifyBackupCode(userId: string, code: string): Promise<boolean> {
     try {
       const backupCodesKey = `mfa_backup_codes:${userId}`;
       const backupCodes = await this.redis.getCache<string[]>(backupCodesKey) || [];
       
-      const codeIndex = backupCodes.indexOf(code);
+      const codeIndex = backupCodes.indexOf(code.toUpperCase());
       if (codeIndex !== -1) {
         // Supprimer code utilisé
         backupCodes.splice(codeIndex, 1);
@@ -451,22 +581,44 @@ export class MfaService implements IMfaService {
       }
       return false;
     } catch (error) {
-      this.logger.error('Backup code verification failed', error.stack);
+      this.logger.error('Backup code verification failed', error.stack, 'MfaService.verifyBackupCode');
       return false;
     }
   }
 
-  private async incrementMfaFailureCount(userId: string, method: MfaProvider): Promise<void> {
-    const failureKey = `mfa_failures:${userId}:${method}`;
-    const failures = await this.redis.getCache<number>(failureKey) || 0;
-    await this.redis.setCache(failureKey, failures + 1, 300); // 5 minutes
+  /**
+   * Gère échec de tentative MFA
+   */
+  private async handleFailedMfaAttempt(userId: string, method: MfaProvider): Promise<void> {
+    try {
+      const failureKey = `mfa_failures:${userId}:${method}`;
+      const failures = await this.redis.getCache<number>(failureKey) || 0;
+      await this.redis.setCache(failureKey, failures + 1, 300); // 5 minutes
+
+      this.logger.logSecurityEvent('MFA_VERIFICATION_FAILED', userId, undefined, undefined, {
+        method,
+        failureCount: failures + 1
+      });
+    } catch (error) {
+      this.logger.error('Handle failed MFA attempt error', error.stack, 'MfaService.handleFailedMfaAttempt');
+    }
   }
 
+  /**
+   * Marque challenge comme utilisé
+   */
   private async markChallengeAsUsed(challengeToken: string): Promise<void> {
-    const challengeKey = `mfa_challenge:${challengeToken}`;
-    await this.redis.deleteCache(challengeKey);
+    try {
+      const challengeKey = `mfa_challenge:${challengeToken}`;
+      await this.redis.delCache(challengeKey);
+    } catch (error) {
+      this.logger.error('Mark challenge as used failed', error.stack, 'MfaService.markChallengeAsUsed');
+    }
   }
 
+  /**
+   * Marque device comme de confiance
+   */
   private async trustDevice(userId: string, deviceFingerprint: string): Promise<void> {
     try {
       const trustKey = `trusted_device:${userId}:${deviceFingerprint}`;
@@ -478,45 +630,123 @@ export class MfaService implements IMfaService {
       };
       await this.redis.setCache(trustKey, trustData, 30 * 24 * 60 * 60); // 30 jours
     } catch (error) {
-      this.logger.error('Failed to trust device', error.stack, { userId });
+      this.logger.error('Trust device failed', error.stack, 'MfaService.trustDevice');
     }
   }
 
-  private async removeMfaConfig(userId: string, provider: MfaProvider): Promise<void> {
-    const configKey = `mfa_config:${userId}:${provider}`;
-    await this.redis.deleteCache(configKey);
-  }
-
-  private async revokeBackupCodes(userId: string): Promise<void> {
-    const backupCodesKey = `mfa_backup_codes:${userId}`;
-    await this.redis.deleteCache(backupCodesKey);
-  }
-
-  private async getUserRoles(userId: string): Promise<string[]> {
+  /**
+   * Vérifie si utilisateur a MFA configuré
+   */
+  private async userHasMfaConfigured(userId: string): Promise<boolean> {
     try {
-      // TODO: Récupérer rôles depuis table user_roles
-      return [];
+      const totpSecret = await this.redis.getCache(`mfa_totp_secret:${userId}`);
+      const smsEnabled = await this.redis.getCache(`mfa_sms_enabled:${userId}`);
+      const emailEnabled = await this.redis.getCache(`mfa_email_enabled:${userId}`);
+
+      return !!(totpSecret || smsEnabled || emailEnabled);
     } catch (error) {
-      this.logger.error('Failed to get user roles', error.stack, { userId });
-      return [];
+      this.logger.error('Check MFA configured failed', error.stack, 'MfaService.userHasMfaConfigured');
+      return false;
     }
   }
 
-  private maskPhone(phone: string): string {
-    if (!phone || phone.length < 4) return phone;
-    return phone.slice(0, 3) + '*'.repeat(phone.length - 6) + phone.slice(-3);
+  /**
+   * Envoie codes OTP selon méthodes demandées
+   */
+  private async sendOtpCodes(userId: string, methods: MfaProvider[]): Promise<void> {
+    try {
+      for (const method of methods) {
+        if (method === 'SMS_OTP') {
+          await this.sendSmsOtp(userId);
+        } else if (method === 'EMAIL_OTP') {
+          await this.sendEmailOtp(userId);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Send OTP codes failed', error.stack, 'MfaService.sendOtpCodes');
+    }
   }
 
-  private maskEmail(email: string): string {
-    const [local, domain] = email.split('@');
-    if (local.length <= 2) return `${local[0]}*@${domain}`;
-    return `${local[0]}${'*'.repeat(local.length - 2)}${local[local.length - 1]}@${domain}`;
+  /**
+   * Envoie SMS OTP
+   */
+  private async sendSmsOtp(userId: string): Promise<void> {
+    try {
+      const code = crypto.randomInt(100000, 999999).toString();
+      await this.redis.setCache(`mfa_otp:${userId}:SMS_OTP`, code, this.OTP_EXPIRY);
+
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: { phone: true, first_name: true }
+      });
+
+      if (user?.phone) {
+        // TODO: Implémenter envoi SMS réel
+        this.logger.info('SMS OTP sent', JSON.stringify({ 
+          userId, 
+          phone: user.phone.substring(0, 3) + '***' 
+        }));
+      }
+    } catch (error) {
+      this.logger.error('Send SMS OTP failed', error.stack, 'MfaService.sendSmsOtp');
+    }
   }
 
-  private generateTotpQrCode(email: string, secret: string): string {
-    // TODO: Générer QR code TOTP selon RFC 6238
-    const issuer = MFA_CONSTANTS.TOTP.ISSUER;
-    const otpauth = `otpauth://totp/${issuer}:${email}?secret=${secret}&issuer=${issuer}`;
-    return `data:image/svg+xml;base64,${Buffer.from(`<svg>QR Code for ${otpauth}</svg>`).toString('base64')}`;
+  /**
+   * Envoie Email OTP
+   */
+  private async sendEmailOtp(userId: string): Promise<void> {
+    try {
+      const code = crypto.randomInt(100000, 999999).toString();
+      await this.redis.setCache(`mfa_otp:${userId}:EMAIL_OTP`, code, this.OTP_EXPIRY);
+
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: { email: true, first_name: true }
+      });
+
+      if (user?.email) {
+        // ✅ CORRIGÉ : Utilise la méthode correcte du EmailService
+        await this.email.sendMail({
+          to: user.email,
+          subject: 'Code de vérification Entrix',
+          template: 'mfa-code',
+          context: {
+            firstName: user.first_name,
+            code,
+            expiresIn: Math.floor(this.OTP_EXPIRY / 60) // minutes
+          }
+        });
+
+        this.logger.info('Email OTP sent', JSON.stringify({ 
+          userId, 
+          email: user.email.substring(0, 3) + '***@***' 
+        }));
+      }
+    } catch (error) {
+      this.logger.error('Send Email OTP failed', error.stack, 'MfaService.sendEmailOtp');
+    }
+  }
+
+  /**
+   * Nettoie challenges actifs utilisateur
+   */
+  private async cleanupUserChallenges(userId: string): Promise<void> {
+    try {
+      // Nettoyer challenges actifs (approximatif)
+      const pattern = `mfa_challenge:*`;
+      const keys = await this.redis.keys(pattern);
+      
+      for (const key of keys) {
+        const challengeData = await this.redis.getCache<MfaChallengeData>(key);
+        
+        // Vérification de type sécurisée avec l'interface typée
+        if (challengeData && challengeData.userId === userId) {
+          await this.redis.delCache(key);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Cleanup user challenges failed', error.stack, 'MfaService.cleanupUserChallenges');
+    }
   }
 }

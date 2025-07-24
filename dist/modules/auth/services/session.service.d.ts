@@ -17,16 +17,15 @@ export declare class SessionService implements ISessionService {
     getUserActiveSessions(userId: string): Promise<IUserSession[]>;
     cleanupExpiredSessions(): Promise<number>;
     private enforceSessionLimits;
-    private isSessionValid;
+    private generateSessionToken;
+    private generateDeviceFingerprint;
     private cacheSession;
-    private getSessionFromCache;
-    private expireSession;
-    private isRememberMeSession;
-    private extendSession;
-    private markRefreshTokenAsUsed;
-    private removeSessionFromCache;
+    private getCachedSession;
+    private removeCachedSession;
+    private updateLastActivity;
+    private invalidateSession;
+    private extendSessionIfNeeded;
     private blacklistSessionTokens;
     private clearUserSessionsFromCache;
     private cleanupExpiredSessionsFromCache;
-    private cleanupExpiredSessionsAsync;
 }

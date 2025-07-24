@@ -179,4 +179,60 @@ export class DeviceUtil {
 
     return { similarity, factors };
   }
+
+  /**
+   * Génère nom lisible pour un device basé sur ses caractéristiques
+   */
+  static generateDeviceName(deviceInfo: Partial<IDeviceInfo>): string {
+    if (!deviceInfo.userAgent && !deviceInfo.ipAddress) {
+      return 'Appareil inconnu';
+    }
+
+    const userAgentInfo = this.parseUserAgent(deviceInfo.userAgent || '');
+    
+    // Construire nom basé sur OS et navigateur
+    let deviceName = '';
+
+    // Partie OS
+    if (userAgentInfo.os !== 'Unknown') {
+      if (userAgentInfo.isMobile) {
+        // Appareils mobiles
+        if (userAgentInfo.os === 'iOS') {
+          deviceName = deviceInfo.userAgent?.includes('iPad') ? 'iPad' : 'iPhone';
+        } else if (userAgentInfo.os === 'Android') {
+          deviceName = 'Android';
+        } else {
+          deviceName = `${userAgentInfo.os} Mobile`;
+        }
+      } else {
+        // Appareils desktop
+        deviceName = userAgentInfo.os;
+      }
+    } else {
+      deviceName = userAgentInfo.isMobile ? 'Mobile' : 'Desktop';
+    }
+
+    // Ajouter navigateur si disponible
+    if (userAgentInfo.browser !== 'Unknown') {
+      deviceName += ` • ${userAgentInfo.browser}`;
+    }
+
+    // Ajouter localisation si disponible
+    if (deviceInfo.geolocation?.city) {
+      deviceName += ` • ${deviceInfo.geolocation.city}`;
+    } else if (deviceInfo.geolocation?.country) {
+      deviceName += ` • ${deviceInfo.geolocation.country}`;
+    }
+
+    // Ajouter timestamp pour unicité si nécessaire
+    const now = new Date();
+    const timeStr = now.toLocaleDateString('fr-TN', { 
+      day: '2-digit', 
+      month: '2-digit' 
+    });
+    deviceName += ` (${timeStr})`;
+
+    return deviceName;
+  }
+  
 }

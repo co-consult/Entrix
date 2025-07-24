@@ -19,4 +19,10 @@ export declare class TokenService implements ITokenService {
     isTokenBlacklisted(token: string): Promise<boolean>;
     private isRefreshTokenUsed;
     generateTokenPair(userId: string, email: string, sessionId: string, rememberMe?: boolean, deviceFingerprint?: string, roles?: string[], permissions?: string[]): Promise<ITokenPair>;
+    markRefreshTokenAsUsed(tokenId: string, token: string): Promise<void>;
+    cleanupExpiredTokens(): Promise<number>;
+    private validateAccessTokenPayload;
+    private validateRefreshTokenPayload;
+    private generateTokenId;
+    private extractJwtPayload;
 }

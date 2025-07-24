@@ -4,171 +4,243 @@ import { Injectable } from '@nestjs/common';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
-import { IDeviceInfo } from '../interfaces';
+import { EmailService } from '../../../shared/email/email.service';
+import { 
+  IDeviceInfo, 
+  IUserSession 
+} from '../interfaces';
 import { DeviceUtil } from '../utils/device.util';
-import { CryptoUtil } from '../utils/crypto.util';
-import { SECURITY_CONSTANTS } from '../constants/security.constants';
+import { SecurityUtil } from '../utils/security.util';
+import { AUTH_CONSTANTS, SECURITY_CONSTANTS } from '../constants';
+import { 
+  DeviceNotTrustedException,
+  SuspiciousActivityException
+} from '../exceptions';
 
 /**
  * Device Service Entrix V3.0 - Grade A+
- * Gestion appareils de confiance et fingerprinting
- * Respecte SECURITY_CONSTANTS et best practices
+ * Gestion des appareils de confiance et fingerprinting
+ * Respecte schema.prisma exact et sécurité renforcée
  */
 
 @Injectable()
 export class DeviceService {
   private readonly logger: LoggerService;
+  private readonly TRUSTED_DEVICE_TTL = 30 * 24 * 60 * 60; // 30 jours en secondes
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly email: EmailService,
     loggerService: LoggerService,
   ) {
     this.logger = loggerService.createChildLogger('DeviceService');
   }
 
   /**
-   * Analyse et normalise informations device
-   */
-  async analyzeDevice(rawDeviceInfo: any): Promise<IDeviceInfo> {
-    const operationId = this.logger.startOperation('analyzeDevice');
-
-    try {
-      // 1. Normaliser informations device
-      const deviceInfo = DeviceUtil.normalizeDeviceInfo(rawDeviceInfo);
-
-      // 2. Générer fingerprint si absent
-      if (!deviceInfo.deviceFingerprint) {
-        deviceInfo.deviceFingerprint = DeviceUtil.generateDeviceFingerprint(deviceInfo);
-      }
-
-      // 3. Calculer entropie
-      const entropy = DeviceUtil.calculateDeviceEntropy(deviceInfo);
-
-      // 4. Enrichir avec métadonnées
-      const enrichedDevice = {
-        ...deviceInfo,
-        entropy,
-        analyzedAt: new Date().toISOString(),
-      };
-
-      this.logger.endOperation(operationId, 'success');
-      return enrichedDevice;
-
-    } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Device analysis failed', error.stack);
-      throw new Error(`Erreur analyse device: ${error.message}`);
-    }
-  }
-
-  /**
-   * Vérifie si device est de confiance
+   * Vérifie si un device est de confiance pour un utilisateur
+   * Cache Redis avec fallback base de données
    */
   async isDeviceTrusted(userId: string, deviceFingerprint: string): Promise<boolean> {
     const operationId = this.logger.startOperation('isDeviceTrusted', {
       userId,
-      deviceFingerprint: deviceFingerprint.substring(0, 8) + '...',
+      deviceFingerprint: deviceFingerprint?.substring(0, 8) + '...',
     });
 
     try {
-      // 1. Vérifier cache Redis d'abord
-      const trustKey = `trusted_device:${userId}:${deviceFingerprint}`;
-      const trustData = await this.redis.getCache(trustKey);
-
-      if (trustData) {
-        this.logger.endOperation(operationId, 'cache_hit');
-        return true;
+      if (!deviceFingerprint) {
+        this.logger.endOperation('isDeviceTrusted', operationId, true, undefined, { trusted: false, reason: 'no_fingerprint' });
+        return false;
       }
 
-      // 2. Vérifier en base de données (sessions récentes)
-      const trustedSession = await this.prisma.user_sessions.findFirst({
+      // 1. Vérifier cache Redis d'abord
+      const trustKey = `trusted_device:${userId}:${deviceFingerprint}`;
+      const cachedTrust = await this.redis.getCache<any>(trustKey);
+      
+      if (cachedTrust !== null) {
+        const isValid = new Date(cachedTrust.expiresAt) > new Date();
+        this.logger.endOperation('isDeviceTrusted', operationId, true, undefined, { 
+          trusted: isValid, 
+          source: 'cache',
+          expiresAt: cachedTrust.expiresAt 
+        });
+        return isValid;
+      }
+
+      // 2. Fallback : chercher dans les sessions récentes fiables
+      const recentTrustedSession = await this.prisma.user_sessions.findFirst({
         where: {
           user_id: userId,
           device_fingerprint: deviceFingerprint,
           is_active: true,
+          expires_at: { gt: new Date() },
           created_at: {
-            gte: new Date(Date.now() - SECURITY_CONSTANTS.DEVICE_FINGERPRINT.TRUST_DURATION * 1000),
-          },
+            gte: new Date(Date.now() - this.TRUSTED_DEVICE_TTL * 1000)
+          }
         },
-        select: { id: true },
+        select: { id: true, created_at: true },
+        orderBy: { last_activity: 'desc' }
       });
 
-      const isTrusted = !!trustedSession;
+      if (recentTrustedSession) {
+        // Remettre en cache pour optimiser les prochains appels
+        const trustData = {
+          userId,
+          deviceFingerprint,
+          trustedAt: recentTrustedSession.created_at.toISOString(),
+          expiresAt: new Date(Date.now() + this.TRUSTED_DEVICE_TTL * 1000).toISOString(),
+        };
+        await this.redis.setCache(trustKey, trustData, this.TRUSTED_DEVICE_TTL);
 
-      if (isTrusted) {
-        // Mettre en cache pour accès rapide
-        await this.redis.setCache(trustKey, { trusted: true }, SECURITY_CONSTANTS.DEVICE_FINGERPRINT.TRUST_DURATION);
+        this.logger.endOperation('isDeviceTrusted', operationId, true, undefined, { 
+          trusted: true, 
+          source: 'database',
+          sessionId: recentTrustedSession.id 
+        });
+        return true;
       }
 
-      this.logger.endOperation(operationId, 'db_hit');
-      return isTrusted;
+      this.logger.endOperation('isDeviceTrusted', operationId, true, undefined, { 
+        trusted: false, 
+        source: 'not_found' 
+      });
+      return false;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Device trust check failed', error.stack, { userId });
+      this.logger.endOperation('isDeviceTrusted', operationId, false, undefined, { error: error.message });
+      this.logger.error('Device trust check failed', error.stack, 'DeviceService', JSON.stringify({
+        userId,
+        deviceFingerprint: deviceFingerprint?.substring(0, 8) + '...',
+      }));
+      // En cas d'erreur, considérer comme non fiable par sécurité
       return false;
     }
   }
 
   /**
-   * Marque device comme fiable
+   * Marque un device comme fiable après vérification 2FA
+   * Sauvegarde Redis + notification par email
    */
-  async trustDevice(userId: string, deviceInfo: IDeviceInfo, duration?: number): Promise<void> {
+  async trustDevice(
+    userId: string, 
+    deviceInfo: IDeviceInfo, 
+    verifiedBy2FA: boolean = false
+  ): Promise<boolean> {
     const operationId = this.logger.startOperation('trustDevice', {
       userId,
-      deviceFingerprint: deviceInfo.deviceFingerprint?.substring(0, 8) + '...',
+      ipAddress: deviceInfo.ipAddress,
+      verifiedBy2FA,
     });
 
     try {
-      const trustDuration = duration || SECURITY_CONSTANTS.DEVICE_FINGERPRINT.TRUST_DURATION;
-      const deviceFingerprint = deviceInfo.deviceFingerprint || 
-                               DeviceUtil.generateDeviceFingerprint(deviceInfo);
+      if (!deviceInfo.deviceFingerprint) {
+        throw new Error('Device fingerprint requis pour marquer comme fiable');
+      }
 
-      // 1. Stocker confiance en Redis
-      const trustKey = `trusted_device:${userId}:${deviceFingerprint}`;
+      // 1. Créer entrée trusted device en cache Redis
+      const trustKey = `trusted_device:${userId}:${deviceInfo.deviceFingerprint}`;
       const trustData = {
         userId,
-        deviceFingerprint,
-        deviceInfo,
-        trustedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + trustDuration * 1000).toISOString(),
-      };
-
-      await this.redis.setCache(trustKey, trustData, trustDuration);
-
-      // 2. Logger confiance device
-      this.logger.logBusinessEvent('DEVICE_TRUSTED', {
-        userId,
-        deviceFingerprint,
-        trustDuration,
+        deviceFingerprint: deviceInfo.deviceFingerprint,
+        deviceName: DeviceUtil.generateDeviceName(deviceInfo),
         ipAddress: deviceInfo.ipAddress,
         userAgent: deviceInfo.userAgent,
+        geolocation: deviceInfo.geolocation,
+        verifiedBy2FA,
+        trustedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + this.TRUSTED_DEVICE_TTL * 1000).toISOString(),
+      };
+
+      await this.redis.setCache(trustKey, trustData, this.TRUSTED_DEVICE_TTL);
+
+      // 2. Récupérer infos utilisateur pour email
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: { 
+          email: true, 
+          first_name: true, 
+          last_name: true 
+        }
+      });
+
+      if (!user) {
+        throw new Error('Utilisateur introuvable');
+      }
+
+      // 3. Envoyer notification email sécurisée
+      try {
+        await this.email.sendMail({
+          to: user.email,
+          subject: '🔒 Nouvel appareil de confiance ajouté',
+          template: 'device-trusted',
+          context: {
+            firstName: user.first_name,
+            deviceName: trustData.deviceName,
+            ipAddress: deviceInfo.ipAddress,
+            location: deviceInfo.geolocation?.city || 'Localisation inconnue',
+            trustedAt: new Date().toLocaleString('fr-TN', {
+              timeZone: 'Africa/Tunis',
+              dateStyle: 'full',
+              timeStyle: 'short'
+            }),
+            securityUrl: `${process.env.FRONTEND_URL}/security/devices`,
+          }
+        });
+      } catch (emailError) {
+        // Ne pas faire échouer l'opération pour un problème d'email
+        this.logger.warn('Failed to send device trusted email', JSON.stringify({
+          userId,
+          error: emailError.message,
+        }));
+      }
+
+      // 4. Logger événement business
+      this.logger.logBusinessEvent('DEVICE_TRUSTED', {
+        userId,
+        deviceFingerprint: deviceInfo.deviceFingerprint,
+        deviceName: trustData.deviceName,
+        ipAddress: deviceInfo.ipAddress,
+        verifiedBy2FA,
+        location: deviceInfo.geolocation?.city,
       }, userId);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('trustDevice', operationId, true, undefined, {
+        deviceFingerprint: deviceInfo.deviceFingerprint?.substring(0, 8) + '...',
+        expiresAt: trustData.expiresAt,
+      });
+
+      return true;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Failed to trust device', error.stack, { userId });
+      this.logger.endOperation('trustDevice', operationId, false, undefined, { error: error.message });
+      this.logger.error('Failed to trust device', error.stack, 'DeviceService', JSON.stringify({
+        userId,
+        ipAddress: deviceInfo.ipAddress,
+      }));
+      return false;
     }
   }
 
   /**
-   * Révoque confiance device
+   * Révoque la confiance d'un device
+   * Supprime cache + termine sessions actives
    */
   async revokeDeviceTrust(userId: string, deviceFingerprint: string): Promise<boolean> {
     const operationId = this.logger.startOperation('revokeDeviceTrust', {
       userId,
-      deviceFingerprint: deviceFingerprint.substring(0, 8) + '...',
+      deviceFingerprint: deviceFingerprint?.substring(0, 8) + '...',
     });
 
     try {
-      // 1. Supprimer de Redis
-      const trustKey = `trusted_device:${userId}:${deviceFingerprint}`;
-      await this.redis.deleteCache(trustKey);
+      if (!deviceFingerprint) {
+        throw new Error('Device fingerprint requis pour révocation');
+      }
 
-      // 2. Révoquer sessions actives de cet appareil
+      // 1. Supprimer du cache Redis
+      const trustKey = `trusted_device:${userId}:${deviceFingerprint}`;
+      await this.redis.delCache(trustKey);
+
+      // 2. Révoquer sessions actives de cet appareil selon schema.prisma exact
       const revokedSessions = await this.prisma.user_sessions.updateMany({
         where: {
           user_id: userId,
@@ -184,22 +256,110 @@ export class DeviceService {
       // 3. Logger révocation
       this.logger.logBusinessEvent('DEVICE_TRUST_REVOKED', {
         userId,
-        deviceFingerprint,
+        deviceFingerprint: deviceFingerprint?.substring(0, 8) + '...',
         sessionsRevoked: revokedSessions.count,
       }, userId);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('revokeDeviceTrust', operationId, true, undefined, {
+        sessionsRevoked: revokedSessions.count,
+      });
+
       return revokedSessions.count > 0;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Failed to revoke device trust', error.stack, { userId });
+      this.logger.endOperation('revokeDeviceTrust', operationId, false, undefined, { error: error.message });
+      this.logger.error('Failed to revoke device trust', error.stack, 'DeviceService', JSON.stringify({
+        userId,
+        deviceFingerprint: deviceFingerprint?.substring(0, 8) + '...',
+      }));
       return false;
     }
   }
 
   /**
-   * Compare similarité entre devices
+   * Liste les devices de confiance d'un utilisateur
+   * Cache + base de données pour cohérence
+   */
+  async getUserTrustedDevices(userId: string): Promise<Array<{
+    deviceFingerprint: string;
+    deviceName: string;
+    ipAddress: string;
+    userAgent: string;
+    location: string;
+    trustedAt: string;
+    lastUsed: string;
+    expiresAt: string;
+    isActive: boolean;
+  }>> {
+    const operationId = this.logger.startOperation('getUserTrustedDevices', { userId });
+
+    try {
+      // 1. Récupérer sessions récentes avec device info selon schema.prisma
+      const recentSessions = await this.prisma.user_sessions.findMany({
+        where: {
+          user_id: userId,
+          device_fingerprint: { not: null },
+          created_at: {
+            gte: new Date(Date.now() - this.TRUSTED_DEVICE_TTL * 1000)
+          }
+        },
+        select: {
+          device_fingerprint: true,
+          ip_address: true,
+          user_agent: true,
+          geolocation: true,
+          created_at: true,
+          last_activity: true,
+          is_active: true,
+        },
+        orderBy: { last_activity: 'desc' },
+        distinct: ['device_fingerprint']
+      });
+
+      const trustedDevices = [];
+
+      // 2. Pour chaque device, vérifier confiance et enrichir
+      for (const session of recentSessions) {
+        if (!session.device_fingerprint) continue;
+
+        const isTrusted = await this.isDeviceTrusted(userId, session.device_fingerprint);
+        if (!isTrusted) continue;
+
+        // Enrichir avec infos cached
+        const trustKey = `trusted_device:${userId}:${session.device_fingerprint}`;
+        const trustData = await this.redis.getCache<any>(trustKey);
+
+        trustedDevices.push({
+          deviceFingerprint: session.device_fingerprint,
+          deviceName: trustData?.deviceName || DeviceUtil.generateDeviceName({
+            userAgent: session.user_agent || '',
+            ipAddress: session.ip_address,
+          }),
+          ipAddress: session.ip_address,
+          userAgent: session.user_agent || '',
+          location: this.formatLocation(session.geolocation),
+          trustedAt: trustData?.trustedAt || session.created_at.toISOString(),
+          lastUsed: session.last_activity.toISOString(),
+          expiresAt: trustData?.expiresAt || new Date(Date.now() + this.TRUSTED_DEVICE_TTL * 1000).toISOString(),
+          isActive: session.is_active,
+        });
+      }
+
+      this.logger.endOperation('getUserTrustedDevices', operationId, true, undefined, {
+        devicesFound: trustedDevices.length,
+      });
+
+      return trustedDevices;
+
+    } catch (error) {
+      this.logger.endOperation('getUserTrustedDevices', operationId, false, undefined, { error: error.message });
+      this.logger.error('Failed to get user trusted devices', error.stack, 'DeviceService', JSON.stringify({ userId }));
+      return [];
+    }
+  }
+
+  /**
+   * Compare similarité entre devices pour détection
    */
   async compareDevices(device1: IDeviceInfo, device2: IDeviceInfo): Promise<{
     similarity: number;
@@ -220,37 +380,40 @@ export class DeviceService {
         recommendation = 'DIFFERENT_DEVICE';
       }
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('compareDevices', operationId, true, undefined, {
+        similarity: comparison.similarity,
+        recommendation,
+      });
+
       return {
         ...comparison,
         recommendation,
       };
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Device comparison failed', error.stack);
+      this.logger.endOperation('compareDevices', operationId, false, undefined, { error: error.message });
+      this.logger.error('Device comparison failed', error.stack, 'DeviceService');
       throw new Error(`Erreur comparaison devices: ${error.message}`);
     }
   }
 
   /**
-   * Génère rapport devices utilisateur
+   * Génère rapport sécurité devices pour un utilisateur
    */
   async getUserDeviceReport(userId: string): Promise<{
     trustedDevices: number;
     activeSessions: number;
     recentDevices: any[];
     securityScore: number;
+    suspiciousActivity: boolean;
   }> {
     const operationId = this.logger.startOperation('getUserDeviceReport', { userId });
 
     try {
       // 1. Compter devices de confiance
-      const trustPattern = `trusted_device:${userId}:*`;
-      // TODO: Implémenter scan Redis pattern
-      const trustedDevices = 0; // Placeholder
+      const trustedDevices = await this.getUserTrustedDevices(userId);
 
-      // 2. Sessions actives
+      // 2. Sessions actives selon schema.prisma exact
       const activeSessions = await this.prisma.user_sessions.count({
         where: {
           user_id: userId,
@@ -259,72 +422,141 @@ export class DeviceService {
         },
       });
 
-      // 3. Devices récents
-      const recentSessions = await this.prisma.user_sessions.findMany({
+      // 3. Devices récents (dernière semaine)
+      const recentDevices = await this.prisma.user_sessions.findMany({
         where: {
           user_id: userId,
           created_at: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 jours
-          },
+            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 jours
+          }
+        },
+        select: {
+          device_fingerprint: true,
+          ip_address: true,
+          user_agent: true,
+          geolocation: true,
+          created_at: true,
+          last_activity: true,
         },
         orderBy: { created_at: 'desc' },
         take: 10,
-        select: {
-          device_fingerprint: true,
-          user_agent: true,
-          ip_address: true,
-          geolocation: true,
-          created_at: true,
-        },
+        distinct: ['device_fingerprint']
       });
 
-      // 4. Calculer score sécurité
+      // 4. Calcul score sécurité
       const securityScore = this.calculateDeviceSecurityScore({
-        trustedDevices,
-        activeSessions,
-        recentDevicesCount: recentSessions.length,
+        trustedDevicesCount: trustedDevices.length,
+        activeSessionsCount: activeSessions,
+        recentDevicesCount: recentDevices.length,
+        hasRecentSuspiciousActivity: false, // TODO: implémenter détection
       });
 
-      const report = {
-        trustedDevices,
+      // 5. Détection activité suspecte
+      const suspiciousActivity = this.detectSuspiciousActivity(recentDevices);
+
+      this.logger.endOperation('getUserDeviceReport', operationId, true, undefined, {
+        trustedDevices: trustedDevices.length,
         activeSessions,
-        recentDevices: recentSessions,
         securityScore,
+        suspiciousActivity,
+      });
+
+      return {
+        trustedDevices: trustedDevices.length,
+        activeSessions,
+        recentDevices,
+        securityScore,
+        suspiciousActivity,
       };
 
-      this.logger.endOperation(operationId, 'success');
-      return report;
-
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Failed to generate device report', error.stack, { userId });
-      throw new Error(`Erreur génération rapport devices: ${error.message}`);
+      this.logger.endOperation('getUserDeviceReport', operationId, false, undefined, { error: error.message });
+      this.logger.error('Failed to generate device report', error.stack, 'DeviceService', JSON.stringify({ userId }));
+      throw new Error(`Erreur génération rapport: ${error.message}`);
     }
   }
 
   /**
-   * Calcule score sécurité devices
+   * Nettoie les devices expirés (job de maintenance)
    */
-  private calculateDeviceSecurityScore(data: {
-    trustedDevices: number;
-    activeSessions: number;
+  async cleanupExpiredDevices(): Promise<number> {
+    const operationId = this.logger.startOperation('cleanupExpiredDevices');
+
+    try {
+      let cleanedCount = 0;
+
+      // TODO: Implémenter scan Redis pattern pour nettoyer devices expirés
+      // Pattern : trusted_device:*
+      // Vérifier expiresAt et supprimer si expiré
+
+      this.logger.endOperation('cleanupExpiredDevices', operationId, true, undefined, {
+        cleanedCount,
+      });
+
+      return cleanedCount;
+
+    } catch (error) {
+      this.logger.endOperation('cleanupExpiredDevices', operationId, false, undefined, { error: error.message });
+      this.logger.error('Device cleanup failed', error.stack, 'DeviceService');
+      return 0;
+    }
+  }
+
+  // ============================================================================
+  // MÉTHODES PRIVÉES
+  // ============================================================================
+
+  /**
+   * Formate geolocation pour affichage
+   */
+  private formatLocation(geolocation: any): string {
+    if (!geolocation) return 'Localisation inconnue';
+    
+    try {
+      const location = typeof geolocation === 'string' 
+        ? JSON.parse(geolocation) 
+        : geolocation;
+      
+      return `${location.city || 'Ville inconnue'}, ${location.country || 'Pays inconnu'}`;
+    } catch {
+      return 'Localisation inconnue';
+    }
+  }
+
+  /**
+   * Calcule score sécurité basé sur devices
+   */
+  private calculateDeviceSecurityScore(metrics: {
+    trustedDevicesCount: number;
+    activeSessionsCount: number;
     recentDevicesCount: number;
+    hasRecentSuspiciousActivity: boolean;
   }): number {
-    let score = 50; // Score de base
+    let score = 100;
 
-    // Bonus pour devices de confiance
-    score += Math.min(30, data.trustedDevices * 10);
+    // Pénalités
+    if (metrics.trustedDevicesCount === 0) score -= 30;
+    if (metrics.activeSessionsCount > 5) score -= 15;
+    if (metrics.recentDevicesCount > 10) score -= 20;
+    if (metrics.hasRecentSuspiciousActivity) score -= 40;
 
-    // Pénalité pour trop de sessions actives
-    if (data.activeSessions > 5) {
-      score -= (data.activeSessions - 5) * 5;
-    }
-
-    // Pénalité pour trop de devices différents récents
-    if (data.recentDevicesCount > 3) {
-      score -= (data.recentDevicesCount - 3) * 5;
-    }
+    // Bonus
+    if (metrics.trustedDevicesCount >= 2 && metrics.trustedDevicesCount <= 4) score += 10;
 
     return Math.max(0, Math.min(100, score));
+  }
+
+  /**
+   * Détecte activité suspecte dans devices récents
+   */
+  private detectSuspiciousActivity(recentDevices: any[]): boolean {
+    if (recentDevices.length === 0) return false;
+
+    // Détection basique : plus de 5 devices différents en 24h
+    const last24h = recentDevices.filter(device => 
+      new Date(device.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+    );
+
+    return last24h.length > 5;
   }
 }

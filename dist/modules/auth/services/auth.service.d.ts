@@ -22,17 +22,15 @@ export declare class AuthService implements IAuthService {
     }): Promise<ILoginResult>;
     register(registerData: IRegisterRequest): Promise<IRegisterResult>;
     validateUser(email: string, password: string, context?: {
-        ipAddress: string;
-        userAgent: string;
+        ipAddress?: string;
+        userAgent?: string;
         deviceFingerprint?: string;
     }): Promise<IUserProfile | null>;
-    logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
-    verifyMfa(challengeToken: string, code: string, method: any): Promise<ILoginResult>;
-    private validateUserSecurity;
-    private updateLastLogin;
     private validatePasswordStrength;
+    private mapDbUserToProfile;
     private handleFailedLogin;
-    private initiateMfaChallenge;
+    private updateLastLogin;
     private processOnboardingSecret;
-    private generateEmailVerificationToken;
+    logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
+    verifyMfa(challengeToken: string, code: string, method: string): Promise<ILoginResult>;
 }

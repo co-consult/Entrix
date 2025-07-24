@@ -8,6 +8,8 @@ export declare class PasswordService implements IPasswordService {
     private readonly redis;
     private readonly email;
     private readonly logger;
+    private readonly RESET_TOKEN_PREFIX;
+    private readonly RESET_ATTEMPTS_PREFIX;
     constructor(prisma: PrismaService, redis: RedisService, email: EmailService, loggerService: LoggerService);
     hashPassword(password: string): Promise<string>;
     verifyPassword(password: string, hash: string): Promise<boolean>;
@@ -21,9 +23,5 @@ export declare class PasswordService implements IPasswordService {
         suggestions: string[];
     }>;
     private checkResetRateLimit;
-    private revokeExistingResetTokens;
-    private revokeAllUserSessions;
-    private sendResetEmail;
-    private sendResetConfirmationEmail;
-    private sendPasswordChangedEmail;
+    private incrementResetAttempts;
 }

@@ -26,6 +26,7 @@ export interface IDeviceInfo {
     os?: string;
     isMobile: boolean;
     ipAddress: string;
+    deviceFingerprint?: string;
     geolocation?: {
         country: string;
         city: string;

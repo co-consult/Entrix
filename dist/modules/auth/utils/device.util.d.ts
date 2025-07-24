@@ -15,4 +15,5 @@ export declare class DeviceUtil {
         similarity: number;
         factors: string[];
     };
+    static generateDeviceName(deviceInfo: Partial<IDeviceInfo>): string;
 }

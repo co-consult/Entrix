@@ -1,6 +1,6 @@
 // src/modules/auth/services/password.service.ts
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
@@ -9,6 +9,7 @@ import { IPasswordService, IPasswordReset } from '../interfaces';
 import { CryptoUtil } from '../utils/crypto.util';
 import { SecurityUtil } from '../utils/security.util';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { SECURITY_CONSTANTS } from '../constants/security.constants';
 import { 
   InvalidResetTokenException,
   WeakPasswordException
@@ -17,12 +18,14 @@ import {
 /**
  * Password Service Entrix V3.0 - Grade A+
  * Gestion sécurisée des mots de passe et réinitialisations
- * Respecte standards sécurité et OWASP
+ * Respecte standards sécurité OWASP et services partagés Entrix
  */
 
 @Injectable()
 export class PasswordService implements IPasswordService {
   private readonly logger: LoggerService;
+  private readonly RESET_TOKEN_PREFIX = 'password_reset:';
+  private readonly RESET_ATTEMPTS_PREFIX = 'reset_attempts:';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -42,11 +45,11 @@ export class PasswordService implements IPasswordService {
 
     try {
       const hashedPassword = await CryptoUtil.hashPassword(password);
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('hashPassword', operationId, true);
       return hashedPassword;
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Password hashing failed', error.stack);
+      this.logger.endOperation('hashPassword', operationId, false, undefined, { errorMessage: error.message });
+      this.logger.error('Password hashing failed', error.stack, 'PasswordService.hashPassword');
       throw new Error('Erreur hachage mot de passe');
     }
   }
@@ -59,11 +62,11 @@ export class PasswordService implements IPasswordService {
 
     try {
       const isValid = await CryptoUtil.verifyPassword(password, hash);
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('verifyPassword', operationId, true);
       return isValid;
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Password verification failed', error.stack);
+      this.logger.endOperation('verifyPassword', operationId, false, undefined, { errorMessage: error.message });
+      this.logger.error('Password verification failed', error.stack, 'PasswordService.verifyPassword');
       return false;
     }
   }
@@ -76,72 +79,81 @@ export class PasswordService implements IPasswordService {
     const operationId = this.logger.startOperation('generateResetToken', { email });
 
     try {
-      // 1. Vérifier utilisateur existe
+      // 1. Vérifier utilisateur existe selon schema.prisma exact
       const user = await this.prisma.users.findUnique({
-        where: { email: email.toLowerCase() },
+        where: { email },
         select: { 
           id: true, 
-          email: true, 
+          email: true,
           first_name: true,
+          last_name: true,
           is_active: true 
-        },
+        }
       });
 
       if (!user) {
-        // Pour sécurité, ne pas révéler si email existe
-        this.logger.warn('Password reset requested for non-existent email', JSON.stringify({ email }));
-        // Retourner token factice mais valide
-        const fakeToken = CryptoUtil.generateSecureToken(32);
-        this.logger.endOperation(operationId, 'fake_token');
-        return fakeToken;
+        // Ne pas révéler si l'email existe (sécurité)
+        this.logger.warn('Password reset requested for non-existent email', undefined, 'PasswordService.generateResetToken', JSON.stringify({ email }));
+        // Retourner token factice pour éviter l'énumération d'emails
+        return 'fake-token-' + Date.now();
       }
 
       if (!user.is_active) {
-        this.logger.warn('Password reset requested for inactive account', JSON.stringify({ 
-          userId: user.id,
-          email 
-        }));
-        throw new Error('Compte désactivé');
+        this.logger.warn('Password reset requested for inactive user', undefined, 'PasswordService.generateResetToken', JSON.stringify({ userId: user.id, email }));
+        throw new BadRequestException('Compte utilisateur inactif');
       }
 
-      // 2. Vérifier rate limiting
+      // 2. Vérifier rate limiting selon AUTH_CONSTANTS
       await this.checkResetRateLimit(email);
 
-      // 3. Révoquer tokens existants
-      await this.revokeExistingResetTokens(user.id);
-
-      // 4. Générer nouveau token sécurisé
+      // 3. Générer token sécurisé
       const resetToken = CryptoUtil.generateSecureToken(32);
-      const expiresAt = new Date(Date.now() + AUTH_CONSTANTS.JWT.PASSWORD_RESET_TOKEN_EXPIRY * 1000);
+      const tokenHash = CryptoUtil.sha256Hash(resetToken);
 
-      // 5. Stocker token en Redis avec TTL
+      // 4. Stocker token dans Redis avec TTL
       const resetData: IPasswordReset = {
         email: user.email,
-        token: resetToken,
-        expiresAt,
+        token: tokenHash,
+        expiresAt: new Date(Date.now() + AUTH_CONSTANTS.JWT.PASSWORD_RESET_TOKEN_EXPIRY * 1000),
         used: false,
       };
 
-      const resetKey = `password_reset:${resetToken}`;
-      await this.redis.setCache(resetKey, resetData, AUTH_CONSTANTS.JWT.PASSWORD_RESET_TOKEN_EXPIRY);
+      await this.redis.setCache(
+        `${this.RESET_TOKEN_PREFIX}${resetToken}`, 
+        resetData, 
+        AUTH_CONSTANTS.JWT.PASSWORD_RESET_TOKEN_EXPIRY
+      );
 
-      // 6. Envoyer email de réinitialisation
-      await this.sendResetEmail(user, resetToken);
+      // 5. Envoyer email de réinitialisation avec bonne méthode EmailService
+      await this.email.sendPasswordResetEmail(user.email, resetToken);
 
-      // 7. Logger génération token
-      this.logger.logBusinessEvent('PASSWORD_RESET_TOKEN_GENERATED', {
-        userId: user.id,
-        email: user.email,
-        expiresAt: expiresAt.toISOString(),
-      }, user.id);
+      // 6. Incrémenter compteur tentatives
+      await this.incrementResetAttempts(email);
 
-      this.logger.endOperation(operationId, 'success');
+      // 7. Logger événement sécurité
+      this.logger.logSecurityEvent(
+        'PASSWORD_RESET_REQUESTED',
+        user.id,
+        undefined,
+        undefined,
+        { email, tokenGenerated: true }
+      );
+
+      this.logger.endOperation('generateResetToken', operationId, true);
       return resetToken;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Failed to generate reset token', error.stack, { email });
-      throw new Error(`Erreur génération token reset: ${error.message}`);
+      this.logger.endOperation('generateResetToken', operationId, false, undefined, { 
+        errorMessage: error.message,
+        email 
+      });
+      
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      this.logger.error('Failed to generate reset token', error.stack, 'PasswordService.generateResetToken', JSON.stringify({ email }));
+      throw new Error('Erreur génération token réinitialisation');
     }
   }
 
@@ -152,43 +164,41 @@ export class PasswordService implements IPasswordService {
     const operationId = this.logger.startOperation('validateResetToken');
 
     try {
-      // 1. Récupérer données token depuis Redis
-      const resetKey = `password_reset:${token}`;
-      const resetData = await this.redis.getCache<IPasswordReset>(resetKey);
+      if (!token || typeof token !== 'string') {
+        this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: 'Invalid token format' });
+        return null;
+      }
+
+      // Récupérer données depuis Redis
+      const resetData = await this.redis.getCache<IPasswordReset>(`${this.RESET_TOKEN_PREFIX}${token}`);
 
       if (!resetData) {
-        this.logger.warn('Invalid or expired reset token used', JSON.stringify({ 
-          tokenPrefix: token.substring(0, 8) + '...' 
-        }));
-        this.logger.endOperation(operationId, 'token_not_found');
+        this.logger.warn('Reset token not found or expired', undefined, 'PasswordService.validateResetToken', JSON.stringify({ tokenPrefix: token.substring(0, 8) }));
+        this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: 'Token not found' });
         return null;
       }
 
-      // 2. Vérifier expiration
-      if (new Date() > resetData.expiresAt) {
-        await this.redis.deleteCache(resetKey);
-        this.logger.warn('Expired reset token used', JSON.stringify({ 
-          email: resetData.email 
-        }));
-        this.logger.endOperation(operationId, 'token_expired');
-        return null;
-      }
-
-      // 3. Vérifier si déjà utilisé
+      // Vérifier si déjà utilisé
       if (resetData.used) {
-        this.logger.warn('Already used reset token attempted', JSON.stringify({ 
-          email: resetData.email 
-        }));
-        this.logger.endOperation(operationId, 'token_used');
+        this.logger.warn('Reset token already used', undefined, 'PasswordService.validateResetToken', JSON.stringify({ email: resetData.email }));
+        this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: 'Token already used' });
         return null;
       }
 
-      this.logger.endOperation(operationId, 'success');
+      // Vérifier expiration
+      if (new Date() > new Date(resetData.expiresAt)) {
+        this.logger.warn('Reset token expired', undefined, 'PasswordService.validateResetToken', JSON.stringify({ email: resetData.email }));
+        await this.redis.delCache(`${this.RESET_TOKEN_PREFIX}${token}`);
+        this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: 'Token expired' });
+        return null;
+      }
+
+      this.logger.endOperation('validateResetToken', operationId, true);
       return resetData;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
-      this.logger.error('Reset token validation failed', error.stack);
+      this.logger.endOperation('validateResetToken', operationId, false, undefined, { errorMessage: error.message });
+      this.logger.error('Failed to validate reset token', error.stack, 'PasswordService.validateResetToken');
       return null;
     }
   }
@@ -206,253 +216,235 @@ export class PasswordService implements IPasswordService {
         throw new InvalidResetTokenException();
       }
 
-      // 2. Valider force nouveau mot de passe
-      const passwordValidation = SecurityUtil.validatePassword(newPassword);
+      // 2. Valider force mot de passe
+      const passwordValidation = await this.validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
-        throw new WeakPasswordException(passwordValidation.errors);
+        throw new WeakPasswordException(passwordValidation.suggestions);
       }
 
-      // 3. Récupérer utilisateur
+      // 3. Vérifier utilisateur existe selon schema.prisma
       const user = await this.prisma.users.findUnique({
         where: { email: resetData.email },
-        select: { id: true, email: true, password: true },
+        select: { id: true, email: true, first_name: true, last_name: true }
       });
 
       if (!user) {
-        throw new InvalidResetTokenException();
+        this.logger.error('User not found during password reset', undefined, 'PasswordService.resetPassword', JSON.stringify({ email: resetData.email }));
+        throw new NotFoundException('Utilisateur introuvable');
       }
 
-      // 4. Vérifier que nouveau mot de passe ≠ ancien
-      const isSamePassword = await this.verifyPassword(newPassword, user.password);
-      if (isSamePassword) {
-        throw new Error('Le nouveau mot de passe doit être différent de l\'ancien');
-      }
-
-      // 5. Hasher nouveau mot de passe
+      // 4. Hasher nouveau mot de passe
       const hashedPassword = await this.hashPassword(newPassword);
 
-      // 6. Mettre à jour en base de données
+      // 5. Mettre à jour mot de passe dans la base selon schema.prisma exact
       await this.prisma.users.update({
         where: { id: user.id },
-        data: {
+        data: { 
           password: hashedPassword,
-          updated_at: new Date(),
-        },
+          updated_at: new Date() // Champ exact du schema
+        }
       });
 
-      // 7. Marquer token comme utilisé
-      const resetKey = `password_reset:${token}`;
-      await this.redis.setCache(resetKey, { ...resetData, used: true }, 300); // 5 min TTL
+      // 6. Marquer token comme utilisé
+      await this.redis.setCache(
+        `${this.RESET_TOKEN_PREFIX}${token}`,
+        { ...resetData, used: true },
+        300 // 5 minutes pour éviter réutilisation immédiate
+      );
 
-      // 8. Révoquer toutes sessions utilisateur (sécurité)
-      await this.revokeAllUserSessions(user.id);
+      // 7. Nettoyer tentatives de reset
+      await this.redis.delCache(`${this.RESET_ATTEMPTS_PREFIX}${resetData.email}`);
 
-      // 9. Logger réinitialisation
-      this.logger.logBusinessEvent('PASSWORD_RESET_COMPLETED', {
-        userId: user.id,
-        email: user.email,
-        sessionsRevoked: true,
-      }, user.id);
+      // 8. Logger événement sécurité
+      this.logger.logSecurityEvent(
+        'PASSWORD_RESET_COMPLETED',
+        user.id,
+        undefined,
+        undefined,
+        { email: user.email, tokenUsed: true }
+      );
 
-      // 10. Envoyer email confirmation
-      await this.sendResetConfirmationEmail(user);
+      // 9. Envoyer notification de changement réussi
+      await this.email.sendMail({
+        to: user.email,
+        subject: 'Mot de passe modifié avec succès',
+        template: 'password-changed',
+        context: {
+          firstName: user.first_name,
+          lastName: user.last_name,
+          changedAt: new Date().toLocaleString('fr-TN'),
+          supportUrl: `${process.env.FRONTEND_URL}/support`
+        }
+      });
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('resetPassword', operationId, true);
       return true;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.endOperation('resetPassword', operationId, false, undefined, { errorMessage: error.message });
       
-      if (error instanceof InvalidResetTokenException ||
-          error instanceof WeakPasswordException) {
+      if (error instanceof InvalidResetTokenException || 
+          error instanceof WeakPasswordException ||
+          error instanceof NotFoundException) {
         throw error;
       }
 
-      this.logger.error('Password reset failed', error.stack);
-      throw new Error(`Erreur réinitialisation: ${error.message}`);
+      this.logger.error('Failed to reset password', error.stack, 'PasswordService.resetPassword');
+      throw new Error('Erreur lors de la réinitialisation');
     }
   }
 
   /**
    * Change mot de passe utilisateur connecté
    */
-  async changePassword(
-    userId: string, 
-    oldPassword: string, 
-    newPassword: string
-  ): Promise<boolean> {
+  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<boolean> {
     const operationId = this.logger.startOperation('changePassword', { userId });
 
     try {
-      // 1. Récupérer utilisateur avec mot de passe actuel
+      // 1. Récupérer utilisateur selon schema.prisma exact
       const user = await this.prisma.users.findUnique({
         where: { id: userId },
         select: { 
           id: true, 
           email: true, 
           password: true,
+          first_name: true,
+          last_name: true,
           is_active: true 
-        },
+        }
       });
 
-      if (!user || !user.is_active) {
-        throw new Error('Utilisateur introuvable ou inactif');
+      if (!user) {
+        throw new NotFoundException('Utilisateur introuvable');
+      }
+
+      if (!user.is_active) {
+        throw new BadRequestException('Compte utilisateur inactif');
       }
 
       // 2. Vérifier ancien mot de passe
-      const isOldPasswordValid = await this.verifyPassword(oldPassword, user.password);
-      if (!isOldPasswordValid) {
-        this.logger.warn('Invalid old password in change attempt', JSON.stringify({ userId }));
-        throw new Error('Mot de passe actuel incorrect');
+      const isValidOldPassword = await this.verifyPassword(oldPassword, user.password);
+      if (!isValidOldPassword) {
+        this.logger.warn('Invalid old password during change', undefined, 'PasswordService.changePassword', JSON.stringify({ userId }));
+        throw new BadRequestException('Ancien mot de passe incorrect');
       }
 
       // 3. Valider nouveau mot de passe
-      const passwordValidation = SecurityUtil.validatePassword(newPassword);
+      const passwordValidation = await this.validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
-        throw new WeakPasswordException(passwordValidation.errors);
+        throw new WeakPasswordException(passwordValidation.suggestions);
       }
 
-      // 4. Vérifier que nouveau ≠ ancien
+      // 4. Vérifier que nouveau mot de passe est différent
       const isSamePassword = await this.verifyPassword(newPassword, user.password);
       if (isSamePassword) {
-        throw new Error('Le nouveau mot de passe doit être différent de l\'actuel');
+        throw new BadRequestException('Le nouveau mot de passe doit être différent de l\'ancien');
       }
 
-      // 5. Hasher nouveau mot de passe
-      const hashedPassword = await this.hashPassword(newPassword);
+      // 5. Hasher et sauvegarder nouveau mot de passe
+      const hashedNewPassword = await this.hashPassword(newPassword);
 
-      // 6. Mettre à jour en base
       await this.prisma.users.update({
         where: { id: userId },
-        data: {
-          password: hashedPassword,
-          updated_at: new Date(),
-        },
+        data: { 
+          password: hashedNewPassword,
+          updated_at: new Date()
+        }
       });
 
-      // 7. Logger changement
-      this.logger.logBusinessEvent('PASSWORD_CHANGED', {
-        userId: user.id,
-        email: user.email,
-        strength: passwordValidation.strength,
-      }, user.id);
+      // 6. Logger événement sécurité
+      this.logger.logSecurityEvent(
+        'PASSWORD_CHANGED',
+        userId,
+        undefined,
+        undefined,
+        { 
+          email: user.email,
+          changedAt: new Date().toISOString()
+        }
+      );
 
-      // 8. Envoyer email notification
-      await this.sendPasswordChangedEmail(user);
+      // 7. Envoyer notification email
+      await this.email.sendMail({
+        to: user.email,
+        subject: 'Mot de passe modifié',
+        template: 'password-changed',
+        context: {
+          firstName: user.first_name,
+          lastName: user.last_name,
+          changedAt: new Date().toLocaleString('fr-TN'),
+          ipAddress: 'Non disponible', // TODO: récupérer IP depuis contexte
+          supportUrl: `${process.env.FRONTEND_URL}/support`
+        }
+      });
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('changePassword', operationId, true);
       return true;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.endOperation('changePassword', operationId, false, undefined, { errorMessage: error.message });
       
-      if (error instanceof WeakPasswordException) {
+      if (error instanceof NotFoundException ||
+          error instanceof BadRequestException ||
+          error instanceof WeakPasswordException) {
         throw error;
       }
 
-      this.logger.error('Password change failed', error.stack, { userId });
-      throw new Error(`Erreur changement mot de passe: ${error.message}`);
+      this.logger.error('Failed to change password', error.stack, 'PasswordService.changePassword', JSON.stringify({ userId }));
+      throw new Error('Erreur lors du changement de mot de passe');
     }
   }
 
   /**
-   * Valide force mot de passe
+   * Valide la force d'un mot de passe selon OWASP
    */
   async validatePasswordStrength(password: string): Promise<{ 
     isValid: boolean; 
     score: number; 
     suggestions: string[] 
   }> {
-    return SecurityUtil.validatePassword(password);
+    const operationId = this.logger.startOperation('validatePasswordStrength');
+
+    try {
+      const result = CryptoUtil.validatePasswordStrength(password);
+      this.logger.endOperation('validatePasswordStrength', operationId, true);
+      return result;
+    } catch (error) {
+      this.logger.endOperation('validatePasswordStrength', operationId, false, undefined, { errorMessage: error.message });
+      this.logger.error('Failed to validate password strength', error.stack, 'PasswordService.validatePasswordStrength');
+      return {
+        isValid: false,
+        score: 0,
+        suggestions: ['Erreur validation mot de passe']
+      };
+    }
+  }
+
+  // ============================================================================
+  // MÉTHODES PRIVÉES
+  // ============================================================================
+
+  /**
+   * Vérifie rate limiting pour reset password
+   */
+  private async checkResetRateLimit(email: string): Promise<void> {
+    const key = `${this.RESET_ATTEMPTS_PREFIX}${email}`;
+    const attempts = await this.redis.get(key);
+    const currentAttempts = attempts ? parseInt(attempts, 10) : 0;
+
+    if (currentAttempts >= SECURITY_CONSTANTS.RATE_LIMITS.PASSWORD_RESET.MAX_ATTEMPTS) {
+      this.logger.warn('Password reset rate limit exceeded', undefined, 'PasswordService.checkResetRateLimit', JSON.stringify({ email, attempts: currentAttempts }));
+      throw new BadRequestException(
+        `Trop de tentatives de réinitialisation. Réessayez dans ${SECURITY_CONSTANTS.RATE_LIMITS.PASSWORD_RESET.WINDOW_MS / (60 * 1000)} minutes.`
+      );
+    }
   }
 
   /**
-   * Méthodes helper privées
+   * Incrémente compteur tentatives reset
    */
-
-  private async checkResetRateLimit(email: string): Promise<void> {
-    const rateLimitKey = `reset_rate_limit:${email}`;
-    const attempts = await this.redis.getCache<number>(rateLimitKey) || 0;
-
-    if (attempts >= 3) { // 3 tentatives par heure
-      throw new Error('Trop de demandes de réinitialisation. Réessayez dans 1 heure.');
-    }
-
-    await this.redis.setCache(rateLimitKey, attempts + 1, 3600); // 1 heure
-  }
-
-  private async revokeExistingResetTokens(userId: string): Promise<void> {
-    try {
-      // Marquer tous tokens existants comme expirés
-      const pattern = `password_reset:*`;
-      // TODO: Implémenter recherche et révocation tokens existants pour cet utilisateur
-    } catch (error) {
-      this.logger.warn('Failed to revoke existing reset tokens', JSON.stringify({ 
-        userId,
-        error: error.message 
-      }));
-    }
-  }
-
-  private async revokeAllUserSessions(userId: string): Promise<void> {
-    try {
-      await this.prisma.user_sessions.updateMany({
-        where: {
-          user_id: userId,
-          is_active: true,
-        },
-        data: {
-          is_active: false,
-          updated_at: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.error('Failed to revoke user sessions after password reset', error.stack, JSON.stringify({ userId }));
-    }
-  }
-
-  private async sendResetEmail(user: any, resetToken: string): Promise<void> {
-    try {
-      await this.email.sendPasswordResetEmail(user.email, JSON.stringify({
-        firstName: user.first_name,
-        resetLink: `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`,
-        verificationCode: resetToken.substring(0, 8).toUpperCase(),
-        expiryDuration: '1 heure',
-        requestDate: new Date().toLocaleString('fr-FR'),
-        ipAddress: 'unknown', // TODO: récupérer depuis context
-        location: 'Tunisie',
-        deviceInfo: 'Navigateur web',
-      }));
-    } catch (error) {
-      this.logger.error('Failed to send reset email', error.stack, JSON.stringify({ 
-        userId: user.id 
-      }));
-    }
-  }
-
-  private async sendResetConfirmationEmail(user: any): Promise<void> {
-    try {
-      // TODO: Implémenter template email confirmation reset
-      this.logger.info('Password reset confirmation email sent', JSON.stringify({ 
-        userId: user.id 
-      }));
-    } catch (error) {
-      this.logger.error('Failed to send reset confirmation email', error.stack, JSON.stringify({ 
-        userId: user.id 
-      }));
-    }
-  }
-
-  private async sendPasswordChangedEmail(user: any): Promise<void> {
-    try {
-      // TODO: Implémenter template email notification changement
-      this.logger.info('Password changed notification email sent', JSON.stringify({ 
-        userId: user.id 
-      }));
-    } catch (error) {
-      this.logger.error('Failed to send password changed email', error.stack, JSON.stringify({ 
-        userId: user.id 
-      }));
-    }
+  private async incrementResetAttempts(email: string): Promise<void> {
+    const key = `${this.RESET_ATTEMPTS_PREFIX}${email}`;
+    await this.redis.increment(key, SECURITY_CONSTANTS.RATE_LIMITS.PASSWORD_RESET.WINDOW_MS / 1000);
   }
 }

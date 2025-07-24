@@ -2,6 +2,7 @@
 
 /**
  * Interfaces de gestion des sessions Entrix V3.0
+ * ✅ CORRIGÉ : IDeviceInfo avec deviceFingerprint
  * Respecte schema.prisma user_sessions
  */
 
@@ -30,7 +31,8 @@ export interface ISessionInfo {
   lastActivity: string;
 }
 
-// Interface Device Info selon spécifications
+// ✅ CORRIGÉ : Interface Device Info avec deviceFingerprint
+// Respecte schema.prisma user_sessions.device_fingerprint
 export interface IDeviceInfo {
   deviceId?: string;
   userAgent: string;
@@ -38,6 +40,7 @@ export interface IDeviceInfo {
   os?: string;
   isMobile: boolean;
   ipAddress: string;
+  deviceFingerprint?: string; // ✅ AJOUTÉ : Champ manquant selon schema.prisma
   geolocation?: {
     country: string;
     city: string;

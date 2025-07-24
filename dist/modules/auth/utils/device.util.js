@@ -131,6 +131,48 @@ class DeviceUtil {
         }
         return { similarity, factors };
     }
+    static generateDeviceName(deviceInfo) {
+        if (!deviceInfo.userAgent && !deviceInfo.ipAddress) {
+            return 'Appareil inconnu';
+        }
+        const userAgentInfo = this.parseUserAgent(deviceInfo.userAgent || '');
+        let deviceName = '';
+        if (userAgentInfo.os !== 'Unknown') {
+            if (userAgentInfo.isMobile) {
+                if (userAgentInfo.os === 'iOS') {
+                    deviceName = deviceInfo.userAgent?.includes('iPad') ? 'iPad' : 'iPhone';
+                }
+                else if (userAgentInfo.os === 'Android') {
+                    deviceName = 'Android';
+                }
+                else {
+                    deviceName = `${userAgentInfo.os} Mobile`;
+                }
+            }
+            else {
+                deviceName = userAgentInfo.os;
+            }
+        }
+        else {
+            deviceName = userAgentInfo.isMobile ? 'Mobile' : 'Desktop';
+        }
+        if (userAgentInfo.browser !== 'Unknown') {
+            deviceName += ` • ${userAgentInfo.browser}`;
+        }
+        if (deviceInfo.geolocation?.city) {
+            deviceName += ` • ${deviceInfo.geolocation.city}`;
+        }
+        else if (deviceInfo.geolocation?.country) {
+            deviceName += ` • ${deviceInfo.geolocation.country}`;
+        }
+        const now = new Date();
+        const timeStr = now.toLocaleDateString('fr-TN', {
+            day: '2-digit',
+            month: '2-digit'
+        });
+        deviceName += ` (${timeStr})`;
+        return deviceName;
+    }
 }
 exports.DeviceUtil = DeviceUtil;
 //# sourceMappingURL=device.util.js.map
