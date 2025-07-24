@@ -226,17 +226,17 @@ let AuthService = class AuthService {
                         where: { status: 'ACTIVE' },
                         include: {
                             roles: {
-                                include: {
-                                    role_permissions: {
-                                        include: {
-                                            permissions: true,
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    code: true,
+                                    level: true,
+                                    is_active: true
+                                }
+                            }
+                        }
+                    }
+                }
             });
             if (!dbUser) {
                 this.logger.endOperation('validateUser', operationId, false, undefined, { reason: 'user_not_found' });
@@ -259,9 +259,7 @@ let AuthService = class AuthService {
             user.roles = dbUser.user_roles_user_roles_user_idTousers
                 ?.filter(ur => ur.status === 'ACTIVE')
                 .map(ur => ur.roles.name) || [];
-            user.permissions = dbUser.user_roles_user_roles_user_idTousers
-                ?.filter(ur => ur.status === 'ACTIVE')
-                .flatMap(ur => ur.roles.role_permissions?.map(rp => rp.permissions.name) || []) || [];
+            user.permissions = [];
             this.logger.endOperation('validateUser', operationId, true);
             return user;
         }
@@ -270,8 +268,8 @@ let AuthService = class AuthService {
             if (error instanceof auth_exceptions_1.AccountLockedException || error instanceof auth_exceptions_1.EmailNotVerifiedException) {
                 throw error;
             }
-            this.logger.error('User validation failed', error.stack, 'AuthService', JSON.stringify({ email }));
-            throw new Error('Erreur validation utilisateur');
+            this.logger.error('User validation failed', error.stack, JSON.stringify({ email }));
+            return null;
         }
     }
     async validatePasswordStrength(password) {

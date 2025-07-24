@@ -6,7 +6,7 @@ export declare class AuthModule {
     static forRoot(): {
         module: typeof AuthModule;
         providers: any[];
-        exports: (typeof TokenService | typeof AuthService | typeof SessionService | typeof JwtAuthGuard)[];
+        exports: (typeof AuthService | typeof TokenService | typeof SessionService | typeof JwtAuthGuard)[];
     };
     static forRootAsync(options: {
         imports?: any[];
@@ -20,7 +20,7 @@ export declare class AuthModule {
             useFactory: (...args: any[]) => any;
             inject: any[];
         }[];
-        exports: (typeof TokenService | typeof AuthService | typeof SessionService | typeof JwtAuthGuard)[];
+        exports: (typeof AuthService | typeof TokenService | typeof SessionService | typeof JwtAuthGuard)[];
     };
     static forFeature(features: {
         enableMfa?: boolean;
@@ -65,5 +65,5 @@ export declare function createAuthModule(config?: Partial<typeof DEFAULT_AUTH_CO
         useFactory: (...args: any[]) => any;
         inject: any[];
     }[];
-    exports: (typeof TokenService | typeof AuthService | typeof SessionService | typeof JwtAuthGuard)[];
+    exports: (typeof AuthService | typeof TokenService | typeof SessionService | typeof JwtAuthGuard)[];
 };
