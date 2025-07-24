@@ -1,7 +1,8 @@
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { MfaService } from '../services/mfa.service';
-import { MfaSetupDto, MfaSetupResponseDto, MfaVerifyDto, MfaVerifyResponseDto } from '../dto/mfa';
-import { IUserProfile, MfaProvider } from '../interfaces';
+import { MfaSetupDto, MfaSetupResponseDto, MfaVerifyDto, MfaVerifyResponseDto, MfaChallengeResponseDto } from '../dto';
+import { IUserProfile } from '../interfaces';
+import { MfaProvider } from '../constants/auth.constants';
 export declare class MfaController {
     private readonly mfaService;
     private readonly logger;
@@ -9,44 +10,35 @@ export declare class MfaController {
     getAvailableProviders(userId: string): Promise<{
         success: boolean;
         data: {
-            available: ("SMS_OTP" | "EMAIL_OTP" | "TOTP_APP" | "BACKUP_CODE")[];
+            available: MfaProvider[];
             configured: MfaProvider[];
-            recommended: any;
+            recommended: MfaProvider;
         };
     }>;
     setupMfa(mfaSetupDto: MfaSetupDto, userId: string): Promise<MfaSetupResponseDto>;
     verifyMfa(mfaVerifyDto: MfaVerifyDto, user: IUserProfile): Promise<MfaVerifyResponseDto>;
-    generateMfaChallenge(userId: string): Promise<{
-        success: boolean;
-        data: {
-            challengeToken: string;
-            availableMethods: ("SMS_OTP" | "EMAIL_OTP" | "TOTP_APP" | "BACKUP_CODE")[];
-            expiresIn: number;
-        };
-    }>;
     disableMfa(provider: MfaProvider, userId: string): Promise<{
         success: boolean;
-        error: {
-            code: string;
+        data: {
+            disabled: boolean;
+            provider: MfaProvider;
             message: string;
         };
-        data?: undefined;
-    } | {
+    }>;
+    getMfaStatus(userId: string): Promise<{
         success: boolean;
         data: {
-            provider: MfaProvider;
-            disabled: boolean;
-            remainingMethods: ("SMS_OTP" | "EMAIL_OTP" | "TOTP_APP" | "BACKUP_CODE")[];
+            enabled: boolean;
+            providers: MfaProvider[];
+            requiredByPolicy: boolean;
+            lastUsed?: string;
         };
-        error?: undefined;
     }>;
-    generateBackupCodes(userId: string): Promise<{
+    generateMfaChallenge(userId: string): Promise<{
         success: boolean;
-        data: {
-            backupCodes: string[];
-            previousCodesRevoked: boolean;
-            warning: string;
-        };
+        data: MfaChallengeResponseDto;
     }>;
+    private generateSetupInstructions;
     private getRecommendedProvider;
+    private generateMethodsInfo;
 }

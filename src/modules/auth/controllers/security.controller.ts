@@ -25,25 +25,26 @@ import {
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { SecurityService } from '../services/security.service';
 import { DeviceService } from '../services/device.service';
+import { MfaService } from '../services/mfa.service';
 import { 
   SecurityEventsQueryDto,
   SecurityEventsResponseDto,
   TrustedDeviceDto,
   TrustedDeviceResponseDto,
   RiskAssessmentDto
-} from '../dto/security';
+} from '../dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { 
   CurrentUser, 
   CurrentUserId,
   DeviceFingerprint,
   ClientInfo
-} from '../decorators/current-user.decorator';
+} from '../decorators';
 import { 
   AuditSecurity,
   AuditAccess,
   RateLimit
-} from '../decorators/audit-log.decorator';
+} from '../decorators';
 import { IUserProfile } from '../interfaces';
 
 /**
@@ -67,6 +68,7 @@ export class SecurityController {
   constructor(
     private readonly securityService: SecurityService,
     private readonly deviceService: DeviceService,
+    private readonly mfaService: MfaService,
     loggerService: LoggerService,
   ) {
     this.logger = loggerService.createChildLogger('SecurityController');
@@ -129,7 +131,7 @@ export class SecurityController {
       const limit = query.limit || 20;
       const paginatedEvents = filteredEvents.slice(offset, offset + limit);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -201,7 +203,7 @@ export class SecurityController {
       );
 
       if (!isValidCode) {
-        this.logger.endOperation(operationId, 'invalid_code');
+        this.logger.endOperation(operationId, 'invalid_code', false);
         throw new Error('Code de vérification invalide');
       }
 
@@ -218,7 +220,7 @@ export class SecurityController {
       const deviceId = `device_${Date.now()}`;
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -276,7 +278,7 @@ export class SecurityController {
     try {
       const deviceReport = await this.deviceService.getUserDeviceReport(userId);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -337,7 +339,7 @@ export class SecurityController {
     try {
       const revoked = await this.deviceService.revokeDeviceTrust(userId, deviceId);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -395,7 +397,7 @@ export class SecurityController {
 
       const riskAssessment = await this.securityService.assessRisk(userId, deviceInfo);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -481,20 +483,20 @@ export class SecurityController {
         mfaEnabled: availableMfaProviders.length > 0,
         trustedDevices: deviceReport.trustedDevices,
         activeSessions: deviceReport.activeSessions,
-        emailVerified: !!user.email_verified,
-        phoneVerified: !!user.phone_verified,
+        emailVerified: !!user.emailVerified,
+        phoneVerified: !!user.phoneVerified,
         recentSuspiciousEvents: recentEvents.filter(e => e.riskScore > 70).length,
       });
 
       // Générer recommandations
       const recommendations = this.generateSecurityRecommendations({
         mfaEnabled: availableMfaProviders.length > 0,
-        emailVerified: !!user.email_verified,
-        phoneVerified: !!user.phone_verified,
+        emailVerified: !!user.emailVerified,
+        phoneVerified: !!user.phoneVerified,
         trustedDevices: deviceReport.trustedDevices,
       });
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -502,13 +504,13 @@ export class SecurityController {
           securityScore,
           mfaEnabled: availableMfaProviders.length > 0,
           mfaProviders: availableMfaProviders,
-          emailVerified: !!user.email_verified,
-          phoneVerified: !!user.phone_verified,
+          emailVerified: !!user.emailVerified,
+          phoneVerified: !!user.phoneVerified,
           trustedDevices: deviceReport.trustedDevices,
           activeSessions: deviceReport.activeSessions,
           recentEvents: recentEvents.length,
           recommendations,
-          lastSecurityUpdate: user.updated_at,
+          lastSecurityUpdate: user.updatedAt,
         },
       };
 

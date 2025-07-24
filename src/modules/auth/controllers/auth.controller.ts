@@ -24,10 +24,15 @@ import {
   LoginDto, 
   RegisterDto, 
   LoginResponseDto, 
-  RegisterResponseDto,
-  LogoutDto,
-  LogoutResponseDto
-} from '../dto/auth';
+  RegisterResponseDto
+} from '../dto';
+import { 
+  UserProfileMapper,
+  TokenPairDto,
+  SessionInfoDto,
+  MfaChallengeDto,
+  RegisterResponseMapper
+} from '../dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { 
   CurrentUser, 
@@ -35,17 +40,18 @@ import {
   Public,
   SessionId,
   ClientInfo
-} from '../decorators/current-user.decorator';
+} from '../decorators';
 import { 
   RateLimitLogin,
   AuditCritical,
   RateLimit
-} from '../decorators/audit-log.decorator';
+} from '../decorators';
 import { IUserProfile } from '../interfaces';
 
 /**
  * Auth Controller Entrix V3.0 - Grade A+
  * Endpoints authentification principaux
+ * ✅ CORRIGÉ : Utilise mappers pour conversion types internes → DTOs API
  * Respecte api_specs_auth_session.md
  */
 
@@ -69,6 +75,7 @@ export class AuthController {
   /**
    * POST /auth/login
    * Connexion utilisateur avec validation adaptative
+   * ✅ CORRIGÉ : Utilise UserProfileMapper pour conversion IUserProfile → UserProfileDto
    */
   @Public()
   @Post('login')
@@ -90,22 +97,8 @@ export class AuthController {
     description: 'Identifiants invalides'
   })
   @ApiResponse({ 
-    status: 428, 
-    description: 'MFA requis',
-    schema: {
-      example: {
-        success: false,
-        error: {
-          code: 'MFA_REQUIRED',
-          message: 'Authentification multifacteur requise',
-          mfaChallenge: {
-            challengeToken: 'mfa_xxx',
-            methods: ['SMS_OTP', 'EMAIL_OTP'],
-            expiresIn: 300
-          }
-        }
-      }
-    }
+    status: 423, 
+    description: 'Compte verrouillé'
   })
   @ApiResponse({ 
     status: 429, 
@@ -113,42 +106,58 @@ export class AuthController {
   })
   async login(
     @Body() loginDto: LoginDto,
-    @Request() req: any,
-    @ClientInfo() clientInfo: { ip: string; userAgent: string }
+    @ClientInfo() clientInfo: { ip: string; userAgent: string; deviceFingerprint?: string }
   ): Promise<LoginResponseDto> {
     const operationId = this.logger.startOperation('POST /auth/login', {
       email: loginDto.email,
       rememberMe: loginDto.rememberMe,
-      ipAddress: clientInfo.ip,
+      hasDeviceFingerprint: !!loginDto.deviceFingerprint,
     });
 
     try {
-      // Extraire contexte de sécurité
+      // Contexte sécurité
       const securityContext = {
         ipAddress: clientInfo.ip,
         userAgent: clientInfo.userAgent,
-        deviceFingerprint: req.headers?.['x-device-fingerprint'],
+        deviceFingerprint: loginDto.deviceFingerprint || clientInfo.deviceFingerprint,
       };
 
       // Appeler service authentification
       const result = await this.authService.login(loginDto, securityContext);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('login', operationId, true);
 
-      // Retourner réponse selon spécification API
-      return {
+      // ✅ CORRIGÉ : Utiliser mappers pour conversion types internes → DTOs API
+      const response: LoginResponseDto = {
         success: result.success,
         data: result.user && result.tokens && result.session ? {
-          user: result.user,
-          tokens: result.tokens,
-          session: result.session,
-          mfaRequired: result.mfaRequired,
+          user: UserProfileMapper.toDto(result.user),  // ✅ Conversion IUserProfile → UserProfileDto
+          tokens: {
+            accessToken: result.tokens.accessToken,
+            refreshToken: result.tokens.refreshToken,
+            tokenType: result.tokens.tokenType,
+            expiresIn: result.tokens.expiresIn,
+          } as TokenPairDto,
+          session: {
+            sessionId: result.session.sessionId,
+            expiresAt: result.session.expiresAt,
+            deviceInfo: result.session.deviceInfo,
+            isActive: result.session.isActive,
+            lastActivity: result.session.lastActivity,
+          } as SessionInfoDto,
+          mfaRequired: result.mfaRequired ? {
+            methods: result.mfaRequired.methods,
+            challengeToken: result.mfaRequired.challengeToken,
+            expiresIn: result.mfaRequired.expiresIn,
+          } as MfaChallengeDto : undefined,
         } : undefined,
         meta: result.meta,
       };
 
+      return response;
+
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.endOperation('login', operationId, false, undefined, { error: error.message });
       throw error; // Les exceptions sont gérées par les guards/filters
     }
   }
@@ -156,6 +165,7 @@ export class AuthController {
   /**
    * POST /auth/register
    * Inscription nouveau utilisateur
+   * ✅ CORRIGÉ : Utilise RegisterResponseMapper pour conversion IRegisterResult → RegisterResponseDto
    */
   @Public()
   @Post('register')
@@ -188,86 +198,84 @@ export class AuthController {
       email: registerDto.email,
       firstName: registerDto.firstName,
       lastName: registerDto.lastName,
+      hasOnboardingSecret: !!registerDto.onboardingSecret,
     });
 
     try {
+      // Appeler service inscription
       const result = await this.authService.register(registerDto);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('register', operationId, true);
 
-      return {
-        success: result.success,
-        data: result.user && result.tokens ? {
-          user: result.user,
-          tokens: result.tokens,
-          verification: result.verification,
-          onboarding: result.onboarding,
-        } : undefined,
-      };
+      // ✅ CORRIGÉ : Utiliser RegisterResponseMapper pour conversion complète
+      const response: RegisterResponseDto = RegisterResponseMapper.toDto(result);
+
+      return response;
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.endOperation('register', operationId, false, undefined, { error: error.message });
       throw error;
     }
   }
 
   /**
    * POST /auth/logout
-   * Déconnexion utilisateur
+   * Déconnexion utilisateur avec invalidation tokens
    */
-  @Post('logout')
   @UseGuards(JwtAuthGuard)
+  @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @ApiBearerAuth()
   @AuditCritical('user_logout')
+  @ApiBearerAuth()
   @ApiOperation({ 
     summary: 'Déconnexion utilisateur',
-    description: 'Révocation tokens et sessions'
+    description: 'Invalidation des tokens et fermeture session(s)'
   })
-  @ApiBody({ type: LogoutDto, required: false })
   @ApiResponse({ 
     status: 200, 
-    description: 'Déconnexion réussie',
-    type: LogoutResponseDto
+    description: 'Déconnexion réussie'
   })
   @ApiResponse({ 
     status: 401, 
     description: 'Token invalide'
   })
   async logout(
-    @Body() logoutDto: LogoutDto = {},
-    @CurrentUserId() userId: string,
-    @SessionId() sessionId: string
-  ): Promise<LogoutResponseDto> {
+    @CurrentUser() user: IUserProfile,
+    @SessionId() sessionId: string,
+    @Body() logoutDto?: { allDevices?: boolean }
+  ): Promise<{
+    success: boolean;
+    data: {
+      message: string;
+      tokensInvalidated: number;
+      sessionsTerminated: number;
+    };
+  }> {
     const operationId = this.logger.startOperation('POST /auth/logout', {
-      userId,
-      sessionId,
-      allDevices: logoutDto.allDevices,
+      userId: user.id,
+      allDevices: logoutDto?.allDevices || false,
     });
 
     try {
-      const success = await this.authService.logout(sessionId, logoutDto.allDevices);
+      // Appeler service logout
+      const result = await this.authService.logout(
+        sessionId, 
+        logoutDto?.allDevices || false
+      );
 
-      const tokensInvalidated = success ? 1 : 0;
-      const sessionsTerminated = logoutDto.allDevices ? 
-        await this.getActiveSessionsCount(userId) : 
-        (success ? 1 : 0);
-
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('logout', operationId, true);
 
       return {
         success: true,
         data: {
-          message: logoutDto.allDevices ? 
-            'Déconnexion de tous les appareils réussie' : 
-            'Déconnexion réussie',
-          tokensInvalidated,
-          sessionsTerminated,
+          message: 'Déconnexion réussie',
+          tokensInvalidated: result ? 1 : 0,
+          sessionsTerminated: result ? 1 : 0,
         },
       };
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.endOperation('logout', operationId, false, undefined, { error: error.message });
       throw error;
     }
   }
@@ -280,9 +288,10 @@ export class AuthController {
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   @RateLimit({ limit: 5, windowMs: 300000 }) // 5 tentatives/5min
+  @AuditCritical('email_verification')
   @ApiOperation({ 
     summary: 'Vérification email',
-    description: 'Confirmation adresse email avec token'
+    description: 'Activation compte via token de vérification'
   })
   @ApiResponse({ 
     status: 200, 
@@ -293,78 +302,83 @@ export class AuthController {
     description: 'Token invalide ou expiré'
   })
   async verifyEmail(
-    @Body('token') token: string
-  ): Promise<{ success: boolean; message: string }> {
-    const operationId = this.logger.startOperation('POST /auth/verify-email');
+    @Body() verifyDto: { token: string }
+  ): Promise<{
+    success: boolean;
+    data: { verified: boolean; message: string };
+  }> {
+    const operationId = this.logger.startOperation('POST /auth/verify-email', {
+      tokenLength: verifyDto.token?.length,
+    });
 
     try {
-      // TODO: Implémenter vérification email
-      // const verified = await this.authService.verifyEmail(token);
+      // TODO: Implémenter dans AuthService
+      // const result = await this.authService.verifyEmail(verifyDto.token);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('verifyEmail', operationId, true);
 
       return {
         success: true,
-        message: 'Email vérifié avec succès',
+        data: {
+          verified: true,
+          message: 'Email vérifié avec succès',
+        },
       };
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.endOperation('verifyEmail', operationId, false, undefined, { error: error.message });
       throw error;
     }
   }
 
   /**
    * POST /auth/resend-verification
-   * Renvoie email de vérification
+   * Renvoyer email de vérification
    */
-  @UseGuards(JwtAuthGuard)
+  @Public()
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
-  @ApiBearerAuth()
-  @RateLimit({ limit: 3, windowMs: 3600000 }) // 3 envois/heure
+  @RateLimit({ limit: 3, windowMs: 300000 }) // 3 tentatives/5min
+  @AuditCritical('resend_verification')
   @ApiOperation({ 
-    summary: 'Renvoyer email de vérification',
-    description: 'Génère et envoie nouveau lien de vérification'
+    summary: 'Renvoyer email vérification',
+    description: 'Renvoie un nouveau token de vérification par email'
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'Email de vérification envoyé'
+    description: 'Email envoyé'
   })
   @ApiResponse({ 
     status: 429, 
-    description: 'Trop de demandes'
+    description: 'Trop de tentatives'
   })
   async resendVerification(
-    @CurrentUser() user: IUserProfile
-  ): Promise<{ success: boolean; message: string }> {
+    @Body() resendDto: { email: string }
+  ): Promise<{
+    success: boolean;
+    data: { sent: boolean; message: string };
+  }> {
     const operationId = this.logger.startOperation('POST /auth/resend-verification', {
-      userId: user.id,
+      email: resendDto.email,
     });
 
     try {
-      // TODO: Implémenter renvoi email vérification
-      // await this.authService.resendVerificationEmail(user.id);
+      // TODO: Implémenter dans AuthService
+      // const result = await this.authService.resendVerificationEmail(resendDto.email);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation('resendVerification', operationId, true);
 
       return {
         success: true,
-        message: 'Email de vérification envoyé',
+        data: {
+          sent: true,
+          message: 'Email de vérification envoyé si compte existant',
+        },
       };
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.endOperation('resendVerification', operationId, false, undefined, { error: error.message });
       throw error;
     }
-  }
-
-  /**
-   * Méthodes helper privées
-   */
-
-  private async getActiveSessionsCount(userId: string): Promise<number> {
-    // TODO: Implémenter comptage sessions actives
-    return 1;
   }
 }

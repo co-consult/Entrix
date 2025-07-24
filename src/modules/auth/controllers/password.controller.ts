@@ -26,14 +26,14 @@ import {
   ResetPasswordResponseDto,
   ChangePasswordDto,
   ChangePasswordResponseDto
-} from '../dto/password';
+} from '../dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CurrentUserId, Public } from '../decorators/current-user.decorator';
 import { 
   RateLimitPasswordReset,
   AuditCritical,
   RateLimit
-} from '../decorators/audit-log.decorator';
+} from '../decorators';
 
 /**
  * Password Controller Entrix V3.0 - Grade A+
@@ -89,7 +89,7 @@ export class PasswordController {
     try {
       const token = await this.passwordService.generateResetToken(forgotPasswordDto.email);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -145,7 +145,7 @@ export class PasswordController {
         resetPasswordDto.newPassword
       );
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -209,7 +209,7 @@ export class PasswordController {
         changePasswordDto.newPassword
       );
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -258,7 +258,7 @@ export class PasswordController {
     try {
       const validation = await this.passwordService.validatePasswordStrength(password);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,

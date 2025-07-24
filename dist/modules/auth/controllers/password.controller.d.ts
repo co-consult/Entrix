@@ -1,6 +1,6 @@
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { PasswordService } from '../services/password.service';
-import { ForgotPasswordDto, ForgotPasswordResponseDto, ResetPasswordDto, ResetPasswordResponseDto, ChangePasswordDto, ChangePasswordResponseDto } from '../dto/password';
+import { ForgotPasswordDto, ForgotPasswordResponseDto, ResetPasswordDto, ResetPasswordResponseDto, ChangePasswordDto, ChangePasswordResponseDto } from '../dto';
 export declare class PasswordController {
     private readonly passwordService;
     private readonly logger;

@@ -22,6 +22,7 @@ __exportStar(require("./session/refresh-token.dto"), exports);
 __exportStar(require("./session/logout.dto"), exports);
 __exportStar(require("./session/device-info.dto"), exports);
 __exportStar(require("./session/device-info.dto"), exports);
+__exportStar(require("./session/sessions-list.dto"), exports);
 __exportStar(require("./password/forgot-password.dto"), exports);
 __exportStar(require("./password/reset-password.dto"), exports);
 __exportStar(require("./password/change-password.dto"), exports);

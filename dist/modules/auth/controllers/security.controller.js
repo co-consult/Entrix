@@ -11,7 +11,6 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SecurityController = void 0;
 const common_1 = require("@nestjs/common");
@@ -19,17 +18,20 @@ const swagger_1 = require("@nestjs/swagger");
 const logger_service_1 = require("../../../shared/logger/logger.service");
 const security_service_1 = require("../services/security.service");
 const device_service_1 = require("../services/device.service");
-const security_1 = require("../dto/security");
+const mfa_service_1 = require("../services/mfa.service");
+const dto_1 = require("../dto");
 const jwt_auth_guard_1 = require("../guards/jwt-auth.guard");
-const current_user_decorator_1 = require("../decorators/current-user.decorator");
-const audit_log_decorator_1 = require("../decorators/audit-log.decorator");
+const decorators_1 = require("../decorators");
+const decorators_2 = require("../decorators");
 let SecurityController = class SecurityController {
     securityService;
     deviceService;
+    mfaService;
     logger;
-    constructor(securityService, deviceService, loggerService) {
+    constructor(securityService, deviceService, mfaService, loggerService) {
         this.securityService = securityService;
         this.deviceService = deviceService;
+        this.mfaService = mfaService;
         this.logger = loggerService.createChildLogger('SecurityController');
     }
     async getSecurityEvents(query, userId) {
@@ -55,7 +57,7 @@ let SecurityController = class SecurityController {
             const offset = query.offset || 0;
             const limit = query.limit || 20;
             const paginatedEvents = filteredEvents.slice(offset, offset + limit);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
@@ -93,7 +95,7 @@ let SecurityController = class SecurityController {
         try {
             const isValidCode = this.verifyDeviceCode(userId, verifyDeviceDto.verificationCode);
             if (!isValidCode) {
-                this.logger.endOperation(operationId, 'invalid_code');
+                this.logger.endOperation(operationId, 'invalid_code', false);
                 throw new Error('Code de vérification invalide');
             }
             if (verifyDeviceDto.trustDevice && deviceFingerprint) {
@@ -106,7 +108,7 @@ let SecurityController = class SecurityController {
             }
             const deviceId = `device_${Date.now()}`;
             const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
@@ -127,7 +129,7 @@ let SecurityController = class SecurityController {
         });
         try {
             const deviceReport = await this.deviceService.getUserDeviceReport(userId);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
@@ -156,7 +158,7 @@ let SecurityController = class SecurityController {
         });
         try {
             const revoked = await this.deviceService.revokeDeviceTrust(userId, deviceId);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
@@ -182,7 +184,7 @@ let SecurityController = class SecurityController {
                 isMobile: this.isMobile(clientInfo.userAgent),
             };
             const riskAssessment = await this.securityService.assessRisk(userId, deviceInfo);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
@@ -228,30 +230,30 @@ let SecurityController = class SecurityController {
                 mfaEnabled: availableMfaProviders.length > 0,
                 trustedDevices: deviceReport.trustedDevices,
                 activeSessions: deviceReport.activeSessions,
-                emailVerified: !!user.email_verified,
-                phoneVerified: !!user.phone_verified,
+                emailVerified: !!user.emailVerified,
+                phoneVerified: !!user.phoneVerified,
                 recentSuspiciousEvents: recentEvents.filter(e => e.riskScore > 70).length,
             });
             const recommendations = this.generateSecurityRecommendations({
                 mfaEnabled: availableMfaProviders.length > 0,
-                emailVerified: !!user.email_verified,
-                phoneVerified: !!user.phone_verified,
+                emailVerified: !!user.emailVerified,
+                phoneVerified: !!user.phoneVerified,
                 trustedDevices: deviceReport.trustedDevices,
             });
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
                     securityScore,
                     mfaEnabled: availableMfaProviders.length > 0,
                     mfaProviders: availableMfaProviders,
-                    emailVerified: !!user.email_verified,
-                    phoneVerified: !!user.phone_verified,
+                    emailVerified: !!user.emailVerified,
+                    phoneVerified: !!user.phoneVerified,
                     trustedDevices: deviceReport.trustedDevices,
                     activeSessions: deviceReport.activeSessions,
                     recentEvents: recentEvents.length,
                     recommendations,
-                    lastSecurityUpdate: user.updated_at,
+                    lastSecurityUpdate: user.updatedAt,
                 },
             };
         }
@@ -315,7 +317,7 @@ let SecurityController = class SecurityController {
 exports.SecurityController = SecurityController;
 __decorate([
     (0, common_1.Get)('security-events'),
-    (0, audit_log_decorator_1.AuditAccess)('security_events_access'),
+    (0, decorators_2.AuditAccess)('security_events_access'),
     (0, swagger_1.ApiOperation)({
         summary: 'Événements de sécurité',
         description: 'Récupère historique des événements de sécurité'
@@ -328,19 +330,19 @@ __decorate([
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Événements récupérés',
-        type: security_1.SecurityEventsResponseDto
+        type: dto_1.SecurityEventsResponseDto
     }),
     __param(0, (0, common_1.Query)()),
-    __param(1, (0, current_user_decorator_1.CurrentUserId)()),
+    __param(1, (0, decorators_1.CurrentUserId)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_a = typeof security_1.SecurityEventsQueryDto !== "undefined" && security_1.SecurityEventsQueryDto) === "function" ? _a : Object, String]),
+    __metadata("design:paramtypes", [dto_1.SecurityEventsQueryDto, String]),
     __metadata("design:returntype", Promise)
 ], SecurityController.prototype, "getSecurityEvents", null);
 __decorate([
     (0, common_1.Post)('verify-device'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.AuditSecurity)('device_verification'),
-    (0, audit_log_decorator_1.RateLimit)({ limit: 5, windowMs: 300000 }),
+    (0, decorators_2.AuditSecurity)('device_verification'),
+    (0, decorators_2.RateLimit)({ limit: 5, windowMs: 300000 }),
     (0, swagger_1.ApiOperation)({
         summary: 'Vérification nouveau device',
         description: 'Vérifie et marque device comme fiable'
@@ -348,23 +350,23 @@ __decorate([
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Device vérifié',
-        type: security_1.TrustedDeviceResponseDto
+        type: dto_1.TrustedDeviceResponseDto
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
         description: 'Code de vérification invalide'
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUserId)()),
-    __param(2, (0, current_user_decorator_1.DeviceFingerprint)()),
-    __param(3, (0, current_user_decorator_1.ClientInfo)()),
+    __param(1, (0, decorators_1.CurrentUserId)()),
+    __param(2, (0, decorators_1.DeviceFingerprint)()),
+    __param(3, (0, decorators_1.ClientInfo)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_b = typeof security_1.TrustedDeviceDto !== "undefined" && security_1.TrustedDeviceDto) === "function" ? _b : Object, String, String, Object]),
+    __metadata("design:paramtypes", [dto_1.TrustedDeviceDto, String, String, Object]),
     __metadata("design:returntype", Promise)
 ], SecurityController.prototype, "verifyDevice", null);
 __decorate([
     (0, common_1.Get)('trusted-devices'),
-    (0, audit_log_decorator_1.AuditAccess)('trusted_devices_access'),
+    (0, decorators_2.AuditAccess)('trusted_devices_access'),
     (0, swagger_1.ApiOperation)({
         summary: 'Devices de confiance',
         description: 'Liste des appareils marqués comme fiables'
@@ -390,7 +392,7 @@ __decorate([
             }
         }
     }),
-    __param(0, (0, current_user_decorator_1.CurrentUserId)()),
+    __param(0, (0, decorators_1.CurrentUserId)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
@@ -398,7 +400,7 @@ __decorate([
 __decorate([
     (0, common_1.Delete)('trusted-devices/:deviceId'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.AuditSecurity)('device_trust_revoked'),
+    (0, decorators_2.AuditSecurity)('device_trust_revoked'),
     (0, swagger_1.ApiOperation)({
         summary: 'Révoquer confiance device',
         description: 'Supprime device de la liste des appareils fiables'
@@ -418,7 +420,7 @@ __decorate([
         }
     }),
     __param(0, (0, common_1.Param)('deviceId')),
-    __param(1, (0, current_user_decorator_1.CurrentUserId)()),
+    __param(1, (0, decorators_1.CurrentUserId)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
@@ -426,8 +428,8 @@ __decorate([
 __decorate([
     (0, common_1.Post)('risk-assessment'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.AuditAccess)('risk_assessment'),
-    (0, audit_log_decorator_1.RateLimit)({ limit: 10, windowMs: 300000 }),
+    (0, decorators_2.AuditAccess)('risk_assessment'),
+    (0, decorators_2.RateLimit)({ limit: 10, windowMs: 300000 }),
     (0, swagger_1.ApiOperation)({
         summary: 'Évaluation de risque',
         description: 'Analyse le niveau de risque de la session courante'
@@ -443,16 +445,16 @@ __decorate([
             }
         }
     }),
-    __param(0, (0, current_user_decorator_1.CurrentUserId)()),
-    __param(1, (0, current_user_decorator_1.DeviceFingerprint)()),
-    __param(2, (0, current_user_decorator_1.ClientInfo)()),
+    __param(0, (0, decorators_1.CurrentUserId)()),
+    __param(1, (0, decorators_1.DeviceFingerprint)()),
+    __param(2, (0, decorators_1.ClientInfo)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], SecurityController.prototype, "assessCurrentRisk", null);
 __decorate([
     (0, common_1.Get)('security-summary'),
-    (0, audit_log_decorator_1.AuditAccess)('security_summary_access'),
+    (0, decorators_2.AuditAccess)('security_summary_access'),
     (0, swagger_1.ApiOperation)({
         summary: 'Résumé sécurité',
         description: 'Vue d\'ensemble de la sécurité du compte'
@@ -474,8 +476,8 @@ __decorate([
             }
         }
     }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)()),
-    __param(1, (0, current_user_decorator_1.CurrentUserId)()),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __param(1, (0, decorators_1.CurrentUserId)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
@@ -492,6 +494,7 @@ exports.SecurityController = SecurityController = __decorate([
     })),
     __metadata("design:paramtypes", [security_service_1.SecurityService,
         device_service_1.DeviceService,
+        mfa_service_1.MfaService,
         logger_service_1.LoggerService])
 ], SecurityController);
 //# sourceMappingURL=security.controller.js.map

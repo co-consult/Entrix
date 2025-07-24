@@ -23,6 +23,7 @@ export * from './session/refresh-token.dto';
 export * from './session/logout.dto';
 export * from './session/device-info.dto';
 export * from './session/device-info.dto';
+export * from './session/sessions-list.dto';
 
 // ========================
 // PASSWORD DTOs

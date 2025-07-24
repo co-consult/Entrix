@@ -1,27 +1,46 @@
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { AuthService } from '../services/auth.service';
-import { LoginDto, RegisterDto, LoginResponseDto, RegisterResponseDto, LogoutDto, LogoutResponseDto } from '../dto/auth';
+import { LoginDto, RegisterDto, LoginResponseDto, RegisterResponseDto } from '../dto';
 import { IUserProfile } from '../interfaces';
 export declare class AuthController {
     private readonly authService;
     private readonly logger;
     constructor(authService: AuthService, loggerService: LoggerService);
-    login(loginDto: LoginDto, req: any, clientInfo: {
+    login(loginDto: LoginDto, clientInfo: {
         ip: string;
         userAgent: string;
+        deviceFingerprint?: string;
     }): Promise<LoginResponseDto>;
     register(registerDto: RegisterDto, clientInfo: {
         ip: string;
         userAgent: string;
     }): Promise<RegisterResponseDto>;
-    logout(logoutDto: LogoutDto, userId: string, sessionId: string): Promise<LogoutResponseDto>;
-    verifyEmail(token: string): Promise<{
+    logout(user: IUserProfile, sessionId: string, logoutDto?: {
+        allDevices?: boolean;
+    }): Promise<{
         success: boolean;
-        message: string;
+        data: {
+            message: string;
+            tokensInvalidated: number;
+            sessionsTerminated: number;
+        };
     }>;
-    resendVerification(user: IUserProfile): Promise<{
+    verifyEmail(verifyDto: {
+        token: string;
+    }): Promise<{
         success: boolean;
-        message: string;
+        data: {
+            verified: boolean;
+            message: string;
+        };
     }>;
-    private getActiveSessionsCount;
+    resendVerification(resendDto: {
+        email: string;
+    }): Promise<{
+        success: boolean;
+        data: {
+            sent: boolean;
+            message: string;
+        };
+    }>;
 }

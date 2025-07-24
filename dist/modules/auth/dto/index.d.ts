@@ -6,6 +6,7 @@ export * from './session/refresh-token.dto';
 export * from './session/logout.dto';
 export * from './session/device-info.dto';
 export * from './session/device-info.dto';
+export * from './session/sessions-list.dto';
 export * from './password/forgot-password.dto';
 export * from './password/reset-password.dto';
 export * from './password/change-password.dto';

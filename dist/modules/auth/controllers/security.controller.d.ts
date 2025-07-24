@@ -1,13 +1,15 @@
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { SecurityService } from '../services/security.service';
 import { DeviceService } from '../services/device.service';
-import { SecurityEventsQueryDto, SecurityEventsResponseDto, TrustedDeviceDto, TrustedDeviceResponseDto } from '../dto/security';
+import { MfaService } from '../services/mfa.service';
+import { SecurityEventsQueryDto, SecurityEventsResponseDto, TrustedDeviceDto, TrustedDeviceResponseDto } from '../dto';
 import { IUserProfile } from '../interfaces';
 export declare class SecurityController {
     private readonly securityService;
     private readonly deviceService;
+    private readonly mfaService;
     private readonly logger;
-    constructor(securityService: SecurityService, deviceService: DeviceService, loggerService: LoggerService);
+    constructor(securityService: SecurityService, deviceService: DeviceService, mfaService: MfaService, loggerService: LoggerService);
     getSecurityEvents(query: SecurityEventsQueryDto, userId: string): Promise<SecurityEventsResponseDto>;
     verifyDevice(verifyDeviceDto: TrustedDeviceDto, userId: string, deviceFingerprint: string, clientInfo: {
         ip: string;
@@ -75,14 +77,14 @@ export declare class SecurityController {
         data: {
             securityScore: number;
             mfaEnabled: boolean;
-            mfaProviders: any;
+            mfaProviders: any[];
             emailVerified: boolean;
             phoneVerified: boolean;
             trustedDevices: number;
             activeSessions: number;
             recentEvents: number;
             recommendations: string[];
-            lastSecurityUpdate: any;
+            lastSecurityUpdate: Date;
         };
     }>;
     private verifyDeviceCode;

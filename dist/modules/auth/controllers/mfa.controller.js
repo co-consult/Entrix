@@ -11,19 +11,16 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MfaController = void 0;
-/ src/modules / auth / controllers / mfa.controller.ts;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const logger_service_1 = require("../../../shared/logger/logger.service");
 const mfa_service_1 = require("../services/mfa.service");
-const mfa_1 = require("../dto/mfa");
+const dto_1 = require("../dto");
 const jwt_auth_guard_1 = require("../guards/jwt-auth.guard");
 const current_user_decorator_1 = require("../decorators/current-user.decorator");
-const audit_log_decorator_1 = require("../decorators/audit-log.decorator");
-const interfaces_1 = require("../interfaces");
+const decorators_1 = require("../decorators");
 let MfaController = class MfaController {
     mfaService;
     logger;
@@ -38,7 +35,7 @@ let MfaController = class MfaController {
         try {
             const availableProviders = await this.mfaService.getAvailableProviders(userId);
             const configuredProviders = [];
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation('getAvailableProviders', operationId, true);
             return {
                 success: true,
                 data: {
@@ -49,7 +46,7 @@ let MfaController = class MfaController {
             };
         }
         catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.endOperation('getAvailableProviders', operationId, false, undefined, { error: error.message });
             throw error;
         }
     }
@@ -60,7 +57,7 @@ let MfaController = class MfaController {
         });
         try {
             const setup = await this.mfaService.setupMfa(userId, mfaSetupDto.provider);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation('setupMfa', operationId, true);
             return {
                 success: true,
                 data: {
@@ -68,12 +65,12 @@ let MfaController = class MfaController {
                     qrCode: setup.qrCode,
                     secret: setup.secret,
                     backupCodes: setup.backupCodes,
-                    setupInstructions: setup.setupInstructions || 'Configuration terminée',
+                    setupInstructions: this.generateSetupInstructions(setup.provider),
                 },
             };
         }
         catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.endOperation('setupMfa', operationId, false, undefined, { error: error.message });
             throw error;
         }
     }
@@ -81,15 +78,16 @@ let MfaController = class MfaController {
         const operationId = this.logger.startOperation('POST /auth/mfa/verify', {
             userId: user.id,
             method: mfaVerifyDto.method,
+            trustDevice: mfaVerifyDto.trustDevice,
         });
         try {
             const isValid = await this.mfaService.verifyMfa(mfaVerifyDto);
             if (!isValid) {
-                this.logger.endOperation(operationId, 'invalid_code');
+                this.logger.endOperation('verifyMfa', operationId, false, undefined, { reason: 'invalid_code' });
                 throw new Error('Code MFA invalide');
             }
             const tokens = null;
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation('verifyMfa', operationId, true);
             return {
                 success: true,
                 data: {
@@ -97,14 +95,60 @@ let MfaController = class MfaController {
                     tokens,
                     session: null,
                     trustedDevice: mfaVerifyDto.trustDevice ? {
-                        deviceId: 'device_xxx',
+                        deviceId: 'device_' + Date.now(),
                         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                     } : undefined,
                 },
             };
         }
         catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.endOperation('verifyMfa', operationId, false, undefined, { error: error.message });
+            throw error;
+        }
+    }
+    async disableMfa(provider, userId) {
+        const operationId = this.logger.startOperation('DELETE /auth/mfa/disable', {
+            userId,
+            provider,
+        });
+        try {
+            const disabled = await this.mfaService.disableMfa(userId, provider);
+            this.logger.endOperation('disableMfa', operationId, true);
+            return {
+                success: true,
+                data: {
+                    disabled,
+                    provider,
+                    message: `MFA ${provider} désactivé avec succès`,
+                },
+            };
+        }
+        catch (error) {
+            this.logger.endOperation('disableMfa', operationId, false, undefined, { error: error.message });
+            throw error;
+        }
+    }
+    async getMfaStatus(userId) {
+        const operationId = this.logger.startOperation('GET /auth/mfa/status', {
+            userId,
+        });
+        try {
+            const configuredProviders = [];
+            const enabled = configuredProviders.length > 0;
+            const requiredByPolicy = await this.mfaService.requiresMfa(userId, 50);
+            this.logger.endOperation('getMfaStatus', operationId, true);
+            return {
+                success: true,
+                data: {
+                    enabled,
+                    providers: configuredProviders,
+                    requiredByPolicy,
+                    lastUsed: undefined,
+                },
+            };
+        }
+        catch (error) {
+            this.logger.endOperation('getMfaStatus', operationId, false, undefined, { error: error.message });
             throw error;
         }
     }
@@ -113,85 +157,78 @@ let MfaController = class MfaController {
             userId,
         });
         try {
-            const challengeToken = `mfa_challenge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const availableMethods = await this.mfaService.getAvailableProviders(userId);
-            this.logger.endOperation(operationId, 'success');
+            const availableProviders = await this.mfaService.getAvailableProviders(userId);
+            const challenge = {
+                methods: availableProviders,
+                challengeToken: `mfa_challenge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                expiresIn: 300,
+                instructions: 'Veuillez choisir une méthode de vérification et saisir le code reçu',
+                methodsInfo: this.generateMethodsInfo(availableProviders),
+            };
+            this.logger.endOperation('generateMfaChallenge', operationId, true);
             return {
                 success: true,
-                data: {
-                    challengeToken,
-                    availableMethods,
-                    expiresIn: 300,
-                },
+                data: challenge,
             };
         }
         catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.endOperation('generateMfaChallenge', operationId, false, undefined, { error: error.message });
             throw error;
         }
     }
-    async disableMfa(provider, userId) {
-        const operationId = this.logger.startOperation('DELETE /auth/mfa/:provider', {
-            userId,
-            provider,
-        });
-        try {
-            const disabled = await this.mfaService.disableMfa(userId, provider);
-            if (!disabled) {
-                this.logger.endOperation(operationId, 'not_found');
-                return {
-                    success: false,
-                    error: {
-                        code: 'MFA_NOT_CONFIGURED',
-                        message: 'MFA non configuré pour ce provider',
-                    },
-                };
+    generateSetupInstructions(provider) {
+        const instructions = {
+            SMS_OTP: 'SMS configuré avec succès. Vous recevrez des codes par SMS lors des connexions.',
+            EMAIL_OTP: 'Email OTP configuré. Vous recevrez des codes par email lors des connexions.',
+            TOTP_APP: 'Scannez le QR code avec votre application d\'authentification (Google Authenticator, Authy, etc.).',
+            BACKUP_CODE: 'Codes de récupération générés. Conservez-les en lieu sûr pour accéder à votre compte.',
+        };
+        return instructions[provider] || 'Configuration MFA terminée avec succès.';
+    }
+    getRecommendedProvider(availableProviders) {
+        const priorityOrder = ['TOTP_APP', 'SMS_OTP', 'EMAIL_OTP', 'BACKUP_CODE'];
+        for (const provider of priorityOrder) {
+            if (availableProviders.includes(provider)) {
+                return provider;
             }
-            const remainingMethods = await this.mfaService.getAvailableProviders(userId);
-            this.logger.endOperation(operationId, 'success');
-            return {
-                success: true,
-                data: {
-                    provider,
-                    disabled: true,
-                    remainingMethods,
-                },
-            };
         }
-        catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
-            throw error;
-        }
+        return availableProviders[0] || 'TOTP_APP';
     }
-    async generateBackupCodes(userId) {
-        const operationId = this.logger.startOperation('POST /auth/mfa/backup-codes', {
-            userId,
+    generateMethodsInfo(providers) {
+        const info = {};
+        providers.forEach(provider => {
+            switch (provider) {
+                case 'SMS_OTP':
+                    info[provider] = {
+                        masked_phone: '+216***45678',
+                        estimated_delivery: '30 seconds',
+                        cost: 'Gratuit',
+                    };
+                    break;
+                case 'EMAIL_OTP':
+                    info[provider] = {
+                        masked_email: 'u***@entrix.tn',
+                        estimated_delivery: '1 minute',
+                        cost: 'Gratuit',
+                    };
+                    break;
+                case 'TOTP_APP':
+                    info[provider] = {
+                        app_name: 'Google Authenticator',
+                        setup_required: false,
+                        offline_capable: true,
+                    };
+                    break;
+                case 'BACKUP_CODE':
+                    info[provider] = {
+                        codes_remaining: 8,
+                        single_use: true,
+                        recommendation: 'À utiliser uniquement en cas d\'urgence',
+                    };
+                    break;
+            }
         });
-        try {
-            const setup = await this.mfaService.setupMfa(userId, 'BACKUP_CODE');
-            this.logger.endOperation(operationId, 'success');
-            return {
-                success: true,
-                data: {
-                    backupCodes: setup.backupCodes || [],
-                    previousCodesRevoked: true,
-                    warning: 'Conservez ces codes en lieu sûr. Ils ne seront plus affichés.',
-                },
-            };
-        }
-        catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
-            throw error;
-        }
-    }
-    getRecommendedProvider(available) {
-        if (available.includes('TOTP_APP'))
-            return 'TOTP_APP';
-        if (available.includes('SMS_OTP'))
-            return 'SMS_OTP';
-        if (available.includes('EMAIL_OTP'))
-            return 'EMAIL_OTP';
-        return null;
+        return info;
     }
 };
 exports.MfaController = MfaController;
@@ -223,8 +260,8 @@ __decorate([
 __decorate([
     (0, common_1.Post)('setup'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.AuditCritical)('mfa_setup'),
-    (0, audit_log_decorator_1.RateLimit)({ limit: 3, windowMs: 900000 }),
+    (0, decorators_1.AuditCritical)('mfa_setup'),
+    (0, decorators_1.RateLimit)({ limit: 3, windowMs: 900000 }),
     (0, swagger_1.ApiOperation)({
         summary: 'Configuration MFA',
         description: 'Configure une méthode d\'authentification multifacteur'
@@ -232,7 +269,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'MFA configuré',
-        type: mfa_1.MfaSetupResponseDto
+        type: dto_1.MfaSetupResponseDto
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
@@ -245,14 +282,14 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUserId)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_a = typeof mfa_1.MfaSetupDto !== "undefined" && mfa_1.MfaSetupDto) === "function" ? _a : Object, String]),
+    __metadata("design:paramtypes", [dto_1.MfaSetupDto, String]),
     __metadata("design:returntype", Promise)
 ], MfaController.prototype, "setupMfa", null);
 __decorate([
     (0, common_1.Post)('verify'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.RateLimitMfa)(),
-    (0, audit_log_decorator_1.AuditSecurity)('mfa_verification'),
+    (0, decorators_1.RateLimitMfa)(),
+    (0, decorators_1.AuditSecurity)('mfa_verification'),
     (0, swagger_1.ApiOperation)({
         summary: 'Vérification MFA',
         description: 'Vérifie code d\'authentification multifacteur'
@@ -260,7 +297,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Code MFA valide',
-        type: mfa_1.MfaVerifyResponseDto
+        type: dto_1.MfaVerifyResponseDto
     }),
     (0, swagger_1.ApiResponse)({
         status: 401,
@@ -273,97 +310,69 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_b = typeof mfa_1.MfaVerifyDto !== "undefined" && mfa_1.MfaVerifyDto) === "function" ? _b : Object, Object]),
+    __metadata("design:paramtypes", [dto_1.MfaVerifyDto, Object]),
     __metadata("design:returntype", Promise)
 ], MfaController.prototype, "verifyMfa", null);
 __decorate([
+    (0, common_1.Delete)('disable/:provider'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, decorators_1.AuditCritical)('mfa_disable'),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Désactiver MFA',
+        description: 'Désactive une méthode MFA spécifique'
+    }),
+    (0, swagger_1.ApiParam)({
+        name: 'provider',
+        enum: ['SMS_OTP', 'EMAIL_OTP', 'TOTP_APP', 'BACKUP_CODE'],
+        description: 'Provider MFA à désactiver'
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: 'MFA désactivé'
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 404,
+        description: 'Provider non configuré'
+    }),
+    __param(0, (0, common_1.Param)('provider')),
+    __param(1, (0, current_user_decorator_1.CurrentUserId)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], MfaController.prototype, "disableMfa", null);
+__decorate([
+    (0, common_1.Get)('status'),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Statut MFA utilisateur',
+        description: 'Récupère le statut MFA et méthodes configurées'
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: 'Statut MFA récupéré'
+    }),
+    __param(0, (0, current_user_decorator_1.CurrentUserId)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], MfaController.prototype, "getMfaStatus", null);
+__decorate([
     (0, common_1.Post)('challenge'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.RateLimit)({ limit: 5, windowMs: 300000 }),
+    (0, decorators_1.RateLimitMfa)(),
     (0, swagger_1.ApiOperation)({
-        summary: 'Génération challenge MFA',
-        description: 'Génère nouveau challenge pour re-authentification'
+        summary: 'Générer challenge MFA',
+        description: 'Génère un nouveau challenge MFA pour authentification'
     }),
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Challenge généré',
-        schema: {
-            example: {
-                success: true,
-                data: {
-                    challengeToken: 'mfa_challenge_xxx',
-                    availableMethods: ['SMS_OTP', 'TOTP_APP'],
-                    expiresIn: 300
-                }
-            }
-        }
+        type: dto_1.MfaChallengeResponseDto
     }),
     __param(0, (0, current_user_decorator_1.CurrentUserId)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], MfaController.prototype, "generateMfaChallenge", null);
-__decorate([
-    (0, common_1.Delete)(':provider'),
-    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.AuditCritical)('mfa_disable'),
-    (0, swagger_1.ApiOperation)({
-        summary: 'Désactivation MFA',
-        description: 'Désactive MFA pour un provider spécifique'
-    }),
-    (0, swagger_1.ApiParam)({ name: 'provider', enum: ['SMS_OTP', 'EMAIL_OTP', 'TOTP_APP', 'BACKUP_CODE'] }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'MFA désactivé',
-        schema: {
-            example: {
-                success: true,
-                data: {
-                    provider: 'SMS_OTP',
-                    disabled: true,
-                    remainingMethods: ['TOTP_APP']
-                }
-            }
-        }
-    }),
-    (0, swagger_1.ApiResponse)({
-        status: 404,
-        description: 'MFA non configuré pour ce provider'
-    }),
-    __param(0, (0, common_1.Param)('provider')),
-    __param(1, (0, current_user_decorator_1.CurrentUserId)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_c = typeof interfaces_1.MfaProvider !== "undefined" && interfaces_1.MfaProvider) === "function" ? _c : Object, String]),
-    __metadata("design:returntype", Promise)
-], MfaController.prototype, "disableMfa", null);
-__decorate([
-    (0, common_1.Post)('backup-codes'),
-    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.AuditCritical)('mfa_backup_codes_generated'),
-    (0, audit_log_decorator_1.RateLimit)({ limit: 2, windowMs: 3600000 }),
-    (0, swagger_1.ApiOperation)({
-        summary: 'Génération codes de récupération',
-        description: 'Génère nouveaux codes de récupération MFA'
-    }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'Codes générés',
-        schema: {
-            example: {
-                success: true,
-                data: {
-                    backupCodes: ['ABC12345', 'DEF67890'],
-                    previousCodesRevoked: true,
-                    warning: 'Conservez ces codes en lieu sûr'
-                }
-            }
-        }
-    }),
-    __param(0, (0, current_user_decorator_1.CurrentUserId)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", Promise)
-], MfaController.prototype, "generateBackupCodes", null);
 exports.MfaController = MfaController = __decorate([
     (0, swagger_1.ApiTags)('Multi-Factor Authentication'),
     (0, common_1.Controller)('auth/mfa'),

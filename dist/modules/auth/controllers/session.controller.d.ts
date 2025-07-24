@@ -1,6 +1,6 @@
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { SessionService } from '../services/session.service';
-import { RefreshTokenDto, RefreshTokenResponseDto, SessionsListResponseDto, RevokeSessionResponseDto } from '../dto/session';
+import { RefreshTokenDto, RefreshTokenResponseDto, SessionsListResponseDto, RevokeSessionResponseDto } from '../dto';
 import { IUserProfile } from '../interfaces';
 export declare class SessionController {
     private readonly sessionService;

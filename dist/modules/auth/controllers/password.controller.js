@@ -11,17 +11,16 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PasswordController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const logger_service_1 = require("../../../shared/logger/logger.service");
 const password_service_1 = require("../services/password.service");
-const password_1 = require("../dto/password");
+const dto_1 = require("../dto");
 const jwt_auth_guard_1 = require("../guards/jwt-auth.guard");
 const current_user_decorator_1 = require("../decorators/current-user.decorator");
-const audit_log_decorator_1 = require("../decorators/audit-log.decorator");
+const decorators_1 = require("../decorators");
 let PasswordController = class PasswordController {
     passwordService;
     logger;
@@ -35,7 +34,7 @@ let PasswordController = class PasswordController {
         });
         try {
             const token = await this.passwordService.generateResetToken(forgotPasswordDto.email);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
@@ -58,7 +57,7 @@ let PasswordController = class PasswordController {
                 throw new Error('Les mots de passe ne correspondent pas');
             }
             const success = await this.passwordService.resetPassword(resetPasswordDto.token, resetPasswordDto.newPassword);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
@@ -82,7 +81,7 @@ let PasswordController = class PasswordController {
                 throw new Error('Les mots de passe ne correspondent pas');
             }
             const success = await this.passwordService.changePassword(userId, changePasswordDto.currentPassword, changePasswordDto.newPassword);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: {
@@ -101,7 +100,7 @@ let PasswordController = class PasswordController {
         const operationId = this.logger.startOperation('POST /auth/validate-password');
         try {
             const validation = await this.passwordService.validatePasswordStrength(password);
-            this.logger.endOperation(operationId, 'success');
+            this.logger.endOperation(operationId, 'success', true);
             return {
                 success: true,
                 data: validation,
@@ -118,8 +117,8 @@ __decorate([
     (0, current_user_decorator_1.Public)(),
     (0, common_1.Post)('forgot-password'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.RateLimitPasswordReset)(),
-    (0, audit_log_decorator_1.AuditCritical)('password_reset_request'),
+    (0, decorators_1.RateLimitPasswordReset)(),
+    (0, decorators_1.AuditCritical)('password_reset_request'),
     (0, swagger_1.ApiOperation)({
         summary: 'Demande réinitialisation mot de passe',
         description: 'Génère token de réinitialisation et envoie email'
@@ -127,7 +126,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Email de réinitialisation envoyé',
-        type: password_1.ForgotPasswordResponseDto
+        type: dto_1.ForgotPasswordResponseDto
     }),
     (0, swagger_1.ApiResponse)({
         status: 429,
@@ -135,15 +134,15 @@ __decorate([
     }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_a = typeof password_1.ForgotPasswordDto !== "undefined" && password_1.ForgotPasswordDto) === "function" ? _a : Object]),
+    __metadata("design:paramtypes", [dto_1.ForgotPasswordDto]),
     __metadata("design:returntype", Promise)
 ], PasswordController.prototype, "forgotPassword", null);
 __decorate([
     (0, current_user_decorator_1.Public)(),
     (0, common_1.Post)('reset-password'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.RateLimit)({ limit: 5, windowMs: 300000 }),
-    (0, audit_log_decorator_1.AuditCritical)('password_reset_complete'),
+    (0, decorators_1.RateLimit)({ limit: 5, windowMs: 300000 }),
+    (0, decorators_1.AuditCritical)('password_reset_complete'),
     (0, swagger_1.ApiOperation)({
         summary: 'Réinitialisation mot de passe',
         description: 'Confirme nouveau mot de passe avec token'
@@ -151,7 +150,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Mot de passe réinitialisé',
-        type: password_1.ResetPasswordResponseDto
+        type: dto_1.ResetPasswordResponseDto
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
@@ -159,7 +158,7 @@ __decorate([
     }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_b = typeof password_1.ResetPasswordDto !== "undefined" && password_1.ResetPasswordDto) === "function" ? _b : Object]),
+    __metadata("design:paramtypes", [dto_1.ResetPasswordDto]),
     __metadata("design:returntype", Promise)
 ], PasswordController.prototype, "resetPassword", null);
 __decorate([
@@ -167,8 +166,8 @@ __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiBearerAuth)(),
-    (0, audit_log_decorator_1.RateLimit)({ limit: 3, windowMs: 3600000 }),
-    (0, audit_log_decorator_1.AuditCritical)('password_change'),
+    (0, decorators_1.RateLimit)({ limit: 3, windowMs: 3600000 }),
+    (0, decorators_1.AuditCritical)('password_change'),
     (0, swagger_1.ApiOperation)({
         summary: 'Changement mot de passe',
         description: 'Modifie mot de passe pour utilisateur connecté'
@@ -176,7 +175,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Mot de passe modifié',
-        type: password_1.ChangePasswordResponseDto
+        type: dto_1.ChangePasswordResponseDto
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
@@ -189,14 +188,14 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUserId)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_c = typeof password_1.ChangePasswordDto !== "undefined" && password_1.ChangePasswordDto) === "function" ? _c : Object, String]),
+    __metadata("design:paramtypes", [dto_1.ChangePasswordDto, String]),
     __metadata("design:returntype", Promise)
 ], PasswordController.prototype, "changePassword", null);
 __decorate([
     (0, current_user_decorator_1.Public)(),
     (0, common_1.Post)('validate-password'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, audit_log_decorator_1.RateLimit)({ limit: 10, windowMs: 60000 }),
+    (0, decorators_1.RateLimit)({ limit: 10, windowMs: 60000 }),
     (0, swagger_1.ApiOperation)({
         summary: 'Validation force mot de passe',
         description: 'Vérifie si mot de passe respecte critères sécurité'

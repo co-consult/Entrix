@@ -27,14 +27,14 @@ import {
   RefreshTokenResponseDto,
   SessionsListResponseDto,
   RevokeSessionResponseDto
-} from '../dto/session';
+} from '../dto';
 import { JwtAuthGuard, JwtRefreshGuard } from '../guards';
 import { 
   CurrentUser, 
   CurrentUserId, 
   SessionId
-} from '../decorators/current-user.decorator';
-import { AuditLog, RateLimit } from '../decorators/audit-log.decorator';
+} from '../decorators';
+import { AuditLog, RateLimit } from '../decorators';
 import { IUserProfile } from '../interfaces';
 
 /**
@@ -92,7 +92,7 @@ export class SessionController {
       const sessions = await this.sessionService.getUserActiveSessions(user.id);
       const currentSession = sessions.find(s => s.id === sessionId);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -154,7 +154,7 @@ export class SessionController {
     try {
       const tokens = await this.sessionService.refreshSession(refreshDto.refreshToken);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -211,7 +211,7 @@ export class SessionController {
         isCurrent: session.id === currentSessionId,
       }));
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
@@ -265,7 +265,7 @@ export class SessionController {
       const sessionExists = userSessions.some(s => s.id === sessionId);
 
       if (!sessionExists) {
-        this.logger.endOperation(operationId, 'not_found');
+        this.logger.endOperation(operationId, 'not_found', false);
         return {
           success: false,
           data: {
@@ -277,7 +277,7 @@ export class SessionController {
 
       const revoked = await this.sessionService.revokeSession(sessionId);
 
-      this.logger.endOperation(operationId, 'success');
+      this.logger.endOperation(operationId, 'success', true);
 
       return {
         success: true,
