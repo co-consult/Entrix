@@ -115,66 +115,21 @@ exports.AuthModule = AuthModule = AuthModule_1 = __decorate([
             security_controller_1.SecurityController,
         ],
         providers: [
-            {
-                provide: auth_service_1.AuthService,
-                useClass: auth_service_1.AuthService,
-            },
-            {
-                provide: token_service_1.TokenService,
-                useClass: token_service_1.TokenService,
-            },
-            {
-                provide: session_service_1.SessionService,
-                useClass: session_service_1.SessionService,
-            },
-            {
-                provide: password_service_1.PasswordService,
-                useClass: password_service_1.PasswordService,
-            },
-            {
-                provide: mfa_service_1.MfaService,
-                useClass: mfa_service_1.MfaService,
-            },
-            {
-                provide: security_service_1.SecurityService,
-                useClass: security_service_1.SecurityService,
-            },
-            {
-                provide: device_service_1.DeviceService,
-                useClass: device_service_1.DeviceService,
-            },
-            {
-                provide: jwt_strategy_1.JwtStrategy,
-                useClass: jwt_strategy_1.JwtStrategy,
-            },
-            {
-                provide: jwt_refresh_strategy_1.JwtRefreshStrategy,
-                useClass: jwt_refresh_strategy_1.JwtRefreshStrategy,
-            },
-            {
-                provide: local_strategy_1.LocalStrategy,
-                useClass: local_strategy_1.LocalStrategy,
-            },
-            {
-                provide: 'APP_GUARD',
-                useClass: jwt_auth_guard_1.JwtAuthGuard,
-            },
-            {
-                provide: jwt_refresh_guard_1.JwtRefreshGuard,
-                useClass: jwt_refresh_guard_1.JwtRefreshGuard,
-            },
-            {
-                provide: mfa_required_guard_1.MfaRequiredGuard,
-                useClass: mfa_required_guard_1.MfaRequiredGuard,
-            },
-            {
-                provide: device_trusted_guard_1.DeviceTrustedGuard,
-                useClass: device_trusted_guard_1.DeviceTrustedGuard,
-            },
-            {
-                provide: account_status_guard_1.AccountStatusGuard,
-                useClass: account_status_guard_1.AccountStatusGuard,
-            },
+            auth_service_1.AuthService,
+            token_service_1.TokenService,
+            session_service_1.SessionService,
+            password_service_1.PasswordService,
+            mfa_service_1.MfaService,
+            security_service_1.SecurityService,
+            device_service_1.DeviceService,
+            jwt_strategy_1.JwtStrategy,
+            jwt_refresh_strategy_1.JwtRefreshStrategy,
+            local_strategy_1.LocalStrategy,
+            jwt_auth_guard_1.JwtAuthGuard,
+            jwt_refresh_guard_1.JwtRefreshGuard,
+            mfa_required_guard_1.MfaRequiredGuard,
+            device_trusted_guard_1.DeviceTrustedGuard,
+            account_status_guard_1.AccountStatusGuard,
             {
                 provide: 'JWT_CONFIG',
                 useFactory: jwt_config_1.getJwtConfig,

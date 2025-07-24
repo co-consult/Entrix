@@ -1,0 +1,601 @@
+###############################################################################
+# TESTS HTTP - MODULE AUTHENTIFICATION ENTRIX V3.0
+# Fichier: auth-tests.http
+# 
+# Instructions d'utilisation:
+# 1. Installer extension REST Client pour VS Code
+# 2. Configurer les variables d'environnement ci-dessous
+# 3. Exécuter les tests dans l'ordre (les variables se propagent)
+# 4. Vérifier les réponses et codes de statut
+###############################################################################
+
+# ============================================================================
+# CONFIGURATION ET VARIABLES
+# ============================================================================
+
+@baseUrl = http://localhost:3000
+@apiVersion = api/v1
+@contentType = application/json
+
+# Variables dynamiques (seront remplies par les réponses)
+@accessToken = 
+@refreshToken = 
+@sessionId = 
+@userId = 
+@challengeToken = 
+@resetToken = 
+@verificationToken = 
+
+# Données de test
+@testEmail = test.user@entrix.tn
+@testPassword = TestPassword123!
+@testFirstName = Jean
+@testLastName = Dupont
+@testPhone = 50560560
+
+###############################################################################
+# 1. AUTHENTIFICATION - INSCRIPTION ET CONNEXION
+###############################################################################
+
+### 1.1 Inscription utilisateur (Succès)
+# Test: Créer un nouveau compte utilisateur
+# Attendu: 201 Created avec tokens JWT et session
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "{{testPassword}}",
+  "firstName": "{{testFirstName}}",
+  "lastName": "{{testLastName}}",
+  "phone": "{{testPhone}}",
+  "dateOfBirth": "1990-01-01",
+  "marketingConsent": true,
+  "termsAccepted": true
+}
+
+### 1.2 Inscription avec email existant (Échec)
+# Test: Tenter inscription avec email déjà utilisé
+# Attendu: 409 Conflict
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "{{testPassword}}",
+  "firstName": "Test",
+  "lastName": "Duplicate",
+  "termsAccepted": true
+}
+
+### 1.3 Inscription avec mot de passe faible (Échec)
+# Test: Validation force mot de passe
+# Attendu: 400 Bad Request avec suggestions
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "weak.password@entrix.tn",
+  "password": "123",
+  "firstName": "Test",
+  "lastName": "Weak",
+  "termsAccepted": true
+}
+
+### 1.4 Connexion utilisateur (Succès)
+# Test: Authentification avec email/password valides
+# Attendu: 200 OK avec tokens et session
+# NOTE: Récupère accessToken, refreshToken, sessionId pour tests suivants
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "{{testPassword}}",
+  "rememberMe": false,
+  "deviceFingerprint": "test-device-fingerprint-123"
+}
+
+### 1.5 Connexion avec identifiants invalides (Échec)
+# Test: Tentative connexion avec mauvais mot de passe
+# Attendu: 401 Unauthorized
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "WrongPassword123!"
+}
+
+### 1.6 Connexion avec email inexistant (Échec)
+# Test: Tentative connexion avec email non enregistré
+# Attendu: 401 Unauthorized
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "nonexistent@entrix.tn",
+  "password": "{{testPassword}}"
+}
+
+### 1.7 Test rate limiting login (Échec après plusieurs tentatives)
+# Test: Dépassement limite tentatives de connexion
+# Attendu: 429 Too Many Requests après 5 tentatives
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "WrongPassword1"
+}
+
+###
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "WrongPassword2"
+}
+
+###
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "WrongPassword3"
+}
+
+###
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "WrongPassword4"
+}
+
+###
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "password": "WrongPassword5"
+}
+
+###############################################################################
+# 2. GESTION DES SESSIONS
+###############################################################################
+
+### 2.1 Récupérer informations session courante
+# Test: Obtenir détails de la session active
+# Attendu: 200 OK avec informations session et utilisateur
+# NOTE: Utilise accessToken de la connexion précédente
+GET {{baseUrl}}/{{apiVersion}}/auth/session
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+### 2.2 Rafraîchir les tokens
+# Test: Renouveler access token avec refresh token
+# Attendu: 200 OK avec nouveaux tokens (rotation)
+POST {{baseUrl}}/{{apiVersion}}/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### 2.3 Lister toutes les sessions actives
+# Test: Obtenir liste des sessions utilisateur sur tous devices
+# Attendu: 200 OK avec array des sessions
+GET {{baseUrl}}/{{apiVersion}}/auth/sessions
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+### 2.4 Révoquer une session spécifique
+# Test: Fermer une session par son ID
+# Attendu: 200 OK avec confirmation révocation
+DELETE {{baseUrl}}/{{apiVersion}}/auth/sessions/{{sessionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+###############################################################################
+# 3. GESTION DES MOTS DE PASSE
+###############################################################################
+
+### 3.1 Demande de réinitialisation mot de passe
+# Test: Envoyer email de reset password
+# Attendu: 200 OK (même si email n'existe pas - sécurité)
+POST {{baseUrl}}/{{apiVersion}}/auth/forgot-password
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}",
+  "captchaToken": "optional-captcha-token"
+}
+
+### 3.2 Réinitialisation avec token invalide (Échec)
+# Test: Tentative reset avec token inexistant/expiré
+# Attendu: 400 Bad Request
+POST {{baseUrl}}/{{apiVersion}}/auth/reset-password
+Content-Type: {{contentType}}
+
+{
+  "token": "invalid-reset-token-123",
+  "newPassword": "NewPassword123!",
+  "confirmPassword": "NewPassword123!"
+}
+
+### 3.3 Changement de mot de passe (utilisateur connecté)
+# Test: Modifier mot de passe avec ancien mot de passe
+# Attendu: 200 OK avec confirmation
+POST {{baseUrl}}/{{apiVersion}}/auth/change-password
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "{{testPassword}}",
+  "newPassword": "NewTestPassword123!",
+  "confirmPassword": "NewTestPassword123!"
+}
+
+###############################################################################
+# 4. MULTI-FACTOR AUTHENTICATION (MFA)
+###############################################################################
+
+### 4.1 Obtenir providers MFA disponibles
+# Test: Liste des méthodes MFA supportées
+# Attendu: 200 OK avec array des providers
+GET {{baseUrl}}/{{apiVersion}}/auth/mfa/providers
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+### 4.2 Configuration MFA - SMS OTP
+# Test: Activer MFA par SMS
+# Attendu: 200 OK avec instructions setup
+POST {{baseUrl}}/{{apiVersion}}/auth/mfa/setup
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "provider": "SMS_OTP",
+  "phoneNumber": "{{testPhone}}"
+}
+
+### 4.3 Configuration MFA - TOTP App
+# Test: Activer MFA par application authenticator
+# Attendu: 200 OK avec QR code et secret
+POST {{baseUrl}}/{{apiVersion}}/auth/mfa/setup
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "provider": "TOTP_APP"
+}
+
+### 4.4 Vérification code MFA
+# Test: Valider code à 6 chiffres
+# Attendu: 200 OK avec confirmation
+POST {{baseUrl}}/{{apiVersion}}/auth/mfa/verify
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "challengeToken": "{{challengeToken}}",
+  "method": "SMS_OTP",
+  "code": "123456",
+  "trustDevice": true
+}
+
+### 4.5 Désactiver MFA
+# Test: Retirer protection MFA
+# Attendu: 200 OK avec confirmation
+DELETE {{baseUrl}}/{{apiVersion}}/auth/mfa/SMS_OTP
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "confirmationCode": "123456"
+}
+
+###############################################################################
+# 5. SÉCURITÉ ET AUDIT
+###############################################################################
+
+### 5.1 Obtenir événements de sécurité
+# Test: Historique des activités sécurité utilisateur
+# Attendu: 200 OK avec liste des événements
+GET {{baseUrl}}/{{apiVersion}}/auth/security-events?limit=20&eventType=LOGIN
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+### 5.2 Évaluation du risque
+# Test: Score de risque de la session courante
+# Attendu: 200 OK avec score et facteurs
+GET {{baseUrl}}/{{apiVersion}}/auth/risk-assessment
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+### 5.3 Lister appareils de confiance
+# Test: Devices autorisés pour l'utilisateur
+# Attendu: 200 OK avec liste appareils
+GET {{baseUrl}}/{{apiVersion}}/auth/trusted-devices
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+### 5.4 Ajouter appareil à la liste de confiance
+# Test: Marquer device actuel comme fiable
+# Attendu: 200 OK avec confirmation
+POST {{baseUrl}}/{{apiVersion}}/auth/trusted-devices
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "deviceName": "MacBook Pro - Chrome",
+  "trustDuration": 2592000
+}
+
+### 5.5 Révoquer appareil de confiance
+# Test: Retirer device de la liste fiable
+# Attendu: 200 OK avec confirmation
+DELETE {{baseUrl}}/{{apiVersion}}/auth/trusted-devices/device-fingerprint-123
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+###############################################################################
+# 6. VÉRIFICATION EMAIL
+###############################################################################
+
+### 6.1 Vérifier email avec token
+# Test: Activer compte via lien email
+# Attendu: 200 OK avec confirmation
+POST {{baseUrl}}/{{apiVersion}}/auth/verify-email
+Content-Type: {{contentType}}
+
+{
+  "token": "{{verificationToken}}"
+}
+
+### 6.2 Renvoyer email de vérification
+# Test: Nouveau lien d'activation
+# Attendu: 200 OK (même si email n'existe pas)
+POST {{baseUrl}}/{{apiVersion}}/auth/resend-verification
+Content-Type: {{contentType}}
+
+{
+  "email": "{{testEmail}}"
+}
+
+### 6.3 Vérification avec token expiré (Échec)
+# Test: Token de vérification invalide
+# Attendu: 400 Bad Request
+POST {{baseUrl}}/{{apiVersion}}/auth/verify-email
+Content-Type: {{contentType}}
+
+{
+  "token": "expired-or-invalid-token-123"
+}
+
+###############################################################################
+# 7. TESTS DE VALIDATION
+###############################################################################
+
+### 7.1 Registration avec données invalides
+# Test: Validation des champs obligatoires
+# Attendu: 400 Bad Request avec détails erreurs
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "invalid-email",
+  "password": "weak",
+  "firstName": "",
+  "lastName": "A",
+  "phone": "invalid-phone",
+  "termsAccepted": false
+}
+
+### 7.2 Login avec payload malformé
+# Test: Validation structure JSON
+# Attendu: 400 Bad Request
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "",
+  "password": null,
+  "extraField": "should-be-filtered"
+}
+
+### 7.3 Accès endpoint protégé sans token (Échec)
+# Test: Sécurisation routes privées
+# Attendu: 401 Unauthorized
+GET {{baseUrl}}/{{apiVersion}}/auth/session
+Content-Type: {{contentType}}
+
+### 7.4 Accès avec token expiré/invalide (Échec)
+# Test: Validation tokens JWT
+# Attendu: 401 Unauthorized
+GET {{baseUrl}}/{{apiVersion}}/auth/session
+Authorization: Bearer invalid.jwt.token
+Content-Type: {{contentType}}
+
+###############################################################################
+# 8. DÉCONNEXION ET NETTOYAGE
+###############################################################################
+
+### 8.1 Déconnexion session courante
+# Test: Logout avec invalidation tokens
+# Attendu: 200 OK avec confirmation
+POST {{baseUrl}}/{{apiVersion}}/auth/logout
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "allDevices": false
+}
+
+### 8.2 Déconnexion de tous les appareils
+# Test: Logout global avec révocation toutes sessions
+# Attendu: 200 OK avec nombre sessions fermées
+POST {{baseUrl}}/{{apiVersion}}/auth/logout
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "allDevices": true
+}
+
+### 8.3 Tentative d'utilisation token après logout (Échec)
+# Test: Vérifier invalidation effective
+# Attendu: 401 Unauthorized
+GET {{baseUrl}}/{{apiVersion}}/auth/session
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+###############################################################################
+# 9. TESTS DE CHARGE ET LIMITES
+###############################################################################
+
+### 9.1 Test limite rate limiting registration
+# Test: Dépassement limite inscriptions par IP
+# Attendu: 429 Too Many Requests après 3 tentatives/heure
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "test1@example.com",
+  "password": "{{testPassword}}",
+  "firstName": "Test",
+  "lastName": "User1",
+  "termsAccepted": true
+}
+
+###
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "test2@example.com",
+  "password": "{{testPassword}}",
+  "firstName": "Test",
+  "lastName": "User2",
+  "termsAccepted": true
+}
+
+###
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "test3@example.com",
+  "password": "{{testPassword}}",
+  "firstName": "Test",
+  "lastName": "User3",
+  "termsAccepted": true
+}
+
+###
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "test4@example.com",
+  "password": "{{testPassword}}",
+  "firstName": "Test",
+  "lastName": "User4",
+  "termsAccepted": true
+}
+
+### 9.2 Test payload large (Edge case)
+# Test: Gestion requêtes volumineuses
+# Attendu: 400 Bad Request ou traitement normal
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "large.payload@entrix.tn",
+  "password": "{{testPassword}}",
+  "firstName": "A".repeat(1000),
+  "lastName": "B".repeat(1000),
+  "termsAccepted": true
+}
+
+###############################################################################
+# 10. TESTS DE SÉCURITÉ
+###############################################################################
+
+### 10.1 Injection SQL (Test sécurité)
+# Test: Tentative injection dans email
+# Attendu: 400 Bad Request ou traitement sécurisé
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "'; DROP TABLE users; --",
+  "password": "{{testPassword}}"
+}
+
+### 10.2 XSS dans les champs (Test sécurité)
+# Test: Script malveillant dans les données
+# Attendu: 400 Bad Request ou échappement
+POST {{baseUrl}}/{{apiVersion}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "xss@test.com",
+  "password": "{{testPassword}}",
+  "firstName": "<script>alert('xss')</script>",
+  "lastName": "Test",
+  "termsAccepted": true
+}
+
+### 10.3 Headers malveillants (Test sécurité)
+# Test: Headers d'attaque
+# Attendu: Traitement sécurisé ou rejet
+POST {{baseUrl}}/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+X-Forwarded-For: 127.0.0.1
+X-Real-IP: 192.168.1.1
+User-Agent: <script>malicious</script>
+
+{
+  "email": "{{testEmail}}",
+  "password": "{{testPassword}}"
+}
+
+###############################################################################
+# NOTES D'UTILISATION:
+# 
+# 1. Variables automatiques:
+#    - Les réponses remplissent automatiquement les variables @accessToken, etc.
+#    - Utiliser ces variables dans les tests suivants
+#
+# 2. Ordre des tests:
+#    - Inscription → Connexion → Tests protégés → Déconnexion
+#    - Respecter l'ordre pour la cohérence des données
+#
+# 3. Configuration serveur:
+#    - Modifier @baseUrl selon votre environnement
+#    - Adapter @apiVersion selon votre configuration
+#
+# 4. Rate limiting:
+#    - Attendre entre les tests si rate limiting activé
+#    - Ou utiliser différentes adresses IP/emails
+#
+# 5. Données de test:
+#    - Modifier @testEmail pour éviter les conflits
+#    - Utiliser emails temporaires pour tests répétés
+#
+# 6. Réponses attendues:
+#    - Vérifier codes de statut HTTP
+#    - Examiner structure des réponses JSON
+#    - Contrôler présence des champs requis
+#
+# 7. Environnements:
+#    - DEV: http://localhost:3000
+#    - STAGING: https://api-staging.entrix.tn
+#    - PROD: https://api.entrix.tn
+###############################################################################

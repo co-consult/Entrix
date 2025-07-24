@@ -48,6 +48,7 @@ import { AccountStatusGuard } from './guards/account-status.guard';
 
 /**
  * Module Authentification Entrix V3.0 - Grade A+
+ * ✅ CORRIGÉ : Providers et exports cohérents pour éviter UnknownExportException
  * 
  * Architecture complète avec :
  * - JWT avec rotation des refresh tokens
@@ -56,13 +57,6 @@ import { AccountStatusGuard } from './guards/account-status.guard';
  * - Rate limiting intelligent
  * - Audit complet et monitoring
  * - Intégration services partagés grade A+
- * 
- * Respecte strictement :
- * - schema.prisma (users, user_sessions, user_roles)
- * - api_specs_auth_session.md
- * - processus_authentification.md
- * - Guide Développement Backend Entrix V3.0
- * - shared-usage-guide.md
  */
 
 @Module({
@@ -104,103 +98,32 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     // SERVICES CORE
     // ========================
     
-    // Service principal d'authentification
-    {
-      provide: AuthService,
-      useClass: AuthService,
-    },
-    
-    // Gestion des tokens JWT avec rotation
-    {
-      provide: TokenService,
-      useClass: TokenService,
-    },
-    
-    // Gestion des sessions utilisateur
-    {
-      provide: SessionService,
-      useClass: SessionService,
-    },
-    
-    // Gestion des mots de passe (hash, reset, validation)
-    {
-      provide: PasswordService,
-      useClass: PasswordService,
-    },
-    
-    // Multi-Factor Authentication
-    {
-      provide: MfaService,
-      useClass: MfaService,
-    },
-    
-    // Risk scoring et détection sécurité
-    {
-      provide: SecurityService,
-      useClass: SecurityService,
-    },
-    
-    // Gestion des appareils de confiance
-    {
-      provide: DeviceService,
-      useClass: DeviceService,
-    },
+    AuthService,
+    TokenService,
+    SessionService,
+    PasswordService,
+    MfaService,
+    SecurityService,
+    DeviceService,
 
     // ========================
     // PASSPORT STRATEGIES
     // ========================
     
-    // Strategy JWT pour access tokens
-    {
-      provide: JwtStrategy,
-      useClass: JwtStrategy,
-    },
-    
-    // Strategy JWT pour refresh tokens
-    {
-      provide: JwtRefreshStrategy,
-      useClass: JwtRefreshStrategy,
-    },
-    
-    // Strategy locale pour email/password
-    {
-      provide: LocalStrategy,
-      useClass: LocalStrategy,
-    },
+    JwtStrategy,
+    JwtRefreshStrategy,
+    LocalStrategy,
 
     // ========================
     // GUARDS DE SÉCURITÉ
     // ========================
+    // ✅ CORRIGÉ : Guards déclarés comme providers simples pour permettre export
     
-    // Guard principal JWT
-    {
-      provide: 'APP_GUARD',
-      useClass: JwtAuthGuard,
-    },
-    
-    // Guard refresh token
-    {
-      provide: JwtRefreshGuard,
-      useClass: JwtRefreshGuard,
-    },
-    
-    // Guard MFA requis
-    {
-      provide: MfaRequiredGuard,
-      useClass: MfaRequiredGuard,
-    },
-    
-    // Guard appareil de confiance
-    {
-      provide: DeviceTrustedGuard,
-      useClass: DeviceTrustedGuard,
-    },
-    
-    // Guard statut compte
-    {
-      provide: AccountStatusGuard,
-      useClass: AccountStatusGuard,
-    },
+    JwtAuthGuard,
+    JwtRefreshGuard,
+    MfaRequiredGuard,
+    DeviceTrustedGuard,
+    AccountStatusGuard,
 
     // ========================
     // CONFIGURATIONS
@@ -268,7 +191,6 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     // SERVICES EXPORTÉS
     // ========================
     
-    // Services principaux disponibles pour autres modules
     AuthService,
     TokenService,
     SessionService,
@@ -280,8 +202,8 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     // ========================
     // GUARDS EXPORTÉS
     // ========================
+    // ✅ CORRIGÉ : Maintenant tous les guards peuvent être exportés car ils sont dans providers
     
-    // Guards réutilisables dans autres modules
     JwtAuthGuard,
     JwtRefreshGuard,
     MfaRequiredGuard,
@@ -292,7 +214,6 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     // STRATEGIES EXPORTÉS
     // ========================
     
-    // Strategies réutilisables
     JwtStrategy,
     JwtRefreshStrategy,
     LocalStrategy,
