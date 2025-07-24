@@ -307,7 +307,7 @@ let OnboardingService = class OnboardingService {
                         last_name: conversionData.userData.lastName,
                         phone: conversionData.userData.phone,
                         password: conversionData.userData.password,
-                        email_verified: new Date(),
+                        email_verified: true,
                         is_active: true
                     }
                 });

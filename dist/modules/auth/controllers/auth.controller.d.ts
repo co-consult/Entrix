@@ -1,7 +1,7 @@
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { AuthService } from '../services/auth.service';
 import { LoginDto, RegisterDto, LoginResponseDto, RegisterResponseDto } from '../dto';
-import { IUserProfile } from '../interfaces';
+import { IUserProfile, IVerificationStatus } from '../interfaces';
 export declare class AuthController {
     private readonly authService;
     private readonly logger;
@@ -25,22 +25,16 @@ export declare class AuthController {
             sessionsTerminated: number;
         };
     }>;
-    verifyEmail(verifyDto: {
-        token: string;
-    }): Promise<{
+    verifyEmail(token: string): Promise<{
         success: boolean;
-        data: {
-            verified: boolean;
-            message: string;
-        };
+        verified: boolean;
+        message: string;
+        userId?: string;
     }>;
-    resendVerification(resendDto: {
-        email: string;
-    }): Promise<{
+    resendVerificationEmail(user: IUserProfile): Promise<{
         success: boolean;
-        data: {
-            sent: boolean;
-            message: string;
-        };
+        message: string;
+        tokenId?: string;
     }>;
+    getVerificationStatus(user: IUserProfile): Promise<IVerificationStatus>;
 }

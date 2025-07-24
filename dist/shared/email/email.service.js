@@ -242,17 +242,27 @@ let EmailService = EmailService_1 = class EmailService {
         }
     }
     async sendWelcomeEmail(email, firstName, verificationToken) {
+        const context = {
+            firstName,
+            emailVerificationToken: verificationToken,
+            verificationUrl: verificationToken
+                ? `${process.env.FRONTEND_URL}/${process.env.API_PREFIX}/auth/verify-email?token=${verificationToken}`
+                : undefined,
+            appName: 'Entrix',
+            supportEmail: process.env.EMAIL_SUPPORT || 'support@entrix.tn',
+            currentYear: new Date().getFullYear(),
+            facebookUrl: process.env.FACEBOOK_URL || 'https://facebook.com/entrix',
+            instagramUrl: process.env.INSTAGRAM_URL || 'https://instagram.com/entrix',
+            twitterUrl: process.env.TWITTER_URL || 'https://twitter.com/entrix',
+            linkedinUrl: process.env.LINKEDIN_URL || 'https://linkedin.com/company/entrix',
+            unsubscribeUrl: `${process.env.FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(email)}`,
+            websiteUrl: process.env.FRONTEND_URL || 'https://entrix.tn',
+        };
         return this.sendMail({
             to: email,
             subject: 'Bienvenue sur Entrix ! 🎉',
-            template: email_types_1.EmailTemplates.WELCOME,
-            context: {
-                firstName,
-                verificationToken,
-                verificationUrl: verificationToken
-                    ? `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`
-                    : undefined,
-            },
+            template: 'welcome',
+            context,
         });
     }
     async sendVerificationEmail(email, token) {

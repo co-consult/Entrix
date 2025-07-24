@@ -18,17 +18,17 @@
 @contentType = application/json
 
 # Variables dynamiques (seront remplies par les réponses)
-@accessToken = 
-@refreshToken = 
-@sessionId = 
-@userId = 
+@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNTUzNDJlMC01MGJiLTQ2ZjQtYmYxOS04Zjk5ZWEwYzliZWIiLCJlbWFpbCI6InNvdWhlaWxzYnNAZ21haWwuY29tIiwiaWF0IjoxNzUzMzU4MDU5LCJleHAiOjE3NTMzNTg5NTksImF1ZCI6ImVudHJpeC11c2VycyIsImlzcyI6ImVudHJpeC12MyIsInNlc3Npb25JZCI6IjIxZDdkZTFjLWI2N2UtNGMxNC05OTJhLTI2NWIwMjhiMWFjMSIsInJvbGVzIjpbXSwicGVybWlzc2lvbnMiOltdfQ.fTlUrIRNKZHWClQuokkJ8-tipf8eds-IfNO8kWn1iAs
+@refreshToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNTUzNDJlMC01MGJiLTQ2ZjQtYmYxOS04Zjk5ZWEwYzliZWIiLCJzZXNzaW9uSWQiOiIyMWQ3ZGUxYy1iNjdlLTRjMTQtOTkyYS0yNjViMDI4YjFhYzEiLCJ0b2tlbklkIjoidGtuXzE3NTMzNTgwNTk4NDNfY2VhcmRtbGt2cHYiLCJpYXQiOjE3NTMzNTgwNTksImV4cCI6MTc1Mzk2Mjg1OSwiYXVkIjoiZW50cml4LXJlZnJlc2giLCJpc3MiOiJlbnRyaXgtdjMifQ.V-5pJAdBl-40rmwR0IEPJdt_CH3pssQ_QS-JJBP1BHo
+@sessionId = b909196f-ec3e-4219-806c-eee75f7aba23
+@userId = 155342e0-50bb-46f4-bf19-8f99ea0c9beb
 @challengeToken = 
 @resetToken = 
 @verificationToken = 
 
 # Données de test
-@testEmail = test.user@entrix.tn
-@testPassword = TestPassword123!
+@testEmail = souheilsbs@gmail.com
+@testPassword = NewTestPassword123!
 @testFirstName = Jean
 @testLastName = Dupont
 @testPhone = 50560560
@@ -177,11 +177,12 @@ GET {{baseUrl}}/{{apiVersion}}/auth/session
 Authorization: Bearer {{accessToken}}
 Content-Type: {{contentType}}
 
-### 2.2 Rafraîchir les tokens
+### 2.2 Rafraîchir les tokens (Version alternative avec header)
 # Test: Renouveler access token avec refresh token
 # Attendu: 200 OK avec nouveaux tokens (rotation)
 POST {{baseUrl}}/{{apiVersion}}/auth/refresh
 Content-Type: {{contentType}}
+Authorization: Bearer {{refreshToken}}
 
 {
   "refreshToken": "{{refreshToken}}"
@@ -231,14 +232,17 @@ Content-Type: {{contentType}}
 ### 3.3 Changement de mot de passe (utilisateur connecté)
 # Test: Modifier mot de passe avec ancien mot de passe
 # Attendu: 200 OK avec confirmation
-POST {{baseUrl}}/{{apiVersion}}/auth/change-password
+### 3.3 Changement de mot de passe (utilisateur connecté)
+# Test: Modifier mot de passe avec ancien mot de passe
+# Attendu: 200 OK avec confirmation
+PUT {{baseUrl}}/{{apiVersion}}/auth/change-password
 Authorization: Bearer {{accessToken}}
 Content-Type: {{contentType}}
 
 {
   "currentPassword": "{{testPassword}}",
-  "newPassword": "NewTestPassword123!",
-  "confirmPassword": "NewTestPassword123!"
+  "newPassword": "NewTestPassword123!X",
+  "confirmPassword": "NewTestPassword123!X"
 }
 
 ###############################################################################

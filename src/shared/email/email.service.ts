@@ -295,23 +295,43 @@ export class EmailService {
   // MÉTHODES SPÉCIALISÉES
   // ============================================================================
 
-  /**
-   * Envoie un email de bienvenue
-   */
-  async sendWelcomeEmail(email: string, firstName: string, verificationToken?: string): Promise<EmailResult> {
-    return this.sendMail({
-      to: email,
-      subject: 'Bienvenue sur Entrix ! 🎉',
-      template: EmailTemplates.WELCOME,
-      context: {
-        firstName,
-        verificationToken,
-        verificationUrl: verificationToken 
-          ? `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`
-          : undefined,
-      },
-    });
-  }
+ /**
+ * Envoie un email de bienvenue avec toutes les variables nécessaires
+ */
+async sendWelcomeEmail(email: string, firstName: string, verificationToken?: string): Promise<EmailResult> {
+  // Variables pour le template welcome.hbs
+  const context = {
+    firstName,
+    emailVerificationToken: verificationToken, // Variable utilisée dans le template
+    verificationUrl: verificationToken 
+      ? `${process.env.FRONTEND_URL}/${process.env.API_PREFIX}/auth/verify-email?token=${verificationToken}`
+      : undefined,
+    
+    // Variables globales pour le footer et les liens
+    appName: 'Entrix',
+    supportEmail: process.env.EMAIL_SUPPORT || 'support@entrix.tn',
+    currentYear: new Date().getFullYear(),
+    
+    // URLs des réseaux sociaux (à configurer dans .env)
+    facebookUrl: process.env.FACEBOOK_URL || 'https://facebook.com/entrix',
+    instagramUrl: process.env.INSTAGRAM_URL || 'https://instagram.com/entrix',
+    twitterUrl: process.env.TWITTER_URL || 'https://twitter.com/entrix',
+    linkedinUrl: process.env.LINKEDIN_URL || 'https://linkedin.com/company/entrix',
+    
+    // URL de désabonnement
+    unsubscribeUrl: `${process.env.FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(email)}`,
+    
+    // URL du site web principal
+    websiteUrl: process.env.FRONTEND_URL || 'https://entrix.tn',
+  };
+
+  return this.sendMail({
+    to: email,
+    subject: 'Bienvenue sur Entrix ! 🎉',
+    template: 'welcome',
+    context,
+  });
+}
 
   /**
    * Envoie un email de vérification

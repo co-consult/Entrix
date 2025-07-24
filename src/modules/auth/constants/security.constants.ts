@@ -19,7 +19,7 @@ export const SECURITY_CONSTANTS = {
     MULTIPLE_SESSIONS: 10,
     
     // Seuils d'action
-    REQUIRE_MFA_THRESHOLD: 40,
+    REQUIRE_MFA_THRESHOLD: 200, // rendre à 40 pour la prod
     BLOCK_THRESHOLD: 80,
     ALERT_THRESHOLD: 60,
   },

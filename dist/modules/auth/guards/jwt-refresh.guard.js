@@ -23,25 +23,41 @@ let JwtRefreshGuard = class JwtRefreshGuard extends (0, passport_1.AuthGuard)('j
         const request = context.switchToHttp().getRequest();
         const operationId = this.logger.startOperation('jwtRefreshGuard', {
             path: request.url,
+            method: request.method,
         });
         try {
             if (err || !user) {
                 this.logger.warn('JWT refresh authentication failed', JSON.stringify({
                     error: err?.message || info?.message || 'No user found',
                     path: request.url,
+                    method: request.method,
+                    hasAuthHeader: !!request.headers?.authorization,
+                    authHeaderFormat: request.headers?.authorization?.startsWith('Bearer ') ? 'Bearer' : 'Invalid',
                 }));
                 this.logger.logBusinessEvent('REFRESH_AUTH_FAILED', {
-                    error: err?.message || 'authentication_failed',
+                    error: err?.message || info?.message || 'authentication_failed',
                     ipAddress: request.ip,
+                    userAgent: request.headers?.['user-agent'],
+                    path: request.url,
                 });
-                this.logger.endOperation(operationId, 'unauthorized', false);
+                this.logger.endOperation('jwtRefreshGuard', operationId, false, undefined, {
+                    reason: 'authentication_failed',
+                    error: err?.message || info?.message
+                });
                 throw new common_1.UnauthorizedException('Token de rafraîchissement invalide');
             }
-            this.logger.endOperation(operationId, 'success', true);
+            this.logger.logBusinessEvent('REFRESH_AUTH_SUCCESS', {
+                userId: user.userId,
+                sessionId: user.sessionId,
+                ipAddress: request.ip,
+            }, user.userId);
+            this.logger.endOperation('jwtRefreshGuard', operationId, true);
             return user;
         }
         catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.endOperation('jwtRefreshGuard', operationId, false, undefined, {
+                error: error.message
+            });
             throw error;
         }
     }

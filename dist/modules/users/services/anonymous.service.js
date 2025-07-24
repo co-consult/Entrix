@@ -206,8 +206,8 @@ let AnonymousService = class AnonymousService {
                         phone: conversionData.userData.phone,
                         password: hashedPassword,
                         is_active: true,
-                        email_verified: new Date(),
-                        phone_verified: conversionData.userData.phone ? new Date() : null,
+                        email_verified: null,
+                        phone_verified: conversionData.userData.phone != null,
                         metadata: {
                             convertedFromAnonymous: true,
                             anonymousId: anonymousUser.id,

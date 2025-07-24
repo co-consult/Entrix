@@ -64,8 +64,8 @@ let UsersService = class UsersService {
                     phone: userData.phone || null,
                     avatar: userData.avatar || null,
                     is_active: userData.isActive ?? true,
-                    email_verified: userData.emailVerified ? new Date() : null,
-                    phone_verified: userData.phoneVerified ? new Date() : null,
+                    email_verified: userData.emailVerified != null,
+                    phone_verified: userData.phoneVerified != null,
                     metadata: userData.metadata || null,
                 },
                 include: {
@@ -233,8 +233,8 @@ let UsersService = class UsersService {
                 phone: updateData.phone,
                 avatar: updateData.avatar,
                 is_active: updateData.isActive,
-                email_verified: updateData.emailVerified ? new Date() : undefined,
-                phone_verified: updateData.phoneVerified ? new Date() : undefined,
+                email_verified: updateData.emailVerified != null,
+                phone_verified: updateData.phoneVerified != null,
                 last_login: updateData.lastLogin,
                 metadata: updateData.metadata
             };

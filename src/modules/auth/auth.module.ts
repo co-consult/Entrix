@@ -33,6 +33,7 @@ import { PasswordService } from './services/password.service';
 import { MfaService } from './services/mfa.service';
 import { SecurityService } from './services/security.service';
 import { DeviceService } from './services/device.service';
+import { EmailVerificationService } from './services/email-verification.service';
 
 // Strategies
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -105,6 +106,7 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     MfaService,
     SecurityService,
     DeviceService,
+    EmailVerificationService,
 
     // ========================
     // PASSPORT STRATEGIES
@@ -198,6 +200,7 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     MfaService,
     SecurityService,
     DeviceService,
+    EmailVerificationService,
     
     // ========================
     // GUARDS EXPORTÉS

@@ -242,8 +242,8 @@ export class AnonymousService {
             phone: conversionData.userData.phone,
             password: hashedPassword, // Champ requis
             is_active: true,
-            email_verified: new Date(), // DateTime pour auto-vérification
-            phone_verified: conversionData.userData.phone ? new Date() : null,
+            email_verified: null, // DateTime pour auto-vérification
+            phone_verified: conversionData.userData.phone != null,
             metadata: {
               convertedFromAnonymous: true,
               anonymousId: anonymousUser.id,

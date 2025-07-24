@@ -485,7 +485,7 @@ export class OnboardingService {
             last_name: conversionData.userData.lastName,
             phone: conversionData.userData.phone,
             password: conversionData.userData.password, // Champ correct selon schema
-            email_verified: new Date(), // DateTime dans le schema
+            email_verified: true, 
             is_active: true
           }
         });

@@ -231,6 +231,12 @@ let MfaService = class MfaService {
     async requiresMfa(userId, riskScore) {
         const operationId = this.logger.startOperation('requiresMfa', { userId, riskScore });
         try {
+            const mfaEnabled = process.env.MFA_ENABLED !== 'false';
+            const forceDisabled = process.env.MFA_FORCE_DISABLED === 'true';
+            if (!mfaEnabled || forceDisabled) {
+                this.logger.endOperation('requiresMfa', operationId, true);
+                return false;
+            }
             const hasMfaConfigured = await this.userHasMfaConfigured(userId);
             if (!hasMfaConfigured) {
                 this.logger.endOperation('requiresMfa', operationId, true);

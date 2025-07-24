@@ -8,7 +8,7 @@ export declare const SECURITY_CONSTANTS: {
         readonly VPN_IP: 20;
         readonly DATACENTER_IP: 15;
         readonly MULTIPLE_SESSIONS: 10;
-        readonly REQUIRE_MFA_THRESHOLD: 40;
+        readonly REQUIRE_MFA_THRESHOLD: 200;
         readonly BLOCK_THRESHOLD: 80;
         readonly ALERT_THRESHOLD: 60;
     };

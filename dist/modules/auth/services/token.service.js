@@ -42,9 +42,6 @@ let TokenService = class TokenService {
             }
             const token = this.jwtService.sign(payload, {
                 secret: this.accessTokenSecret,
-                expiresIn: auth_constants_1.AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY,
-                issuer: 'entrix-v3',
-                audience: 'entrix-users',
             });
             this.logger.logBusinessEvent('ACCESS_TOKEN_GENERATED', {
                 userId: payload.sub,
@@ -73,12 +70,8 @@ let TokenService = class TokenService {
             if (!this.validateRefreshTokenPayload(payload)) {
                 throw new Error('Payload JWT invalide pour refresh token');
             }
-            const expiresInSeconds = payload.exp - payload.iat;
             const token = this.jwtService.sign(payload, {
                 secret: this.refreshTokenSecret,
-                expiresIn: expiresInSeconds,
-                issuer: 'entrix-v3',
-                audience: 'entrix-refresh',
             });
             const tokenMappingKey = `refresh_mapping:${payload.tokenId}`;
             await this.redis.setCache(tokenMappingKey, payload.sub, auth_constants_1.AUTH_CONSTANTS.JWT.REFRESH_TOKEN_EXPIRY_REMEMBER);
@@ -86,7 +79,7 @@ let TokenService = class TokenService {
                 userId: payload.sub,
                 sessionId: payload.sessionId,
                 tokenId: payload.tokenId,
-                expiresIn: expiresInSeconds,
+                expiresIn: payload.exp - payload.iat,
             }, payload.sub);
             this.logger.endOperation('generateRefreshToken', operationId, true);
             return token;

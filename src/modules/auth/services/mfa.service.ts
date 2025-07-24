@@ -316,6 +316,15 @@ export class MfaService implements IMfaService {
     const operationId = this.logger.startOperation('requiresMfa', { userId, riskScore });
 
     try {
+      // 🔧 NOUVEAU : Vérifier variables d'environnement
+      const mfaEnabled = process.env.MFA_ENABLED !== 'false';
+      const forceDisabled = process.env.MFA_FORCE_DISABLED === 'true';
+      
+      if (!mfaEnabled || forceDisabled) {
+        this.logger.endOperation('requiresMfa', operationId, true);
+        return false; // MFA désactivé globalement
+      }
+
       // 1. Vérifier si utilisateur a MFA configuré
       const hasMfaConfigured = await this.userHasMfaConfigured(userId);
       if (!hasMfaConfigured) {

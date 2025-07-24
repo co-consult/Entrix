@@ -1,6 +1,6 @@
 // src/modules/auth/services/auth.service.ts
 
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
@@ -17,8 +17,10 @@ import {
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
+import { EmailVerificationService } from './email-verification.service';
 import { CryptoUtil } from '../utils/crypto.util';
 import { DeviceUtil } from '../utils/device.util';
+
 import { 
   InvalidCredentialsException,
   EmailAlreadyExistsException,
@@ -45,6 +47,7 @@ export class AuthService implements IAuthService {
     private readonly email: EmailService,
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
+    private readonly emailVerificationService: EmailVerificationService,
     private readonly securityService: SecurityService,
     loggerService: LoggerService,
   ) {
@@ -52,7 +55,7 @@ export class AuthService implements IAuthService {
   }
 
   /**
-   * Authentification login complète
+   * Authentification login complète avec logs de debug détaillés
    * ✅ CORRIGÉ : Signatures méthodes, types et relations Prisma
    */
   async login(loginData: ILoginRequest, context?: { 
@@ -67,11 +70,32 @@ export class AuthService implements IAuthService {
     });
 
     try {
+      // 🔍 DEBUG : Log des données d'entrée
+      console.log('🔍 DEBUG LOGIN - Données d\'entrée:', {
+        email: loginData.email,
+        hasPassword: !!loginData.password,
+        passwordLength: loginData.password?.length,
+        rememberMe: loginData.rememberMe,
+        deviceFingerprint: loginData.deviceFingerprint,
+        context: {
+          ipAddress: context?.ipAddress,
+          userAgent: context?.userAgent,
+          deviceFingerprint: context?.deviceFingerprint,
+        }
+      });
+
       this.logger.info('Login attempt started', JSON.stringify({
         email: loginData.email,
         ipAddress: context?.ipAddress,
         hasDeviceFingerprint: !!context?.deviceFingerprint,
       }));
+
+      // 🔍 DEBUG : Avant validation utilisateur
+      console.log('🔍 DEBUG LOGIN - Avant validateUser avec:', {
+        email: loginData.email,
+        passwordProvided: !!loginData.password,
+        contextProvided: !!context
+      });
 
       // 1. Validation utilisateur et mot de passe
       const user = await this.validateUser(
@@ -80,24 +104,65 @@ export class AuthService implements IAuthService {
         context
       );
 
+      // 🔍 DEBUG : Résultat validateUser
+      console.log('🔍 DEBUG LOGIN - Résultat validateUser:', {
+        userFound: !!user,
+        userId: user?.id,
+        userEmail: user?.email,
+        userActive: user?.isActive,
+        userRoles: user?.roles,
+        userPermissions: user?.permissions
+      });
+
       if (!user) {
+        // 🔍 DEBUG : User null - analyser pourquoi
+        console.log('🔍 DEBUG LOGIN - validateUser a retourné null, causes possibles:');
+        console.log('  1. Email inexistant en base');
+        console.log('  2. Mot de passe incorrect');
+        console.log('  3. Compte inactif');
+        console.log('  4. Email non vérifié (si requis)');
+        console.log('  5. Erreur dans le hashage/comparaison');
+
         await this.handleFailedLogin(loginData.email, context);
+        
+        // 🔍 DEBUG : Avant de throw InvalidCredentialsException
+        console.log('🔍 DEBUG LOGIN - Throwing InvalidCredentialsException pour email:', loginData.email);
+        
         throw new InvalidCredentialsException();
       }
 
+      // 🔍 DEBUG : User trouvé, continuons
+      console.log('🔍 DEBUG LOGIN - User validé, continuation du processus');
+
       // 2. Construire informations device
-      // ✅ CORRIGÉ : deviceFingerprint est maintenant dans IDeviceInfo
+      console.log('🔍 DEBUG LOGIN - Construction deviceInfo');
       const deviceInfo: IDeviceInfo = DeviceUtil.normalizeDeviceInfo({
         userAgent: context?.userAgent || 'unknown',
         ipAddress: context?.ipAddress || 'unknown',
         deviceFingerprint: context?.deviceFingerprint || loginData.deviceFingerprint,
       });
 
+      console.log('🔍 DEBUG LOGIN - DeviceInfo créé:', {
+        userAgent: deviceInfo.userAgent,
+        ipAddress: deviceInfo.ipAddress,
+        deviceFingerprint: deviceInfo.deviceFingerprint,
+        geolocation: deviceInfo.geolocation
+      });
+
       // 3. Évaluation de risque sécurité
+      console.log('🔍 DEBUG LOGIN - Évaluation du risque sécurité');
       const riskAssessment = await this.securityService.assessRisk(user.id, deviceInfo);
+      
+      console.log('🔍 DEBUG LOGIN - Risk assessment:', {
+        score: riskAssessment.score,
+        requiresMfa: riskAssessment.requiresMfa,
+        factors: riskAssessment.factors
+      });
 
       // 4. Vérifier si MFA requis basé sur le score de risque
       if (riskAssessment.requiresMfa) {
+        console.log('🔍 DEBUG LOGIN - MFA requis, création challenge');
+        
         // Retourner challenge MFA
         const challengeToken = CryptoUtil.generateSecureToken(32);
         await this.redis.setCache(`mfa_challenge:${challengeToken}`, {
@@ -107,7 +172,8 @@ export class AuthService implements IAuthService {
           expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
         }, 300);
 
-        // ✅ CORRIGÉ : endOperation avec 5 paramètres
+        console.log('🔍 DEBUG LOGIN - Challenge MFA créé avec token:', challengeToken);
+
         this.logger.endOperation('login', operationId, false, undefined, { reason: 'mfa_required' });
 
         return {
@@ -126,24 +192,40 @@ export class AuthService implements IAuthService {
       }
 
       // 5. Créer session et tokens
+      console.log('🔍 DEBUG LOGIN - Création session');
       const session = await this.sessionService.createSession(
         user.id,
         deviceInfo,
         loginData.rememberMe
       );
 
-      // ✅ CORRIGÉ : generateTokenPair avec paramètres corrects
+      console.log('🔍 DEBUG LOGIN - Session créée:', {
+        sessionId: session.id,
+        userId: session.user_id,
+        expiresAt: session.expires_at,
+        isActive: session.is_active
+      });
+
+      console.log('🔍 DEBUG LOGIN - Génération tokens JWT');
       const tokens = await this.tokenService.generateTokenPair(
         user.id,
         user.email,
         session.id,
         loginData.rememberMe,
-        deviceInfo.deviceFingerprint, // ✅ CORRIGÉ : deviceFingerprint existe dans IDeviceInfo
+        deviceInfo.deviceFingerprint,
         user.roles,
         user.permissions
       );
 
+      console.log('🔍 DEBUG LOGIN - Tokens générés:', {
+        hasAccessToken: !!tokens.accessToken,
+        hasRefreshToken: !!tokens.refreshToken,
+        tokenType: tokens.tokenType,
+        expiresIn: tokens.expiresIn
+      });
+
       // 6. Mettre à jour last_login selon schema.prisma
+      console.log('🔍 DEBUG LOGIN - Mise à jour last_login');
       await this.updateLastLogin(user.id, deviceInfo.ipAddress);
 
       // 7. Logger succès login
@@ -156,7 +238,8 @@ export class AuthService implements IAuthService {
         deviceFingerprint: deviceInfo.deviceFingerprint,
       }, user.id);
 
-      // ✅ CORRIGÉ : endOperation avec 5 paramètres
+      console.log('🔍 DEBUG LOGIN - Login réussi pour user:', user.id);
+
       this.logger.endOperation('login', operationId, true);
 
       return {
@@ -178,16 +261,24 @@ export class AuthService implements IAuthService {
       };
 
     } catch (error) {
-      // ✅ CORRIGÉ : endOperation avec paramètres corrects et error avec JSON.stringify
+      // 🔍 DEBUG : Log de l'erreur détaillée
+      console.log('🔍 DEBUG LOGIN - Erreur capturée:', {
+        errorType: error.constructor.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        email: loginData.email
+      });
+
       this.logger.endOperation('login', operationId, false, undefined, { error: error.message });
       
       if (error instanceof InvalidCredentialsException || 
           error instanceof AccountLockedException ||
           error instanceof EmailNotVerifiedException) {
+        console.log('🔍 DEBUG LOGIN - Erreur attendue:', error.constructor.name);
         throw error;
       }
 
-      // ✅ CORRIGÉ : logger.error avec error.stack et JSON.stringify pour objets
+      console.log('🔍 DEBUG LOGIN - Erreur inattendue, conversion en UnauthorizedException');
       this.logger.error('Login failed with unexpected error', error.stack, 'AuthService', JSON.stringify({
         email: loginData.email,
       }));
@@ -199,12 +290,15 @@ export class AuthService implements IAuthService {
    * Inscription utilisateur
    * ✅ CORRIGÉ : Méthodes email et crypto, relations Prisma, types
    */
-  async register(registerData: IRegisterRequest): Promise<IRegisterResult> {
-    const operationId = this.logger.startOperation('register', {
-      email: registerData.email,
-      firstName: registerData.firstName,
-      lastName: registerData.lastName,
-    });
+  async register(
+  registerData: IRegisterRequest, 
+  clientInfo?: { ip: string; userAgent: string }  // ✅ Ajouter paramètre clientInfo
+): Promise<IRegisterResult> {
+  const operationId = this.logger.startOperation('register', {
+    email: registerData.email,
+    firstName: registerData.firstName,
+    lastName: registerData.lastName,
+  });
 
     try {
       this.logger.info('Registration attempt started', JSON.stringify({
@@ -252,20 +346,18 @@ export class AuthService implements IAuthService {
         },
       });
 
-      // 6. Stocker token vérification en Redis
-      await this.redis.setCache(`email_verification:${verificationToken}`, {
-        userId: user.id,
-        email: user.email,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
-      }, 24 * 60 * 60); // TTL 24h
+      // 6. ✅ NOUVEAU : Générer token de vérification avec EmailVerificationService
+    const verificationTokenData = await this.emailVerificationService.generateVerificationToken(
+      user.id,
+      user.email
+    );
 
-      // 7. Envoyer email de bienvenue avec vérification
-      // ✅ CORRIGÉ : sendWelcomeEmail avec signature correcte
-      await this.email.sendWelcomeEmail(
-        user.email, 
-        user.first_name, // Utilise first_name de la DB
-        verificationToken
-      );
+      // 7. ✅ NOUVEAU : Envoyer email de bienvenue avec lien de vérification
+    await this.email.sendWelcomeEmail(
+      user.email,
+      user.first_name,
+      verificationTokenData.token // ✅ Token en clair pour l'URL
+    );
 
       // 8. Traitement onboarding si secret fourni
       let onboardingResult;
@@ -276,18 +368,20 @@ export class AuthService implements IAuthService {
         );
       }
 
-      // 9. Générer tokens pour connexion automatique
-      const deviceInfo: IDeviceInfo = DeviceUtil.normalizeDeviceInfo({
-        userAgent: 'registration',
-        ipAddress: 'unknown',
-      });
+      // 9. ✅ CORRIGÉ : Générer tokens avec IP réelle de la requête
+    const realIpAddress = this.validateAndNormalizeIp(clientInfo?.ip || 'unknown');
+    
+    const deviceInfo: IDeviceInfo = DeviceUtil.normalizeDeviceInfo({
+      userAgent: clientInfo?.userAgent || 'registration',
+      ipAddress: realIpAddress, // ✅ Utilise IP réelle ou fallback valide
+    });
 
-      const session = await this.sessionService.createSession(user.id, deviceInfo);
-      const tokens = await this.tokenService.generateTokenPair(
-        user.id,
-        user.email,
-        session.id
-      );
+    const session = await this.sessionService.createSession(user.id, deviceInfo);
+    const tokens = await this.tokenService.generateTokenPair(
+      user.id,
+      user.email,
+      session.id
+    );
 
       // 10. Logger inscription réussie
       this.logger.logBusinessEvent('USER_REGISTERED', {
@@ -306,15 +400,16 @@ export class AuthService implements IAuthService {
       const userProfile: IUserProfile = this.mapDbUserToProfile(user);
 
       return {
-        success: true,
-        user: userProfile,
-        tokens,
-        verification: {
-          emailSent: true,
-          verificationRequired: true,
-        },
-        onboarding: onboardingResult,
-      };
+      success: true,
+      user: userProfile,
+      tokens,
+      verification: {
+        emailSent: true,
+        verificationRequired: true,
+        tokenId: verificationTokenData.id, // ✅ ID pour tracking
+      },
+      onboarding: onboardingResult,
+    };
 
     } catch (error) {
       // ✅ CORRIGÉ : endOperation et error avec JSON.stringify
@@ -594,4 +689,278 @@ async validateUser(
     // Cette méthode sera implémentée avec le service MFA
     throw new Error('MFA verification not implemented yet');
   }
+
+  /**
+ * ✅ NOUVELLE MÉTHODE : Valide et normalise une adresse IP
+ */
+private validateAndNormalizeIp(ip: string): string {
+  // Nettoyer l'IP (supprimer espaces, préfixes IPv6, etc.)
+  const cleanedIp = ip.trim();
+  
+  // Cas spéciaux à traiter
+  if (cleanedIp === 'unknown' || cleanedIp === '' || !cleanedIp) {
+    return '127.0.0.1'; // Localhost par défaut
+  }
+  
+  // Gérer les IPs avec préfixe IPv6-mapped IPv4
+  if (cleanedIp.startsWith('::ffff:')) {
+    const ipv4 = cleanedIp.replace('::ffff:', '');
+    if (this.isValidIpv4(ipv4)) {
+      return ipv4;
+    }
+  }
+  
+  // Valider IPv4
+  if (this.isValidIpv4(cleanedIp)) {
+    return cleanedIp;
+  }
+  
+  // Valider IPv6
+  if (this.isValidIpv6(cleanedIp)) {
+    return cleanedIp;
+  }
+  
+  // Si aucune validation ne passe, utiliser localhost
+  this.logger.warn('Invalid IP address provided, using localhost', JSON.stringify({
+    originalIp: ip,
+    cleanedIp,
+  }));
+  
+  return '127.0.0.1';
+}
+
+/**
+ * ✅ NOUVELLE MÉTHODE : Valide une adresse IPv4
+ */
+private isValidIpv4(ip: string): boolean {
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  return ipv4Regex.test(ip);
+}
+
+/**
+ * ✅ NOUVELLE MÉTHODE : Valide une adresse IPv6 (basique)
+ */
+private isValidIpv6(ip: string): boolean {
+  // Validation IPv6 simplifiée (pour cas complexes, utiliser une librairie)
+  const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$/;
+  return ipv6Regex.test(ip);
+}
+
+
+/**
+ * Vérification d'email mise à jour
+ * ✅ MISE À JOUR : Utilise EmailVerificationService
+ */
+async verifyEmail(token: string): Promise<{
+  success: boolean;
+  verified: boolean;
+  message: string;
+  userId?: string;
+}> {
+  const operationId = this.logger.startOperation('verifyEmail', {
+    tokenLength: token?.length,
+  });
+
+  try {
+    // ✅ DÉLÉGUER à EmailVerificationService
+    const result = await this.emailVerificationService.verifyEmailToken(token);
+
+    this.logger.endOperation('verifyEmail', operationId, result.success, undefined, {
+      verified: result.verified,
+      userId: result.userId,
+    });
+
+    return result;
+
+  } catch (error) {
+    this.logger.endOperation('verifyEmail', operationId, false, undefined, {
+      error: error.message,
+    });
+    
+    this.logger.error(
+      'Email verification failed with unexpected error',
+      error.stack,
+      'AuthService.verifyEmail',
+      JSON.stringify({
+        tokenPrefix: token?.substring(0, 8),
+        error: error.message,
+      })
+    );
+
+    return {
+      success: false,
+      verified: false,
+      message: 'Erreur lors de la vérification de l\'email',
+    };
+  }
+}
+
+/**
+ * ✅ NOUVELLE MÉTHODE : Renvoyer un email de vérification
+ */
+async resendVerificationEmail(userId: string): Promise<{
+  success: boolean;
+  message: string;
+  tokenId?: string;
+}> {
+  const operationId = this.logger.startOperation('resendVerificationEmail', { userId });
+
+  try {
+    // 1. Vérifier que l'utilisateur existe et n'est pas déjà vérifié
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        email_verified: true,
+        first_name: true,
+        is_active: true,
+      },
+    });
+
+    if (!user) {
+      this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
+        reason: 'user_not_found',
+      });
+      
+      return {
+        success: false,
+        message: 'Utilisateur introuvable',
+      };
+    }
+
+    if (user.email_verified) {
+      this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
+        reason: 'already_verified',
+      });
+      
+      return {
+        success: false,
+        message: 'Email déjà vérifié',
+      };
+    }
+
+    if (!user.is_active) {
+      this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
+        reason: 'user_inactive',
+      });
+      
+      return {
+        success: false,
+        message: 'Compte utilisateur inactif',
+      };
+    }
+
+    // 2. Générer nouveau token
+    const verificationTokenData = await this.emailVerificationService.generateVerificationToken(
+      user.id,
+      user.email
+    );
+
+    // 3. Envoyer email de vérification
+    await this.email.sendVerificationEmail(user.email, verificationTokenData.token);
+
+    // 4. Logger l'événement
+    this.logger.logBusinessEvent('EMAIL_VERIFICATION_RESENT', {
+      userId: user.id,
+      email: user.email,
+      tokenId: verificationTokenData.id,
+    }, user.id);
+
+    this.logger.endOperation('resendVerificationEmail', operationId, true);
+
+    return {
+      success: true,
+      message: 'Email de vérification renvoyé',
+      tokenId: verificationTokenData.id,
+    };
+
+  } catch (error) {
+    this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
+      error: error.message,
+    });
+    
+    this.logger.error(
+      'Failed to resend verification email',
+      error.stack,
+      'AuthService.resendVerificationEmail',
+      JSON.stringify({ userId })
+    );
+
+    return {
+      success: false,
+      message: 'Erreur lors de l\'envoi de l\'email de vérification',
+    };
+  }
+}
+
+/**
+ * Récupère le statut de vérification email d'un utilisateur
+ * @param userId ID de l'utilisateur
+ * @returns Statut de vérification avec informations détaillées
+ */
+async getVerificationStatus(userId: string): Promise<{
+  emailVerified: boolean;
+  verifiedAt?: string;
+  canResend: boolean;
+}> {
+  const operationId = this.logger.startOperation('getVerificationStatus', {
+    userId,
+  });
+
+  try {
+    // Récupérer les informations de vérification depuis la base
+    const dbUser = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: {
+        email_verified: true,
+        is_active: true,
+        email: true, // Pour les logs
+      },
+    });
+
+    if (!dbUser) {
+      this.logger.warn('User not found for verification status', JSON.stringify({
+        userId,
+      }));
+      throw new NotFoundException('Utilisateur introuvable');
+    }
+
+    const emailVerified = !!dbUser.email_verified;
+    const canResend = !emailVerified && dbUser.is_active;
+
+    // Logger consultation du statut
+    this.logger.logBusinessEvent('VERIFICATION_STATUS_CHECKED', {
+      userId,
+      emailVerified,
+      canResend,
+      //verifiedAt: dbUser.email_verified?.toISOString(),
+    }, userId);
+
+    this.logger.endOperation('getVerificationStatus', operationId, true);
+
+    return {
+      emailVerified,
+      canResend,
+    };
+
+  } catch (error) {
+    this.logger.endOperation('getVerificationStatus', operationId, false, undefined, {
+      error: error.message,
+    });
+    
+    if (error instanceof NotFoundException) {
+      throw error;
+    }
+
+    this.logger.error(
+      'Failed to get verification status',
+      error.stack,
+      'AuthService.getVerificationStatus',
+      JSON.stringify({ userId })
+    );
+    throw new InternalServerErrorException('Erreur lors de la récupération du statut de vérification');
+  }
+}
+
 }

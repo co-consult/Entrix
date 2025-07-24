@@ -212,8 +212,8 @@ export class UsersService implements IUserService {
           phone: userData.phone || null,
           avatar: userData.avatar || null,
           is_active: userData.isActive ?? true,           // Champ exact du schema
-          email_verified: userData.emailVerified ? new Date() : null, // DateTime? dans schema
-          phone_verified: userData.phoneVerified ? new Date() : null, // DateTime? dans schema
+          email_verified: userData.emailVerified != null, // DateTime? dans schema
+          phone_verified: userData.phoneVerified != null, // DateTime? dans schema
           metadata: userData.metadata || null,
         },
         include: {
@@ -450,8 +450,8 @@ export class UsersService implements IUserService {
         phone: updateData.phone,
         avatar: updateData.avatar,
         is_active: updateData.isActive,
-        email_verified: updateData.emailVerified ? new Date() : undefined,
-        phone_verified: updateData.phoneVerified ? new Date() : undefined,
+        email_verified: updateData.emailVerified != null,
+        phone_verified: updateData.phoneVerified != null,
         last_login: updateData.lastLogin,
         metadata: updateData.metadata as any
       };

@@ -42,6 +42,7 @@ export interface IRegisterResult {
     verification?: {
         emailSent: boolean;
         verificationRequired: boolean;
+        tokenId: string;
     };
     onboarding?: {
         incentiveApplied: boolean;
@@ -49,6 +50,11 @@ export interface IRegisterResult {
         incentiveValue: number;
         migratedTickets: number;
     };
+}
+export interface IVerificationStatus {
+    emailVerified: boolean;
+    verifiedAt?: string;
+    canResend: boolean;
 }
 export interface IAuthService {
     login(loginData: ILoginRequest, context?: {

@@ -6,21 +6,26 @@ import { IAuthService, ILoginResult, IRegisterResult, ILoginRequest, IRegisterRe
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
+import { EmailVerificationService } from './email-verification.service';
 export declare class AuthService implements IAuthService {
     private readonly prisma;
     private readonly redis;
     private readonly email;
     private readonly tokenService;
     private readonly sessionService;
+    private readonly emailVerificationService;
     private readonly securityService;
     private readonly logger;
-    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, securityService: SecurityService, loggerService: LoggerService);
+    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, emailVerificationService: EmailVerificationService, securityService: SecurityService, loggerService: LoggerService);
     login(loginData: ILoginRequest, context?: {
         ipAddress: string;
         userAgent: string;
         deviceFingerprint?: string;
     }): Promise<ILoginResult>;
-    register(registerData: IRegisterRequest): Promise<IRegisterResult>;
+    register(registerData: IRegisterRequest, clientInfo?: {
+        ip: string;
+        userAgent: string;
+    }): Promise<IRegisterResult>;
     validateUser(email: string, password: string, context?: {
         ipAddress?: string;
         userAgent?: string;
@@ -33,4 +38,23 @@ export declare class AuthService implements IAuthService {
     private processOnboardingSecret;
     logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
     verifyMfa(challengeToken: string, code: string, method: string): Promise<ILoginResult>;
+    private validateAndNormalizeIp;
+    private isValidIpv4;
+    private isValidIpv6;
+    verifyEmail(token: string): Promise<{
+        success: boolean;
+        verified: boolean;
+        message: string;
+        userId?: string;
+    }>;
+    resendVerificationEmail(userId: string): Promise<{
+        success: boolean;
+        message: string;
+        tokenId?: string;
+    }>;
+    getVerificationStatus(userId: string): Promise<{
+        emailVerified: boolean;
+        verifiedAt?: string;
+        canResend: boolean;
+    }>;
 }

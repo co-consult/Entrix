@@ -46,6 +46,7 @@ export class TokenService implements ITokenService {
   /**
    * Génère access token JWT
    * Respecte AUTH_CONSTANTS.JWT et sécurité
+   * 🔧 CORRIGÉ : Suppression complète des options qui sont déjà dans le payload
    */
   async generateAccessToken(payload: JwtPayload): Promise<string> {
     const operationId = this.logger.startOperation('generateAccessToken', {
@@ -59,12 +60,12 @@ export class TokenService implements ITokenService {
         throw new Error('Payload JWT invalide pour access token');
       }
 
-      // Signer token avec secret access
+      // ✅ CORRIGÉ : Seul le secret est nécessaire, tout le reste est dans le payload
       const token = this.jwtService.sign(payload, {
         secret: this.accessTokenSecret,
-        expiresIn: AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY,
-        issuer: 'entrix-v3',
-        audience: 'entrix-users',
+        // expiresIn: AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY, // ❌ SUPPRIMÉ - dans payload.exp
+        // issuer: 'entrix-v3',      // ❌ SUPPRIMÉ - dans payload.iss
+        // audience: 'entrix-users', // ❌ SUPPRIMÉ - dans payload.aud
       });
 
       // Logger génération token (sans le token lui-même)
@@ -74,15 +75,12 @@ export class TokenService implements ITokenService {
         expiresIn: AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY,
       }, payload.sub);
 
-      // CORRECTION : endOperation avec signature correcte
       this.logger.endOperation('generateAccessToken', operationId, true);
       return token;
 
     } catch (error) {
-      // CORRECTION : endOperation avec signature correcte
       this.logger.endOperation('generateAccessToken', operationId, false);
       
-      // CORRECTION : logger.error avec JSON.stringify pour les objets
       this.logger.error(
         'Failed to generate access token', 
         error.stack, 
@@ -99,6 +97,7 @@ export class TokenService implements ITokenService {
   /**
    * Génère refresh token JWT avec rotation
    * Rotation automatique pour sécurité renforcée
+   * 🔧 CORRIGÉ : Suppression complète des options qui sont déjà dans le payload
    */
   async generateRefreshToken(payload: JwtRefreshPayload): Promise<string> {
     const operationId = this.logger.startOperation('generateRefreshToken', {
@@ -113,15 +112,12 @@ export class TokenService implements ITokenService {
         throw new Error('Payload JWT invalide pour refresh token');
       }
 
-      // Calculer durée depuis payload
-      const expiresInSeconds = payload.exp - payload.iat;
-
-      // Signer refresh token
+      // ✅ CORRIGÉ : Seul le secret est nécessaire, tout le reste est dans le payload
       const token = this.jwtService.sign(payload, {
         secret: this.refreshTokenSecret,
-        expiresIn: expiresInSeconds,
-        issuer: 'entrix-v3',
-        audience: 'entrix-refresh',
+        // expiresIn: expiresInSeconds, // ❌ SUPPRIMÉ - dans payload.exp
+        // issuer: 'entrix-v3',         // ❌ SUPPRIMÉ - dans payload.iss
+        // audience: 'entrix-refresh',  // ❌ SUPPRIMÉ - dans payload.aud
       });
 
       // Stocker mapping tokenId -> userId dans Redis pour rotation
@@ -137,18 +133,15 @@ export class TokenService implements ITokenService {
         userId: payload.sub,
         sessionId: payload.sessionId,
         tokenId: payload.tokenId,
-        expiresIn: expiresInSeconds,
+        expiresIn: payload.exp - payload.iat,
       }, payload.sub);
 
-      // CORRECTION : endOperation avec signature correcte
       this.logger.endOperation('generateRefreshToken', operationId, true);
       return token;
 
     } catch (error) {
-      // CORRECTION : endOperation avec signature correcte
       this.logger.endOperation('generateRefreshToken', operationId, false);
       
-      // CORRECTION : logger.error avec JSON.stringify pour les objets
       this.logger.error(
         'Failed to generate refresh token', 
         error.stack, 

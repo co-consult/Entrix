@@ -9,7 +9,8 @@ import {
   HttpCode,
   HttpStatus,
   ValidationPipe,
-  UsePipes
+  UsePipes,
+  Get
 } from '@nestjs/common';
 import { 
   ApiTags, 
@@ -18,6 +19,8 @@ import {
   ApiBearerAuth,
   ApiBody
 } from '@nestjs/swagger';
+import { Query, BadRequestException } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { AuthService } from '../services/auth.service';
 import { 
@@ -44,9 +47,9 @@ import {
 import { 
   RateLimitLogin,
   AuditCritical,
-  RateLimit
+  RateLimit,
 } from '../decorators';
-import { IUserProfile } from '../interfaces';
+import { IUserProfile,IVerificationStatus } from '../interfaces';
 
 /**
  * Auth Controller Entrix V3.0 - Grade A+
@@ -163,60 +166,50 @@ export class AuthController {
   }
 
   /**
-   * POST /auth/register
-   * Inscription nouveau utilisateur
-   * ✅ CORRIGÉ : Utilise RegisterResponseMapper pour conversion IRegisterResult → RegisterResponseDto
-   */
-  @Public()
-  @Post('register')
-  @HttpCode(HttpStatus.CREATED)
-  @RateLimit({ limit: 3, windowMs: 3600000 }) // 3 inscriptions/heure
-  @AuditCritical('user_registration')
-  @ApiOperation({ 
-    summary: 'Inscription utilisateur',
-    description: 'Création compte avec validation complète et onboarding'
-  })
-  @ApiBody({ type: RegisterDto })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'Inscription réussie',
-    type: RegisterResponseDto
-  })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'Données invalides'
-  })
-  @ApiResponse({ 
-    status: 409, 
-    description: 'Email déjà utilisé'
-  })
-  async register(
-    @Body() registerDto: RegisterDto,
-    @ClientInfo() clientInfo: { ip: string; userAgent: string }
-  ): Promise<RegisterResponseDto> {
-    const operationId = this.logger.startOperation('POST /auth/register', {
-      email: registerDto.email,
-      firstName: registerDto.firstName,
-      lastName: registerDto.lastName,
-      hasOnboardingSecret: !!registerDto.onboardingSecret,
-    });
+ * POST /auth/register
+ * ✅ CORRIGÉ : Passe les informations client au service
+ */
+@Public()
+@Post('register')
+@HttpCode(HttpStatus.CREATED)
+@RateLimit({ limit: 3, windowMs: 3600000 })
+@AuditCritical('user_registration')
+@ApiOperation({ 
+  summary: 'Inscription utilisateur',
+  description: 'Création compte avec validation complète et onboarding'
+})
+@ApiBody({ type: RegisterDto })
+@ApiResponse({ 
+  status: 201, 
+  description: 'Inscription réussie',
+  type: RegisterResponseDto
+})
+async register(
+  @Body() registerDto: RegisterDto,
+  @ClientInfo() clientInfo: { ip: string; userAgent: string }
+): Promise<RegisterResponseDto> {
+  const operationId = this.logger.startOperation('POST /auth/register', {
+    email: registerDto.email,
+    firstName: registerDto.firstName,
+    lastName: registerDto.lastName,
+    hasOnboardingSecret: !!registerDto.onboardingSecret,
+    clientIp: clientInfo.ip, // ✅ Logger l'IP pour debug
+  });
 
-    try {
-      // Appeler service inscription
-      const result = await this.authService.register(registerDto);
+  try {
+    // ✅ CORRIGÉ : Passer clientInfo au service
+    const result = await this.authService.register(registerDto, clientInfo);
 
-      this.logger.endOperation('register', operationId, true);
+    this.logger.endOperation('register', operationId, true);
 
-      // ✅ CORRIGÉ : Utiliser RegisterResponseMapper pour conversion complète
-      const response: RegisterResponseDto = RegisterResponseMapper.toDto(result);
+    const response: RegisterResponseDto = RegisterResponseMapper.toDto(result);
+    return response;
 
-      return response;
-
-    } catch (error) {
-      this.logger.endOperation('register', operationId, false, undefined, { error: error.message });
-      throw error;
-    }
+  } catch (error) {
+    this.logger.endOperation('register', operationId, false, undefined, { error: error.message });
+    throw error;
   }
+}
 
   /**
    * POST /auth/logout
@@ -280,105 +273,165 @@ export class AuthController {
     }
   }
 
-  /**
-   * POST /auth/verify-email
-   * Vérification email utilisateur
-   */
-  @Public()
-  @Post('verify-email')
-  @HttpCode(HttpStatus.OK)
-  @RateLimit({ limit: 5, windowMs: 300000 }) // 5 tentatives/5min
-  @AuditCritical('email_verification')
-  @ApiOperation({ 
-    summary: 'Vérification email',
-    description: 'Activation compte via token de vérification'
-  })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Email vérifié avec succès'
-  })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'Token invalide ou expiré'
-  })
-  async verifyEmail(
-    @Body() verifyDto: { token: string }
-  ): Promise<{
+ /**
+ * GET /auth/verify-email
+ * Vérification d'email via token (lien cliqué)
+ */
+    @Get('verify-email')
+    @Public()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+    summary: 'Vérifier email utilisateur',
+    description: 'Vérifie l\'email utilisateur via token reçu par email'
+    })
+    @ApiQuery({
+    name: 'token',
+    description: 'Token de vérification reçu par email',
+    required: true,
+    type: String,
+    })
+    @ApiResponse({
+    status: 200,
+    description: 'Résultat de la vérification',
+    schema: {
+        example: {
+        success: true,
+        verified: true,
+        message: 'Email vérifié avec succès',
+        userId: 'uuid'
+        }
+    }
+    })
+    async verifyEmail(
+    @Query('token') token: string
+    ): Promise<{
     success: boolean;
-    data: { verified: boolean; message: string };
-  }> {
-    const operationId = this.logger.startOperation('POST /auth/verify-email', {
-      tokenLength: verifyDto.token?.length,
+    verified: boolean;
+    message: string;
+    userId?: string;
+    }> {
+    const operationId = this.logger.startOperation('GET /auth/verify-email', {
+        tokenLength: token?.length,
     });
 
     try {
-      // TODO: Implémenter dans AuthService
-      // const result = await this.authService.verifyEmail(verifyDto.token);
+        const result = await this.authService.verifyEmail(token);
 
-      this.logger.endOperation('verifyEmail', operationId, true);
+        this.logger.endOperation('verifyEmail', operationId, result.success, undefined, {
+        verified: result.verified,
+        userId: result.userId,
+        });
 
-      return {
-        success: true,
-        data: {
-          verified: true,
-          message: 'Email vérifié avec succès',
-        },
-      };
+        return result;
 
     } catch (error) {
-      this.logger.endOperation('verifyEmail', operationId, false, undefined, { error: error.message });
-      throw error;
+        this.logger.endOperation('verifyEmail', operationId, false, undefined, {
+        error: error.message,
+        });
+        throw error;
     }
-  }
+    }
 
   /**
-   * POST /auth/resend-verification
-   * Renvoyer email de vérification
-   */
-  @Public()
-  @Post('resend-verification')
-  @HttpCode(HttpStatus.OK)
-  @RateLimit({ limit: 3, windowMs: 300000 }) // 3 tentatives/5min
-  @AuditCritical('resend_verification')
-  @ApiOperation({ 
-    summary: 'Renvoyer email vérification',
-    description: 'Renvoie un nouveau token de vérification par email'
-  })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Email envoyé'
-  })
-  @ApiResponse({ 
-    status: 429, 
-    description: 'Trop de tentatives'
-  })
-  async resendVerification(
-    @Body() resendDto: { email: string }
-  ): Promise<{
-    success: boolean;
-    data: { sent: boolean; message: string };
-  }> {
-    const operationId = this.logger.startOperation('POST /auth/resend-verification', {
-      email: resendDto.email,
-    });
-
-    try {
-      // TODO: Implémenter dans AuthService
-      // const result = await this.authService.resendVerificationEmail(resendDto.email);
-
-      this.logger.endOperation('resendVerification', operationId, true);
-
-      return {
-        success: true,
-        data: {
-          sent: true,
-          message: 'Email de vérification envoyé si compte existant',
-        },
-      };
-
-    } catch (error) {
-      this.logger.endOperation('resendVerification', operationId, false, undefined, { error: error.message });
-      throw error;
+ * POST /auth/resend-verification
+ * Renvoyer email de vérification
+ */
+@Post('resend-verification')
+@UseGuards(JwtAuthGuard)
+@HttpCode(HttpStatus.OK)
+@RateLimit({ limit: 3, windowMs: 300000 }) // 3 tentatives/5 minutes
+@ApiOperation({
+  summary: 'Renvoyer email de vérification',
+  description: 'Génère et envoie un nouveau token de vérification d\'email'
+})
+@ApiBearerAuth()
+@ApiResponse({
+  status: 200,
+  description: 'Email de vérification renvoyé',
+  schema: {
+    example: {
+      success: true,
+      message: 'Email de vérification renvoyé',
+      tokenId: 'uuid'
     }
   }
+})
+@ApiResponse({
+  status: 400,
+  description: 'Email déjà vérifié ou utilisateur inactif'
+})
+@ApiResponse({
+  status: 429,
+  description: 'Trop de tentatives'
+})
+async resendVerificationEmail(
+  @CurrentUser() user: IUserProfile
+): Promise<{
+  success: boolean;
+  message: string;
+  tokenId?: string;
+}> {
+  const operationId = this.logger.startOperation('POST /auth/resend-verification', {
+    userId: user.id,
+  });
+
+  try {
+    const result = await this.authService.resendVerificationEmail(user.id);
+
+    this.logger.endOperation('resendVerificationEmail', operationId, result.success, undefined, {
+      tokenId: result.tokenId,
+    });
+
+    return result;
+
+  } catch (error) {
+    this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * GET /auth/verification-status
+ * Statut de vérification de l'utilisateur connecté
+ */
+@Get('verification-status')
+@UseGuards(JwtAuthGuard)
+@ApiOperation({
+  summary: 'Statut de vérification email',
+  description: 'Obtient le statut de vérification email de l\'utilisateur connecté'
+})
+@ApiBearerAuth()
+@ApiResponse({
+  status: 200,
+  description: 'Statut de vérification',
+  schema: {
+    example: {
+      emailVerified: true,
+      verifiedAt: '2025-07-24T10:30:00.000Z',
+      canResend: false
+    }
+  }
+})
+async getVerificationStatus(
+  @CurrentUser() user: IUserProfile
+): Promise<IVerificationStatus> {
+  const operationId = this.logger.startOperation('GET /auth/verification-status', {
+    userId: user.id,
+  });
+
+  try {
+    const verificationStatus = await this.authService.getVerificationStatus(user.id);
+    this.logger.endOperation('getVerificationStatus', operationId, true);
+    return verificationStatus;
+
+  } catch (error) {
+    this.logger.endOperation('getVerificationStatus', operationId, false, undefined, {
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
 }

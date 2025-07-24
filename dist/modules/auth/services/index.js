@@ -21,4 +21,5 @@ __exportStar(require("./password.service"), exports);
 __exportStar(require("./mfa.service"), exports);
 __exportStar(require("./security.service"), exports);
 __exportStar(require("./device.service"), exports);
+__exportStar(require("./email-verification.service"), exports);
 //# sourceMappingURL=index.js.map
