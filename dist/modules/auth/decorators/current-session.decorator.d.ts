@@ -6,7 +6,7 @@ export interface SessionContext {
     issuedAt: number;
     expiresAt: number;
 }
-export declare const CurrentSession: (...dataOrPipes: (keyof SessionContext | import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>>)[]) => ParameterDecorator;
+export declare const CurrentSession: (...dataOrPipes: (import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>> | keyof SessionContext)[]) => ParameterDecorator;
 export declare const SessionId: (...dataOrPipes: unknown[]) => ParameterDecorator;
 export declare const DeviceFingerprint: (...dataOrPipes: unknown[]) => ParameterDecorator;
-export declare const ClientInfo: (...dataOrPipes: ("userAgent" | "ip" | import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>>)[]) => ParameterDecorator;
+export declare const ClientInfo: (...dataOrPipes: (import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>> | "userAgent" | "ip")[]) => ParameterDecorator;
