@@ -1,3 +1,4 @@
+export type SessionType = 'reused' | 'refreshed' | 'new';
 export interface IUserSession {
     id: string;
     session_token: string;
@@ -19,7 +20,7 @@ export interface ISessionInfo {
     isActive: boolean;
     lastActivity: string;
     isReused?: boolean;
-    sessionType?: 'reused' | 'refreshed' | 'new';
+    sessionType?: SessionType;
 }
 export interface IDeviceInfo {
     deviceId?: string;
@@ -44,24 +45,9 @@ export interface ITokenPair {
 export interface ISessionLoginResult {
     session: IUserSession;
     tokens: ITokenPair;
-    type: 'reused' | 'refreshed' | 'new';
+    type: SessionType;
     isReused: boolean;
-}
-export interface ISessionCompatibility {
-    session: IUserSession;
-    score: number;
-    factors: {
-        deviceFingerprint: boolean;
-        ipAddress: boolean;
-        userAgent: boolean;
-        recentActivity: boolean;
-    };
-}
-export interface ISessionStrategy {
-    reuseThresholdMinutes: number;
-    maxConcurrentSessions: number;
-    preferDeviceFingerprint: boolean;
-    allowIpBasedMatching: boolean;
+    tokensReused?: boolean;
 }
 export interface ISessionService {
     createSession(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<IUserSession>;
@@ -72,7 +58,4 @@ export interface ISessionService {
     getUserActiveSessions(userId: string): Promise<IUserSession[]>;
     cleanupExpiredSessions(): Promise<number>;
     handleUserLogin(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<ISessionLoginResult>;
-    findCompatibleSession(sessions: IUserSession[], deviceInfo: IDeviceInfo, rememberMe: boolean): Promise<IUserSession | null>;
-    refreshExistingSession(session: IUserSession, deviceInfo: IDeviceInfo, rememberMe: boolean): Promise<IUserSession>;
-    cleanupExpiredSessionsForUser(userId: string): Promise<number>;
 }

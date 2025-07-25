@@ -12,16 +12,19 @@ import {
   ILoginRequest,
   IRegisterRequest,
   IUserProfile,
-  IDeviceInfo
+  IDeviceInfo,
+  ISessionLoginResult
 } from '../interfaces';
-import { ITokenPair } from '../interfaces/session.interface'; // ✅ AJOUTÉ : Import manquant
+import { ITokenPair } from '../interfaces/session.interface';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
 import { EmailVerificationService } from './email-verification.service';
-import { PasswordService } from './password.service'; // ✅ NOUVEAU : Service centralisé
-import { CryptoUtil } from '../utils/crypto.util';
+import { PasswordService } from './password.service';
 import { DeviceUtil } from '../utils/device.util';
+import { MfaService } from './mfa.service';
+import { IMfaChallenge } from '../interfaces/mfa.interface';
+
 
 import { 
   InvalidCredentialsException,
@@ -31,17 +34,7 @@ import {
   EmailNotVerifiedException
 } from '../exceptions/auth.exceptions';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
-import { SECURITY_CONSTANTS } from '../constants/security.constants'; // ✅ AJOUTÉ : Import pour RATE_LIMITS
-
-/**
- * ✅ Interface pour challenge MFA typé
- */
-interface IMfaChallenge {
-  userId: string;
-  email: string;
-  deviceInfo: IDeviceInfo;
-  expiresAt: Date;
-}
+import { SECURITY_CONSTANTS } from '../constants/security.constants';
 
 /**
  * Auth Service Entrix V3.0 - Grade A+
@@ -66,181 +59,197 @@ export class AuthService implements IAuthService {
     private readonly sessionService: SessionService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly securityService: SecurityService,
-    private readonly passwordService: PasswordService, // ✅ NOUVEAU : Service centralisé
+    private readonly passwordService: PasswordService,
+    private readonly mfaService: MfaService,
     loggerService: LoggerService,
   ) {
     this.logger = loggerService.createChildLogger('AuthService');
   }
 
-  /**
-   * ✅ AMÉLIORÉ : Login avec gestion intelligente des sessions existantes
-   * Authentification login complète avec réutilisation des sessions actives
-   */
-  async login(loginData: ILoginRequest, context?: { 
-    ipAddress: string; 
-    userAgent: string; 
-    deviceFingerprint?: string 
-  }): Promise<ILoginResult> {
-    const operationId = this.logger.startOperation('login', {
+ /**
+ * ✅ OPTIMISÉ : Login avec gestion intelligente des sessions et MfaService
+ * Authentification login complète avec réutilisation des sessions actives
+ */
+async login(loginData: ILoginRequest, context?: { 
+  ipAddress: string; 
+  userAgent: string; 
+  deviceFingerprint?: string 
+}): Promise<ILoginResult> {
+  const operationId = this.logger.startOperation('login', {
+    email: loginData.email,
+    rememberMe: loginData.rememberMe,
+    hasDeviceFingerprint: !!loginData.deviceFingerprint,
+  });
+
+  try {
+    // 🔍 DEBUG : Log des données d'entrée
+    console.log('🔍 DEBUG LOGIN - Données d\'entrée:', {
       email: loginData.email,
+      hasPassword: !!loginData.password,
+      passwordLength: loginData.password?.length,
       rememberMe: loginData.rememberMe,
-      hasDeviceFingerprint: !!loginData.deviceFingerprint,
+      deviceFingerprint: loginData.deviceFingerprint,
+      context: {
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+        deviceFingerprint: context?.deviceFingerprint,
+      }
     });
 
-    try {
-      // 🔍 DEBUG : Log des données d'entrée
-      console.log('🔍 DEBUG LOGIN - Données d\'entrée:', {
-        email: loginData.email,
-        hasPassword: !!loginData.password,
-        passwordLength: loginData.password?.length,
-        rememberMe: loginData.rememberMe,
-        deviceFingerprint: loginData.deviceFingerprint,
-        context: {
-          ipAddress: context?.ipAddress,
-          userAgent: context?.userAgent,
-          deviceFingerprint: context?.deviceFingerprint,
-        }
-      });
+    this.logger.info('Login attempt started', JSON.stringify({
+      email: loginData.email,
+      ipAddress: context?.ipAddress,
+      hasDeviceFingerprint: !!context?.deviceFingerprint,
+    }));
 
-      this.logger.info('Login attempt started', JSON.stringify({
-        email: loginData.email,
-        ipAddress: context?.ipAddress,
-        hasDeviceFingerprint: !!context?.deviceFingerprint,
-      }));
+    // 1. Validation utilisateur et mot de passe
+    const user = await this.validateUser(
+      loginData.email, 
+      loginData.password,
+      context
+    );
 
-      // 1. Validation utilisateur et mot de passe
-      const user = await this.validateUser(
-        loginData.email, 
-        loginData.password,
-        context
-      );
+    if (!user) {
+      await this.handleFailedLogin(loginData.email, context);
+      throw new InvalidCredentialsException();
+    }
 
-      if (!user) {
-        await this.handleFailedLogin(loginData.email, context);
-        throw new InvalidCredentialsException();
-      }
+    console.log('🔍 DEBUG LOGIN - User validé, ID:', user.id);
 
-      console.log('🔍 DEBUG LOGIN - User validé, ID:', user.id);
+    // 2. Construire informations device
+    const deviceInfo: IDeviceInfo = DeviceUtil.normalizeDeviceInfo({
+      userAgent: context?.userAgent || 'unknown',
+      ipAddress: context?.ipAddress || 'unknown',
+      deviceFingerprint: context?.deviceFingerprint || loginData.deviceFingerprint,
+    });
 
-      // 2. Construire informations device
-      const deviceInfo: IDeviceInfo = DeviceUtil.normalizeDeviceInfo({
-        userAgent: context?.userAgent || 'unknown',
-        ipAddress: context?.ipAddress || 'unknown',
-        deviceFingerprint: context?.deviceFingerprint || loginData.deviceFingerprint,
-      });
+    // 3. Évaluation de risque sécurité
+    const riskAssessment = await this.securityService.assessRisk(user.id, deviceInfo);
 
-      // 3. Évaluation de risque sécurité
-      const riskAssessment = await this.securityService.assessRisk(user.id, deviceInfo);
+    console.log('🔍 DEBUG LOGIN - Risk assessment:', {
+      score: riskAssessment.score,
+      requiresMfa: riskAssessment.requiresMfa,
+      factors: riskAssessment.factors
+    });
 
-      console.log('🔍 DEBUG LOGIN - Risk assessment:', {
-        score: riskAssessment.score,
-        requiresMfa: riskAssessment.requiresMfa,
-        factors: riskAssessment.factors
-      });
+    // 4. ✅ OPTIMISÉ : Vérification MFA via MfaService
+    const requiresMfa = await this.isMfaRequired(user.id, riskAssessment.score);
 
-      // 4. Vérifier si MFA requis basé sur le score de risque
-      if (riskAssessment.requiresMfa) {
-        console.log('🔍 DEBUG LOGIN - MFA requis, création challenge');
-        
-        // Retourner challenge MFA
-        const challengeToken = CryptoUtil.generateSecureToken(32);
-        const challengeData: IMfaChallenge = { // ✅ TYPÉ
-          userId: user.id,
-          email: user.email,
-          deviceInfo,
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
-        };
-        
-        await this.redis.setCache(`mfa_challenge:${challengeToken}`, challengeData, 300);
-
-        console.log('🔍 DEBUG LOGIN - Challenge MFA créé avec token:', challengeToken);
-
-        this.logger.endOperation('login', operationId, false, undefined, { reason: 'mfa_required' });
-
-        return {
-          success: false,
-          mfaRequired: {
-            methods: ['SMS_OTP', 'TOTP_APP'],
-            challengeToken,
-            expiresIn: 300,
-          },
-          meta: {
-            riskScore: riskAssessment.score,
-            requiresMfa: true,
-            ipGeolocation: deviceInfo.geolocation?.country || 'Unknown',
-          },
-        };
-      }
-
-      // ✅ NOUVEAU : 5. Gestion intelligente des sessions existantes
-      console.log('🔍 DEBUG LOGIN - Gestion intelligente des sessions');
-      const sessionResult = await this.sessionService.handleUserLogin(
-        user.id,
-        deviceInfo,
-        loginData.rememberMe
-      );
-
-      console.log('🔍 DEBUG LOGIN - Résultat session:', {
-        sessionType: sessionResult.type,
-        sessionId: sessionResult.session.id,
-        isReused: sessionResult.isReused,
-        hasTokens: !!sessionResult.tokens
-      });
-
-      // 6. Mettre à jour last_login selon schema.prisma
-      await this.updateLastLogin(user.id, deviceInfo.ipAddress);
-
-      // 7. Logger succès login
-      this.logger.logBusinessEvent('LOGIN_SUCCESS', {
+    if (requiresMfa) {
+      console.log('🔍 DEBUG LOGIN - MFA requis, génération challenge via MfaService');
+      
+      // ✅ DÉLÉGATION : Générer challenge via MfaService spécialisé
+      const mfaChallenge = await this.generateMfaChallenge(user.id, user.email, deviceInfo);
+      
+      this.logger.logBusinessEvent('LOGIN_MFA_REQUIRED', {
         userId: user.id,
         email: user.email,
-        sessionId: sessionResult.session.id,
-        sessionType: sessionResult.type, // ✅ NOUVEAU
-        isSessionReused: sessionResult.isReused, // ✅ NOUVEAU
         riskScore: riskAssessment.score,
-        ipAddress: deviceInfo.ipAddress,
-        deviceFingerprint: deviceInfo.deviceFingerprint,
+        factors: riskAssessment.factors,
+        mfaMethods: mfaChallenge.methods,
       }, user.id);
 
       this.logger.endOperation('login', operationId, true);
 
       return {
-        success: true,
-        user,
-        tokens: sessionResult.tokens,
-        session: {
-          sessionId: sessionResult.session.id,
-          expiresAt: sessionResult.session.expires_at.toISOString(),
-          deviceInfo,
-          isActive: sessionResult.session.is_active,
-          lastActivity: sessionResult.session.last_activity.toISOString(),
-          isReused: sessionResult.isReused, // ✅ NOUVEAU
-          sessionType: sessionResult.type, // ✅ NOUVEAU
-        },
+        success: false,
+        mfaRequired: mfaChallenge,
         meta: {
           riskScore: riskAssessment.score,
-          requiresMfa: false,
-          ipGeolocation: deviceInfo.geolocation?.country || 'Unknown',
-          sessionType: sessionResult.type, // ✅ NOUVEAU
-          wasSessionReused: sessionResult.isReused, // ✅ NOUVEAU
-        },
+          requiresMfa: true,
+          ipGeolocation: deviceInfo.geolocation?.country || 'unknown',
+        }
       };
-
-    } catch (error) {
-      this.logger.endOperation('login', operationId, false, undefined, { error: error.message });
-      
-      if (error instanceof InvalidCredentialsException || 
-          error instanceof AccountLockedException ||
-          error instanceof EmailNotVerifiedException) {
-        throw error;
-      }
-
-      this.logger.error('Login failed with unexpected error', error.stack, 'AuthService', JSON.stringify({
-        email: loginData.email,
-      }));
-      throw new UnauthorizedException('Erreur lors de la connexion');
     }
+
+    // 5. ✅ OPTIMISÉ : Gestion intelligente des sessions avec SessionService
+    console.log('🔍 DEBUG LOGIN - Pas de MFA requis, gestion session intelligente');
+    
+    const sessionResult: ISessionLoginResult = await this.sessionService.handleUserLogin(
+      user.id,
+      deviceInfo,
+      loginData.rememberMe || false
+    );
+
+    console.log('🔍 DEBUG LOGIN - Session result:', {
+      sessionId: sessionResult.session.id,
+      type: sessionResult.type,
+      isReused: sessionResult.isReused,
+      tokensReused: sessionResult.tokensReused,
+    });
+
+    // 6. ✅ OPTIMISÉ : Enregistrer succès avec métriques
+    await this.handleSuccessfulLogin(user.id, deviceInfo, sessionResult);
+
+    // 7. Formater réponse selon ILoginResult
+    const loginResult: ILoginResult = {
+      success: true,
+      user: this.mapDbUserToProfile(user),
+      tokens: sessionResult.tokens,
+      session: {
+        sessionId: sessionResult.session.id,
+        expiresAt: sessionResult.session.expires_at.toISOString(),
+        deviceInfo,
+        isActive: sessionResult.session.is_active,
+        lastActivity: sessionResult.session.last_activity.toISOString(),
+        isReused: sessionResult.isReused,
+        sessionType: sessionResult.type,
+      },
+      meta: {
+        riskScore: riskAssessment.score,
+        requiresMfa: false,
+        ipGeolocation: deviceInfo.geolocation?.country || 'unknown',
+        sessionType: sessionResult.type,
+        wasSessionReused: sessionResult.isReused,
+        tokensReused: sessionResult.tokensReused,
+      }
+    };
+
+    this.logger.logBusinessEvent('LOGIN_SUCCESS', {
+      userId: user.id,
+      email: user.email,
+      sessionId: sessionResult.session.id,
+      sessionType: sessionResult.type,
+      sessionReused: sessionResult.isReused,
+      tokensReused: sessionResult.tokensReused,
+      riskScore: riskAssessment.score,
+    }, user.id);
+
+    this.logger.endOperation('login', operationId, true);
+    return loginResult;
+
+  } catch (error) {
+    this.logger.logErrorEvent(
+      error as Error,
+      'AuthService.login',
+      undefined,
+      JSON.stringify({
+        email: loginData.email,
+        context: {
+          ipAddress: context?.ipAddress,
+          userAgent: context?.userAgent,
+        }
+      })
+    );
+
+    this.logger.endOperation('login', operationId, false);
+    
+    if (error instanceof InvalidCredentialsException ||
+        error instanceof AccountLockedException ||
+        error instanceof EmailNotVerifiedException) {
+      throw error;
+    }
+    
+    this.logger.error('Authentication failed with unexpected error', error.stack, 'AuthService.login', JSON.stringify({
+      email: loginData.email,
+      context: {
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+      }
+    }));
+    throw new InternalServerErrorException('Authentication failed');
   }
+}
 
   /**
    * ✅ AMÉLIORÉ : Inscription avec création automatique de session
@@ -248,7 +257,7 @@ export class AuthService implements IAuthService {
    */
   async register(
     registerData: IRegisterRequest, 
-    clientInfo?: { ip: string; userAgent: string } // ✅ NOUVEAU : Paramètre clientInfo ajouté
+    clientInfo?: { ip: string; userAgent: string }
   ): Promise<IRegisterResult> {
     const operationId = this.logger.startOperation('register', {
       email: registerData.email,
@@ -297,7 +306,7 @@ export class AuthService implements IAuthService {
       // 4. Transformer données DB vers format application
       const userProfile: IUserProfile = this.mapDbUserToProfile(user);
 
-      // ✅ CORRIGÉ : 5. Générer token de vérification email avec 2 arguments
+      // 5. Générer token de vérification email
       const verificationTokenData = await this.emailVerificationService.generateVerificationToken(
         user.id,
         user.email
@@ -310,7 +319,7 @@ export class AuthService implements IAuthService {
         verificationTokenData.token
       );
 
-      // 7. Traitement onboarding si secret fourni (logique existante conservée)
+      // 7. Traitement onboarding si secret fourni
       let onboardingResult;
       if (registerData.onboardingSecret) {
         onboardingResult = await this.processOnboardingSecret(
@@ -320,7 +329,7 @@ export class AuthService implements IAuthService {
       }
 
       // ✅ NOUVEAU : 8. Création automatique de session et tokens
-      let tokens: ITokenPair | null = null; // ✅ TYPÉ
+      let tokens: ITokenPair | null = null;
       let sessionInfo = null;
 
       if (clientInfo) {
@@ -371,7 +380,7 @@ export class AuthService implements IAuthService {
         lastName: user.last_name,
         hasOnboardingSecret: !!registerData.onboardingSecret,
         onboardingApplied: !!onboardingResult?.incentiveApplied,
-        hasAutoSession: !!sessionInfo, // ✅ NOUVEAU
+        hasAutoSession: !!sessionInfo,
       }, user.id);
 
       this.logger.endOperation('register', operationId, true);
@@ -379,8 +388,8 @@ export class AuthService implements IAuthService {
       return {
         success: true,
         user: userProfile,
-        tokens, // ✅ NOUVEAU : Tokens inclus si session créée
-        session: sessionInfo, // ✅ NOUVEAU : Info session si créée
+        tokens,
+        session: sessionInfo,
         verification: {
           emailSent: true,
           verificationRequired: true,
@@ -406,6 +415,70 @@ export class AuthService implements IAuthService {
       throw new InternalServerErrorException('Erreur lors de l\'inscription');
     }
   }
+
+  /**
+ * ✅ OPTIMISÉ : Gestion succès login avec métriques de session
+ * Ajouter cette méthode à AuthService si elle n'existe pas
+ */
+private async handleSuccessfulLogin(
+  userId: string, 
+  deviceInfo: IDeviceInfo, 
+  sessionResult: ISessionLoginResult
+): Promise<void> {
+  try {
+    // ✅ OPTIMISÉ : Mise à jour compteurs et enregistrement en parallèle
+    const [updatedUser] = await Promise.all([
+      // Mettre à jour last_login et login_count
+      this.prisma.users.update({
+        where: { id: userId },
+        data: {
+          last_login: new Date(),
+          //login_count: { increment: 1 },
+          //failed_login_attempts: 0,
+          //account_locked_until: null,
+        },
+        select: { email: true }
+      }),
+      
+      // Enregistrer tentative réussie
+      this.prisma.login_attempts.create({
+        data: {
+          email: '', // sera mis à jour après
+          user_id: userId,
+          ip_address: deviceInfo.ipAddress,
+          user_agent: deviceInfo.userAgent,
+          success: true,
+          failure_reason: null,
+          is_suspicious: false,
+          geolocation: deviceInfo.geolocation,
+          metadata: {
+            sessionId: sessionResult.session.id,
+            sessionType: sessionResult.type,
+            sessionReused: sessionResult.isReused,
+            tokensReused: sessionResult.tokensReused,
+            deviceFingerprint: deviceInfo.deviceFingerprint,
+          },
+        }
+      })
+    ]);
+
+    // Mettre à jour l'email dans login_attempts
+    await this.prisma.login_attempts.update({
+      where: { id: (await this.prisma.login_attempts.findFirst({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' }
+      }))?.id },
+      data: { email: updatedUser.email }
+    });
+
+  } catch (error) {
+    this.logger.warn('Failed to handle successful login', JSON.stringify({
+      userId,
+      sessionId: sessionResult.session.id,
+      error: error.message,
+    }));
+  }
+}
 
   /**
    * ✅ AMÉLIORÉ : Validation utilisateur avec PasswordService centralisé
@@ -543,65 +616,104 @@ export class AuthService implements IAuthService {
   }
 
   /**
-   * ✅ CORRIGÉ : Vérification MFA avec typage correct
-   */
-  async verifyMfa(
-    challengeToken: string, 
-    code: string, 
-    method: any
-  ): Promise<ILoginResult> {
-    const operationId = this.logger.startOperation('verifyMfa', { challengeToken, method });
+ * ✅ OPTIMISÉ : verifyMfa() utilisant MfaService
+ * Remplacer la méthode verifyMfa existante dans AuthService
+ */
+async verifyMfa(
+  challengeToken: string, 
+  code: string, 
+  method: any
+): Promise<ILoginResult> {
+  const operationId = this.logger.startOperation('verifyMfa', { challengeToken, method });
 
-    try {
-      // 1. Récupérer challenge depuis Redis avec typage
-      const challenge = await this.redis.getCache(`mfa_challenge:${challengeToken}`) as IMfaChallenge | null;
-      
-      // ✅ CORRIGÉ : Vérification avec typage correct
-      if (!challenge || new Date(challenge.expiresAt) < new Date()) {
-        throw new UnauthorizedException('Challenge MFA expiré ou invalide');
-      }
+  try {
+    // 1. ✅ DÉLÉGATION : Vérifier via MfaService spécialisé
+    const verification = {
+      challengeToken,
+      code,
+      method,
+      trustDevice: false // Peut être paramétrable
+    };
 
-      // 2. Vérifier code MFA (logique existante conservée)
-      // ... (code existant de vérification MFA)
-
-      // ✅ CORRIGÉ : 3. Si MFA valide, procéder à la création de session complète
-      const user = await this.getUserProfile(challenge.userId);
-      if (!user) {
-        throw new UnauthorizedException('Utilisateur introuvable');
-      }
-
-      // ✅ CORRIGÉ : Utiliser gestion intelligente des sessions pour MFA aussi
-      const sessionResult = await this.sessionService.handleUserLogin(
-        user.id,
-        challenge.deviceInfo,
-        false
-      );
-
-      this.logger.endOperation('verifyMfa', operationId, true);
-
-      return {
-        success: true,
-        user,
-        tokens: sessionResult.tokens,
-        session: {
-          sessionId: sessionResult.session.id,
-          expiresAt: sessionResult.session.expires_at.toISOString(),
-          deviceInfo: challenge.deviceInfo,
-          isActive: sessionResult.session.is_active,
-          lastActivity: sessionResult.session.last_activity.toISOString(),
-        },
-        meta: {
-          riskScore: 0,
-          requiresMfa: false,
-          ipGeolocation: challenge.deviceInfo.geolocation?.country || 'Unknown',
-        },
-      };
-
-    } catch (error) {
-      this.logger.endOperation('verifyMfa', operationId, false, undefined, { error: error.message });
-      throw error;
+    const isMfaValid = await this.mfaService.verifyMfa(verification);
+    
+    if (!isMfaValid) {
+      throw new UnauthorizedException('Code MFA invalide');
     }
+
+    // 2. Récupérer challenge pour obtenir userId et deviceInfo
+    const challenge = await this.redis.getCache(`mfa_challenge:${challengeToken}`) as any;
+    
+    if (!challenge || new Date(challenge.expiresAt) < new Date()) {
+      throw new UnauthorizedException('Challenge MFA expiré ou invalide');
+    }
+
+    // 3. Récupérer utilisateur
+    const user = await this.getUserProfile(challenge.userId);
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur introuvable');
+    }
+
+    // 4. ✅ RÉUTILISATION : Gestion intelligente des sessions
+    const deviceInfo: IDeviceInfo = {
+      userAgent: challenge.deviceInfo?.userAgent || 'unknown',
+      ipAddress: challenge.deviceInfo?.ipAddress || 'unknown',
+      deviceFingerprint: challenge.deviceFingerprint,
+      isMobile: challenge.deviceInfo?.isMobile || false,
+      geolocation: challenge.deviceInfo?.geolocation
+    };
+
+    const sessionResult = await this.sessionService.handleUserLogin(
+      user.id,
+      deviceInfo,
+      false // MFA flow généralement sans remember me
+    );
+
+    // 5. Logger succès MFA
+    this.logger.logBusinessEvent('MFA_VERIFICATION_SUCCESS', {
+      userId: user.id,
+      email: user.email,
+      method,
+      sessionId: sessionResult.session.id,
+      sessionType: sessionResult.type,
+    }, user.id);
+
+    this.logger.endOperation('verifyMfa', operationId, true);
+
+    return {
+      success: true,
+      user: this.mapDbUserToProfile(user),
+      tokens: sessionResult.tokens,
+      session: {
+        sessionId: sessionResult.session.id,
+        expiresAt: sessionResult.session.expires_at.toISOString(),
+        deviceInfo,
+        isActive: sessionResult.session.is_active,
+        lastActivity: sessionResult.session.last_activity.toISOString(),
+        sessionType: sessionResult.type,
+      },
+      meta: {
+        riskScore: 0, // Post-MFA = risque faible
+        requiresMfa: false,
+        ipGeolocation: deviceInfo.geolocation?.country || 'unknown',
+        sessionType: sessionResult.type,
+        wasSessionReused: sessionResult.isReused,
+        tokensReused: sessionResult.tokensReused,
+      },
+    };
+
+  } catch (error) {
+    this.logger.logErrorEvent(
+      error as Error,
+      'AuthService.verifyMfa',
+      undefined,
+      JSON.stringify({ challengeToken: challengeToken.substring(0, 8) + '...', method })
+    );
+
+    this.logger.endOperation('verifyMfa', operationId, false);
+    throw error;
   }
+}
 
   /**
    * ✅ CORRIGÉ : Vérification email (conserve signature existante)
@@ -749,6 +861,72 @@ export class AuthService implements IAuthService {
     }
   }
 
+  /**
+   * ✅ NOUVEAU : Récupère le statut de vérification email d'un utilisateur
+   */
+  async getVerificationStatus(userId: string): Promise<{
+    emailVerified: boolean;
+    verifiedAt?: string;
+    canResend: boolean;
+  }> {
+    const operationId = this.logger.startOperation('getVerificationStatus', {
+      userId,
+    });
+
+    try {
+      // Récupérer les informations de vérification depuis la base
+      const dbUser = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: {
+          email_verified: true,
+          is_active: true,
+          email: true,
+        },
+      });
+
+      if (!dbUser) {
+        this.logger.warn('User not found for verification status', JSON.stringify({
+          userId,
+        }));
+        throw new NotFoundException('Utilisateur introuvable');
+      }
+
+      const emailVerified = !!dbUser.email_verified;
+      const canResend = !emailVerified && dbUser.is_active;
+
+      // Logger consultation du statut
+      this.logger.logBusinessEvent('VERIFICATION_STATUS_CHECKED', {
+        userId,
+        emailVerified,
+        canResend,
+      }, userId);
+
+      this.logger.endOperation('getVerificationStatus', operationId, true);
+
+      return {
+        emailVerified,
+        canResend,
+      };
+
+    } catch (error) {
+      this.logger.endOperation('getVerificationStatus', operationId, false, undefined, {
+        error: error.message,
+      });
+      
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.error(
+        'Failed to get verification status',
+        error.stack,
+        'AuthService.getVerificationStatus',
+        JSON.stringify({ userId })
+      );
+      throw new InternalServerErrorException('Erreur lors de la récupération du statut de vérification');
+    }
+  }
+
   // ============================================================================
   // MÉTHODES PRIVÉES (conservées de l'implémentation existante)
   // ============================================================================
@@ -786,13 +964,13 @@ export class AuthService implements IAuthService {
 
     const key = `registration_attempts:${ip}`;
     const attempts = await this.redis.getCache(key) as number | null;
-    const currentAttempts = attempts ? parseInt(String(attempts), 10) : 0; // ✅ CORRIGÉ : Opération arithmétique
+    const currentAttempts = attempts ? parseInt(String(attempts), 10) : 0;
     
-    if (currentAttempts >= SECURITY_CONSTANTS.RATE_LIMITS.REGISTRATION.MAX_ATTEMPTS) { // ✅ CORRIGÉ : SECURITY_CONSTANTS
+    if (currentAttempts >= SECURITY_CONSTANTS.RATE_LIMITS.REGISTRATION.MAX_ATTEMPTS) {
       throw new Error('Trop de tentatives d\'inscription depuis cette IP');
     }
 
-    await this.redis.setCache(key, currentAttempts + 1, 3600); // ✅ CORRIGÉ : Addition sécurisée
+    await this.redis.setCache(key, currentAttempts + 1, 3600);
   }
 
   /**
@@ -810,8 +988,8 @@ export class AuthService implements IAuthService {
     // Rate limiting par email
     const key = `login_attempts:${email}`;
     const attempts = await this.redis.getCache(key) as number | null;
-    const currentAttempts = attempts ? parseInt(String(attempts), 10) : 0; // ✅ CORRIGÉ : Opération arithmétique
-    await this.redis.setCache(key, currentAttempts + 1, 3600); // ✅ CORRIGÉ : Addition sécurisée
+    const currentAttempts = attempts ? parseInt(String(attempts), 10) : 0;
+    await this.redis.setCache(key, currentAttempts + 1, 3600);
   }
 
   /**
@@ -918,71 +1096,47 @@ export class AuthService implements IAuthService {
       permissions: [],
     };
   }
-
   /**
-   * ✅ NOUVEAU : Récupère le statut de vérification email d'un utilisateur
-   */
-  async getVerificationStatus(userId: string): Promise<{
-    emailVerified: boolean;
-    verifiedAt?: string;
-    canResend: boolean;
-  }> {
-    const operationId = this.logger.startOperation('getVerificationStatus', {
+ * ✅ SIMPLIFIÉ : Génère challenge MFA via MfaService
+ * Délègue la responsabilité au service spécialisé
+ */
+private async generateMfaChallenge(
+  userId: string, 
+  email: string, 
+  deviceInfo: IDeviceInfo
+): Promise<IMfaChallenge> {
+  try {
+    // Déléguer au MfaService spécialisé
+    return await this.mfaService.generateChallengeForAuth(userId, email, deviceInfo);
+  } catch (error) {
+    this.logger.logErrorEvent(
+      error as Error,
+      'AuthService.generateMfaChallenge',
       userId,
-    });
-
-    try {
-      // Récupérer les informations de vérification depuis la base
-      const dbUser = await this.prisma.users.findUnique({
-        where: { id: userId },
-        select: {
-          email_verified: true,
-          is_active: true,
-          email: true,
-        },
-      });
-
-      if (!dbUser) {
-        this.logger.warn('User not found for verification status', JSON.stringify({
-          userId,
-        }));
-        throw new NotFoundException('Utilisateur introuvable');
-      }
-
-      const emailVerified = !!dbUser.email_verified;
-      const canResend = !emailVerified && dbUser.is_active;
-
-      // Logger consultation du statut
-      this.logger.logBusinessEvent('VERIFICATION_STATUS_CHECKED', {
-        userId,
-        emailVerified,
-        canResend,
-      }, userId);
-
-      this.logger.endOperation('getVerificationStatus', operationId, true);
-
-      return {
-        emailVerified,
-        canResend,
-      };
-
-    } catch (error) {
-      this.logger.endOperation('getVerificationStatus', operationId, false, undefined, {
-        error: error.message,
-      });
-      
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-
-      this.logger.error(
-        'Failed to get verification status',
-        error.stack,
-        'AuthService.getVerificationStatus',
-        JSON.stringify({ userId })
-      );
-      throw new InternalServerErrorException('Erreur lors de la récupération du statut de vérification');
-    }
+      JSON.stringify({ email, deviceInfo: { ipAddress: deviceInfo.ipAddress } })
+    );
+    throw error;
   }
-  
+}
+
+// 5. OPTIONNEL - Ajouter méthode utilitaire pour vérification MFA :
+
+/**
+ * ✅ NOUVEAU : Vérifie si MFA requis via MfaService
+ */
+private async isMfaRequired(userId: string, riskScore: number): Promise<boolean> {
+  try {
+    return await this.mfaService.isMfaRequiredForRisk(userId, riskScore);
+  } catch (error) {
+    this.logger.warn('Erreur vérification MFA requis', JSON.stringify({
+      userId,
+      riskScore,
+      error: error.message,
+    }));
+    
+    // En cas d'erreur, sécurité = MFA requis
+    return true;
+  }
+}
+
 }

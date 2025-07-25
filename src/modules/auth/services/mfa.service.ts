@@ -9,8 +9,9 @@ import {
   IMfaService,
   IMfaSetup,
   IMfaVerification,
-  IMfaChallenge
-} from '../interfaces/mfa.interface';
+  IMfaChallenge,
+  IDeviceInfo
+} from '../interfaces';
 import { MfaProvider } from '../constants/auth.constants';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import {
@@ -758,4 +759,109 @@ export class MfaService implements IMfaService {
       this.logger.error('Cleanup user challenges failed', error.stack, 'MfaService.cleanupUserChallenges');
     }
   }
+
+  /**
+ * ✅ NOUVELLES MÉTHODES PUBLIQUES à ajouter dans MfaService
+ * Pour permettre l'utilisation depuis AuthService
+ */
+
+/**
+ * ✅ NOUVELLE MÉTHODE PUBLIQUE : Génère challenge MFA pour AuthService
+ * Utilise la logique existante mais avec interface AuthService-friendly
+ */
+async generateChallengeForAuth(
+  userId: string, 
+  email: string, 
+  deviceInfo: IDeviceInfo
+): Promise<IMfaChallenge> {
+  const operationId = this.logger.startOperation('generateChallengeForAuth', { userId });
+
+  try {
+    // 1. Détecter méthodes MFA disponibles
+    const availableMethods = await this.getUserAvailableMethods(userId);
+    
+    // 2. Utiliser la méthode generateMfaChallenge existante
+    const challenge = await this.generateMfaChallenge(
+      userId, 
+      availableMethods, 
+      deviceInfo.deviceFingerprint
+    );
+
+    // 3. Logger avec contexte AuthService
+    this.logger.logBusinessEvent('MFA_CHALLENGE_FOR_AUTH', {
+      userId,
+      email,
+      methods: availableMethods,
+      deviceFingerprint: deviceInfo.deviceFingerprint,
+    }, userId);
+
+    this.logger.endOperation('generateChallengeForAuth', operationId, true);
+    return challenge;
+
+  } catch (error) {
+    this.logger.logErrorEvent(
+      error as Error,
+      'MfaService.generateChallengeForAuth',
+      userId,
+      JSON.stringify({ email, deviceInfo: { ipAddress: deviceInfo.ipAddress } })
+    );
+
+    this.logger.endOperation('generateChallengeForAuth', operationId, false);
+    throw error;
+  }
+}
+
+/**
+ * ✅ NOUVELLE MÉTHODE PUBLIQUE : Expose la détection des méthodes MFA
+ * Rend publique la logique de userHasMfaConfigured
+ */
+async getUserAvailableMethods(userId: string): Promise<MfaProvider[]> {
+  const methods: MfaProvider[] = [];
+
+  try {
+    // Réutiliser la logique privée existante mais l'exposer
+    const hasMfaConfigured = await this.userHasMfaConfigured(userId);
+    
+    if (!hasMfaConfigured) {
+      // Si aucune méthode configurée, proposer EMAIL_OTP par défaut
+      methods.push('EMAIL_OTP');
+      return methods;
+    }
+
+    // Vérifier chaque méthode individuellement
+    const [totpSecret, smsEnabled, emailEnabled] = await Promise.all([
+      this.redis.getCache(`mfa_totp_secret:${userId}`),
+      this.redis.getCache(`mfa_sms_enabled:${userId}`),
+      this.redis.getCache(`mfa_email_enabled:${userId}`)
+    ]);
+
+    if (totpSecret) methods.push('TOTP_APP');
+    if (smsEnabled) methods.push('SMS_OTP');
+    if (emailEnabled) methods.push('EMAIL_OTP');
+
+    // Fallback si problème de détection
+    if (methods.length === 0) {
+      methods.push('EMAIL_OTP');
+    }
+
+  } catch (error) {
+    this.logger.warn('Erreur getUserAvailableMethods', JSON.stringify({
+      userId,
+      error: error.message,
+    }));
+    
+    // Fallback sécurisé
+    methods.push('EMAIL_OTP');
+  }
+
+  return methods;
+}
+
+/**
+ * ✅ NOUVELLE MÉTHODE PUBLIQUE : Vérifie si MFA requis pour un risque donné
+ * Utilise la logique existante de requiresMfa
+ */
+async isMfaRequiredForRisk(userId: string, riskScore: number): Promise<boolean> {
+  return await this.requiresMfa(userId, riskScore);
+}
 }

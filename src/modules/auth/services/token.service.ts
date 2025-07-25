@@ -12,6 +12,7 @@ import {
   ITokenPair 
 } from '../interfaces';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { SESSION_CONSTANTS } from '../constants/session.constants';
 
 /**
  * Token Service Entrix V3.0 - Grade A+
@@ -157,183 +158,198 @@ export class TokenService implements ITokenService {
   }
 
   /**
-   * Vérifie et valide access token
-   * Avec vérification blacklist et structure
-   */
-  async verifyAccessToken(token: string): Promise<JwtPayload> {
-    const operationId = this.logger.startOperation('verifyAccessToken');
+ * ✅ OPTIMISÉ : Vérifie access token avec cache intelligent
+ * Remplace la méthode existante par cette version optimisée
+ */
+async verifyAccessToken(token: string): Promise<JwtPayload> {
+  const operationId = this.logger.startOperation('verifyAccessToken');
 
-    try {
-      // Vérifier JWT signature et expiration
-      const payload = this.jwtService.verify(token, {
-        secret: this.accessTokenSecret,
-        issuer: 'entrix-v3',
-        audience: 'entrix-users',
-      }) as JwtPayload;
-
-      // Vérifier si token blacklisté
-      const isBlacklisted = await this.isTokenBlacklisted(token);
-      if (isBlacklisted) {
-        throw new Error('Token blacklisté');
-      }
-
-      // Valider structure payload
-      if (!this.validateAccessTokenPayload(payload)) {
-        throw new Error('Payload JWT invalide');
-      }
-
-      // CORRECTION : endOperation avec signature correcte
+  try {
+    // 1. ✅ OPTIMISÉ : Vérifier en cache d'abord
+    const cacheKey = `token_payload:access:${this.getTokenHash(token)}`;
+    const cachedPayload = await this.redis.getCache<JwtPayload>(cacheKey);
+    
+    if (cachedPayload) {
       this.logger.endOperation('verifyAccessToken', operationId, true);
-      return payload;
-
-    } catch (error) {
-      // CORRECTION : endOperation avec signature correcte
-      this.logger.endOperation('verifyAccessToken', operationId, false);
-      
-      // CORRECTION : logger.error avec JSON.stringify pour les objets
-      this.logger.error(
-        'Failed to verify access token', 
-        error.stack, 
-        'TokenService.verifyAccessToken',
-        JSON.stringify({ errorMessage: error.message })
-      );
-      throw error;
+      return cachedPayload;
     }
+
+    // 2. Vérifier blacklisting avant vérification coûteuse
+    const isBlacklisted = await this.isTokenBlacklisted(token);
+    if (isBlacklisted) {
+      throw new Error('Token is blacklisted');
+    }
+
+    // 3. Vérification JWT standard
+    const payload = this.jwtService.verify(token, {
+      secret: this.accessTokenSecret,
+      issuer: 'entrix-v3',
+      audience: 'entrix-users',
+    }) as JwtPayload;
+
+    // Valider structure payload
+    if (!this.validateAccessTokenPayload(payload)) {
+      throw new Error('Payload JWT invalide');
+    }
+
+    // 4. ✅ OPTIMISÉ : Mettre le payload en cache pour les prochaines vérifications
+    const ttl = Math.max(0, payload.exp - Math.floor(Date.now() / 1000));
+    if (ttl > 0) {
+      await this.redis.setCache(cacheKey, payload, Math.min(ttl, 300)); // Max 5 minutes cache
+    }
+
+    this.logger.endOperation('verifyAccessToken', operationId, true);
+    return payload;
+
+  } catch (error) {
+    this.logger.endOperation('verifyAccessToken', operationId, false);
+    
+    this.logger.error(
+      'Failed to verify access token', 
+      error.stack, 
+      'TokenService.verifyAccessToken',
+      JSON.stringify({ errorMessage: error.message })
+    );
+    throw error;
   }
+}
+
+/**
+ * ✅ NOUVEAU : Génère hash sécurisé du token pour clé Redis
+ * Ajouter cette méthode privée au TokenService
+ */
+private getTokenHash(token: string): string {
+  const crypto = require('crypto');
+  return crypto.createHash('sha256').update(token).digest('hex').substring(0, 16);
+}
 
   /**
-   * Vérifie et valide refresh token
-   * Avec vérification rotation et blacklist
-   */
-  async verifyRefreshToken(token: string): Promise<JwtRefreshPayload> {
-    const operationId = this.logger.startOperation('verifyRefreshToken');
+ * ✅ OPTIMISÉ : Vérifie refresh token avec cache intelligent
+ * Remplace la méthode existante par cette version optimisée
+ */
+async verifyRefreshToken(token: string): Promise<JwtRefreshPayload> {
+  const operationId = this.logger.startOperation('verifyRefreshToken');
 
-    try {
-      // Vérifier JWT signature et expiration
-      const payload = this.jwtService.verify(token, {
-        secret: this.refreshTokenSecret,
-        issuer: 'entrix-v3',
-        audience: 'entrix-refresh',
-      }) as JwtRefreshPayload;
-
-      // Vérifier si refresh token déjà utilisé (rotation)
-      const isUsed = await this.isRefreshTokenUsed(payload.tokenId);
-      if (isUsed) {
-        throw new Error('Refresh token déjà utilisé');
-      }
-
-      // Valider structure payload
-      if (!this.validateRefreshTokenPayload(payload)) {
-        throw new Error('Payload refresh token invalide');
-      }
-
-      // CORRECTION : endOperation avec signature correcte
+  try {
+    // 1. ✅ OPTIMISÉ : Vérifier en cache d'abord
+    const cacheKey = `token_payload:refresh:${this.getTokenHash(token)}`;
+    const cachedPayload = await this.redis.getCache<JwtRefreshPayload>(cacheKey);
+    
+    if (cachedPayload) {
       this.logger.endOperation('verifyRefreshToken', operationId, true);
-      return payload;
-
-    } catch (error) {
-      // CORRECTION : endOperation avec signature correcte
-      this.logger.endOperation('verifyRefreshToken', operationId, false);
-      
-      // CORRECTION : logger.error avec JSON.stringify pour les objets
-      this.logger.error(
-        'Failed to verify refresh token', 
-        error.stack, 
-        'TokenService.verifyRefreshToken',
-        JSON.stringify({ errorMessage: error.message })
-      );
-      throw error;
+      return cachedPayload;
     }
+
+    // 2. Vérifier JWT signature et expiration
+    const payload = this.jwtService.verify(token, {
+      secret: this.refreshTokenSecret,
+      issuer: 'entrix-v3',
+      audience: 'entrix-refresh',
+    }) as JwtRefreshPayload;
+
+    // 3. Vérifier si refresh token déjà utilisé (rotation)
+    const isUsed = await this.isRefreshTokenUsed(payload.tokenId);
+    if (isUsed) {
+      throw new Error('Refresh token déjà utilisé');
+    }
+
+    // 4. Valider structure payload
+    if (!this.validateRefreshTokenPayload(payload)) {
+      throw new Error('Payload refresh token invalide');
+    }
+
+    // 5. ✅ OPTIMISÉ : Mettre le payload en cache
+    const ttl = Math.max(0, payload.exp - Math.floor(Date.now() / 1000));
+    if (ttl > 0) {
+      await this.redis.setCache(cacheKey, payload, Math.min(ttl, 300)); // Max 5 minutes cache
+    }
+
+    this.logger.endOperation('verifyRefreshToken', operationId, true);
+    return payload;
+
+  } catch (error) {
+    this.logger.endOperation('verifyRefreshToken', operationId, false);
+    
+    this.logger.error(
+      'Failed to verify refresh token', 
+      error.stack, 
+      'TokenService.verifyRefreshToken',
+      JSON.stringify({ errorMessage: error.message })
+    );
+    throw error;
   }
+}
+
+ /**
+ * ✅ CORRIGÉ : Blackliste token avec suppression du cache
+ * Utilise SESSION_CONSTANTS.REDIS_KEYS.BLACKLISTED_TOKEN_PREFIX
+ */
+async blacklistToken(token: string): Promise<void> {
+  const operationId = this.logger.startOperation('blacklistToken');
+
+  try {
+    // 1. Calculer TTL basé sur l'expiration du token
+    let ttl = AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY; // TTL par défaut
+    
+    try {
+      const decoded = this.jwtService.decode(token) as any;
+      if (decoded && decoded.exp) {
+        ttl = Math.max(0, decoded.exp - Math.floor(Date.now() / 1000));
+      }
+    } catch {
+      // Si décodage échoue, utiliser TTL par défaut
+    }
+
+    // 2. ✅ CORRIGÉ : Utiliser SESSION_CONSTANTS au lieu de AUTH_CONSTANTS.REDIS
+    const blacklistKey = `${SESSION_CONSTANTS.REDIS_KEYS.BLACKLISTED_TOKEN_PREFIX}${this.getTokenHash(token)}`;
+    await this.redis.setCache(blacklistKey, 'blacklisted', ttl);
+
+    // 3. ✅ OPTIMISÉ : Supprimer du cache de vérification
+    const tokenHash = this.getTokenHash(token);
+    const cacheKeys = [
+      `token_payload:access:${tokenHash}`,
+      `token_payload:refresh:${tokenHash}`
+    ];
+    
+    await Promise.all(cacheKeys.map(key => this.redis.delCache(key)));
+
+    // 4. Logger blacklisting
+    this.logger.logBusinessEvent('TOKEN_BLACKLISTED', {
+      tokenHash: this.getTokenHash(token),
+      ttl,
+    });
+
+    this.logger.endOperation('blacklistToken', operationId, true);
+
+  } catch (error) {
+    this.logger.endOperation('blacklistToken', operationId, false);
+    
+    this.logger.error(
+      'Failed to blacklist token', 
+      error.stack, 
+      'TokenService.blacklistToken',
+      JSON.stringify({ errorMessage: error.message })
+    );
+    throw error;
+  }
+}
 
   /**
-   * Blackliste un token (révocation)
-   * Utilise Redis pour persistance
-   */
-  async blacklistToken(token: string): Promise<void> {
-    const operationId = this.logger.startOperation('blacklistToken');
-
-    try {
-      // Extraire payload pour TTL et clé
-      let payload: JwtPayload | JwtRefreshPayload;
-      
-      try {
-        // Essayer comme access token d'abord
-        payload = this.jwtService.decode(token) as JwtPayload;
-      } catch {
-        // Si échec, essayer comme refresh token
-        payload = this.jwtService.decode(token) as JwtRefreshPayload;
-      }
-
-      if (payload && payload.exp && payload.iat) {
-        // Calculer TTL restant
-        const now = Math.floor(Date.now() / 1000);
-        const ttl = Math.max(0, payload.exp - now);
-
-        if (ttl > 0) {
-          // Utiliser sessionId et iat pour créer clé unique
-          const blacklistKey = `blacklist:token:${payload.sessionId || 'unknown'}:${payload.iat}`;
-          
-          // CORRECTION : Utiliser setCache au lieu de set
-          await this.redis.setCache(blacklistKey, 'revoked', ttl);
-
-          // Logger révocation
-          this.logger.logBusinessEvent('TOKEN_BLACKLISTED', {
-            userId: payload.sub,
-            sessionId: payload.sessionId || 'unknown',
-            reason: 'manual_revocation',
-            ttl,
-          }, payload.sub);
-        }
-      }
-
-      // CORRECTION : endOperation avec signature correcte
-      this.logger.endOperation('blacklistToken', operationId, true);
-
-    } catch (error) {
-      // CORRECTION : endOperation avec signature correcte
-      this.logger.endOperation('blacklistToken', operationId, false);
-      
-      // CORRECTION : logger.error avec JSON.stringify pour les objets
-      this.logger.error(
-        'Failed to blacklist token', 
-        error.stack, 
-        'TokenService.blacklistToken',
-        JSON.stringify({ errorMessage: error.message })
-      );
-      // Ne pas faire échouer - blacklisting est best effort
-    }
+ * ✅ CORRIGÉ : Vérifie si token est blacklisté 
+ * Utilise SESSION_CONSTANTS.REDIS_KEYS.BLACKLISTED_TOKEN_PREFIX
+ */
+async isTokenBlacklisted(token: string): Promise<boolean> {
+  try {
+    // ✅ CORRIGÉ : Utiliser SESSION_CONSTANTS au lieu de AUTH_CONSTANTS.REDIS
+    const blacklistKey = `${SESSION_CONSTANTS.REDIS_KEYS.BLACKLISTED_TOKEN_PREFIX}${this.getTokenHash(token)}`;
+    const result = await this.redis.getCache(blacklistKey);
+    return result !== null;
+  } catch (error) {
+    this.logger.warn('Failed to check token blacklist', error.message);
+    // En cas d'erreur Redis, ne pas bloquer l'authentification
+    return false;
   }
-
-  /**
-   * Vérifie si token est blacklisté
-   */
-  async isTokenBlacklisted(token: string): Promise<boolean> {
-    try {
-      // Décoder token pour construire clé blacklist
-      const payload = this.jwtService.decode(token) as JwtPayload | JwtRefreshPayload;
-      
-      if (!payload || !payload.sessionId || !payload.iat) {
-        return false; // Token malformé, laisser JWT verify gérer
-      }
-
-      const blacklistKey = `blacklist:token:${payload.sessionId}:${payload.iat}`;
-      
-      // CORRECTION : Utiliser exists au lieu d'une méthode inexistante
-      const isBlacklisted = await this.redis.exists(blacklistKey);
-      
-      return isBlacklisted;
-    } catch (error) {
-      // CORRECTION : logger.error avec JSON.stringify pour les objets
-      this.logger.error(
-        'Error checking token blacklist', 
-        error.stack, 
-        'TokenService.isTokenBlacklisted',
-        JSON.stringify({ errorMessage: error.message })
-      );
-      return false; // En cas d'erreur Redis, laisser passer
-    }
-  }
+}
 
   /**
    * Vérifie si refresh token déjà utilisé

@@ -20,8 +20,8 @@ const session_service_1 = require("./session.service");
 const security_service_1 = require("./security.service");
 const email_verification_service_1 = require("./email-verification.service");
 const password_service_1 = require("./password.service");
-const crypto_util_1 = require("../utils/crypto.util");
 const device_util_1 = require("../utils/device.util");
+const mfa_service_1 = require("./mfa.service");
 const auth_exceptions_1 = require("../exceptions/auth.exceptions");
 const security_constants_1 = require("../constants/security.constants");
 let AuthService = class AuthService {
@@ -33,8 +33,9 @@ let AuthService = class AuthService {
     emailVerificationService;
     securityService;
     passwordService;
+    mfaService;
     logger;
-    constructor(prisma, redis, email, tokenService, sessionService, emailVerificationService, securityService, passwordService, loggerService) {
+    constructor(prisma, redis, email, tokenService, sessionService, emailVerificationService, securityService, passwordService, mfaService, loggerService) {
         this.prisma = prisma;
         this.redis = redis;
         this.email = email;
@@ -43,6 +44,7 @@ let AuthService = class AuthService {
         this.emailVerificationService = emailVerificationService;
         this.securityService = securityService;
         this.passwordService = passwordService;
+        this.mfaService = mfaService;
         this.logger = loggerService.createChildLogger('AuthService');
     }
     async login(loginData, context) {
@@ -86,55 +88,40 @@ let AuthService = class AuthService {
                 requiresMfa: riskAssessment.requiresMfa,
                 factors: riskAssessment.factors
             });
-            if (riskAssessment.requiresMfa) {
-                console.log('🔍 DEBUG LOGIN - MFA requis, création challenge');
-                const challengeToken = crypto_util_1.CryptoUtil.generateSecureToken(32);
-                const challengeData = {
+            const requiresMfa = await this.isMfaRequired(user.id, riskAssessment.score);
+            if (requiresMfa) {
+                console.log('🔍 DEBUG LOGIN - MFA requis, génération challenge via MfaService');
+                const mfaChallenge = await this.generateMfaChallenge(user.id, user.email, deviceInfo);
+                this.logger.logBusinessEvent('LOGIN_MFA_REQUIRED', {
                     userId: user.id,
                     email: user.email,
-                    deviceInfo,
-                    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-                };
-                await this.redis.setCache(`mfa_challenge:${challengeToken}`, challengeData, 300);
-                console.log('🔍 DEBUG LOGIN - Challenge MFA créé avec token:', challengeToken);
-                this.logger.endOperation('login', operationId, false, undefined, { reason: 'mfa_required' });
+                    riskScore: riskAssessment.score,
+                    factors: riskAssessment.factors,
+                    mfaMethods: mfaChallenge.methods,
+                }, user.id);
+                this.logger.endOperation('login', operationId, true);
                 return {
                     success: false,
-                    mfaRequired: {
-                        methods: ['SMS_OTP', 'TOTP_APP'],
-                        challengeToken,
-                        expiresIn: 300,
-                    },
+                    mfaRequired: mfaChallenge,
                     meta: {
                         riskScore: riskAssessment.score,
                         requiresMfa: true,
-                        ipGeolocation: deviceInfo.geolocation?.country || 'Unknown',
-                    },
+                        ipGeolocation: deviceInfo.geolocation?.country || 'unknown',
+                    }
                 };
             }
-            console.log('🔍 DEBUG LOGIN - Gestion intelligente des sessions');
-            const sessionResult = await this.sessionService.handleUserLogin(user.id, deviceInfo, loginData.rememberMe);
-            console.log('🔍 DEBUG LOGIN - Résultat session:', {
-                sessionType: sessionResult.type,
+            console.log('🔍 DEBUG LOGIN - Pas de MFA requis, gestion session intelligente');
+            const sessionResult = await this.sessionService.handleUserLogin(user.id, deviceInfo, loginData.rememberMe || false);
+            console.log('🔍 DEBUG LOGIN - Session result:', {
                 sessionId: sessionResult.session.id,
+                type: sessionResult.type,
                 isReused: sessionResult.isReused,
-                hasTokens: !!sessionResult.tokens
+                tokensReused: sessionResult.tokensReused,
             });
-            await this.updateLastLogin(user.id, deviceInfo.ipAddress);
-            this.logger.logBusinessEvent('LOGIN_SUCCESS', {
-                userId: user.id,
-                email: user.email,
-                sessionId: sessionResult.session.id,
-                sessionType: sessionResult.type,
-                isSessionReused: sessionResult.isReused,
-                riskScore: riskAssessment.score,
-                ipAddress: deviceInfo.ipAddress,
-                deviceFingerprint: deviceInfo.deviceFingerprint,
-            }, user.id);
-            this.logger.endOperation('login', operationId, true);
-            return {
+            await this.handleSuccessfulLogin(user.id, deviceInfo, sessionResult);
+            const loginResult = {
                 success: true,
-                user,
+                user: this.mapDbUserToProfile(user),
                 tokens: sessionResult.tokens,
                 session: {
                     sessionId: sessionResult.session.id,
@@ -148,23 +135,46 @@ let AuthService = class AuthService {
                 meta: {
                     riskScore: riskAssessment.score,
                     requiresMfa: false,
-                    ipGeolocation: deviceInfo.geolocation?.country || 'Unknown',
+                    ipGeolocation: deviceInfo.geolocation?.country || 'unknown',
                     sessionType: sessionResult.type,
                     wasSessionReused: sessionResult.isReused,
-                },
+                    tokensReused: sessionResult.tokensReused,
+                }
             };
+            this.logger.logBusinessEvent('LOGIN_SUCCESS', {
+                userId: user.id,
+                email: user.email,
+                sessionId: sessionResult.session.id,
+                sessionType: sessionResult.type,
+                sessionReused: sessionResult.isReused,
+                tokensReused: sessionResult.tokensReused,
+                riskScore: riskAssessment.score,
+            }, user.id);
+            this.logger.endOperation('login', operationId, true);
+            return loginResult;
         }
         catch (error) {
-            this.logger.endOperation('login', operationId, false, undefined, { error: error.message });
+            this.logger.logErrorEvent(error, 'AuthService.login', undefined, JSON.stringify({
+                email: loginData.email,
+                context: {
+                    ipAddress: context?.ipAddress,
+                    userAgent: context?.userAgent,
+                }
+            }));
+            this.logger.endOperation('login', operationId, false);
             if (error instanceof auth_exceptions_1.InvalidCredentialsException ||
                 error instanceof auth_exceptions_1.AccountLockedException ||
                 error instanceof auth_exceptions_1.EmailNotVerifiedException) {
                 throw error;
             }
-            this.logger.error('Login failed with unexpected error', error.stack, 'AuthService', JSON.stringify({
+            this.logger.error('Authentication failed with unexpected error', error.stack, 'AuthService.login', JSON.stringify({
                 email: loginData.email,
+                context: {
+                    ipAddress: context?.ipAddress,
+                    userAgent: context?.userAgent,
+                }
             }));
-            throw new common_1.UnauthorizedException('Erreur lors de la connexion');
+            throw new common_1.InternalServerErrorException('Authentication failed');
         }
     }
     async register(registerData, clientInfo) {
@@ -271,6 +281,52 @@ let AuthService = class AuthService {
             throw new common_1.InternalServerErrorException('Erreur lors de l\'inscription');
         }
     }
+    async handleSuccessfulLogin(userId, deviceInfo, sessionResult) {
+        try {
+            const [updatedUser] = await Promise.all([
+                this.prisma.users.update({
+                    where: { id: userId },
+                    data: {
+                        last_login: new Date(),
+                    },
+                    select: { email: true }
+                }),
+                this.prisma.login_attempts.create({
+                    data: {
+                        email: '',
+                        user_id: userId,
+                        ip_address: deviceInfo.ipAddress,
+                        user_agent: deviceInfo.userAgent,
+                        success: true,
+                        failure_reason: null,
+                        is_suspicious: false,
+                        geolocation: deviceInfo.geolocation,
+                        metadata: {
+                            sessionId: sessionResult.session.id,
+                            sessionType: sessionResult.type,
+                            sessionReused: sessionResult.isReused,
+                            tokensReused: sessionResult.tokensReused,
+                            deviceFingerprint: deviceInfo.deviceFingerprint,
+                        },
+                    }
+                })
+            ]);
+            await this.prisma.login_attempts.update({
+                where: { id: (await this.prisma.login_attempts.findFirst({
+                        where: { user_id: userId },
+                        orderBy: { created_at: 'desc' }
+                    }))?.id },
+                data: { email: updatedUser.email }
+            });
+        }
+        catch (error) {
+            this.logger.warn('Failed to handle successful login', JSON.stringify({
+                userId,
+                sessionId: sessionResult.session.id,
+                error: error.message,
+            }));
+        }
+    }
     async validateUser(email, password, context) {
         const operationId = this.logger.startOperation('validateUser', { email });
         try {
@@ -368,6 +424,16 @@ let AuthService = class AuthService {
     async verifyMfa(challengeToken, code, method) {
         const operationId = this.logger.startOperation('verifyMfa', { challengeToken, method });
         try {
+            const verification = {
+                challengeToken,
+                code,
+                method,
+                trustDevice: false
+            };
+            const isMfaValid = await this.mfaService.verifyMfa(verification);
+            if (!isMfaValid) {
+                throw new common_1.UnauthorizedException('Code MFA invalide');
+            }
             const challenge = await this.redis.getCache(`mfa_challenge:${challengeToken}`);
             if (!challenge || new Date(challenge.expiresAt) < new Date()) {
                 throw new common_1.UnauthorizedException('Challenge MFA expiré ou invalide');
@@ -376,28 +442,47 @@ let AuthService = class AuthService {
             if (!user) {
                 throw new common_1.UnauthorizedException('Utilisateur introuvable');
             }
-            const sessionResult = await this.sessionService.handleUserLogin(user.id, challenge.deviceInfo, false);
+            const deviceInfo = {
+                userAgent: challenge.deviceInfo?.userAgent || 'unknown',
+                ipAddress: challenge.deviceInfo?.ipAddress || 'unknown',
+                deviceFingerprint: challenge.deviceFingerprint,
+                isMobile: challenge.deviceInfo?.isMobile || false,
+                geolocation: challenge.deviceInfo?.geolocation
+            };
+            const sessionResult = await this.sessionService.handleUserLogin(user.id, deviceInfo, false);
+            this.logger.logBusinessEvent('MFA_VERIFICATION_SUCCESS', {
+                userId: user.id,
+                email: user.email,
+                method,
+                sessionId: sessionResult.session.id,
+                sessionType: sessionResult.type,
+            }, user.id);
             this.logger.endOperation('verifyMfa', operationId, true);
             return {
                 success: true,
-                user,
+                user: this.mapDbUserToProfile(user),
                 tokens: sessionResult.tokens,
                 session: {
                     sessionId: sessionResult.session.id,
                     expiresAt: sessionResult.session.expires_at.toISOString(),
-                    deviceInfo: challenge.deviceInfo,
+                    deviceInfo,
                     isActive: sessionResult.session.is_active,
                     lastActivity: sessionResult.session.last_activity.toISOString(),
+                    sessionType: sessionResult.type,
                 },
                 meta: {
                     riskScore: 0,
                     requiresMfa: false,
-                    ipGeolocation: challenge.deviceInfo.geolocation?.country || 'Unknown',
+                    ipGeolocation: deviceInfo.geolocation?.country || 'unknown',
+                    sessionType: sessionResult.type,
+                    wasSessionReused: sessionResult.isReused,
+                    tokensReused: sessionResult.tokensReused,
                 },
             };
         }
         catch (error) {
-            this.logger.endOperation('verifyMfa', operationId, false, undefined, { error: error.message });
+            this.logger.logErrorEvent(error, 'AuthService.verifyMfa', undefined, JSON.stringify({ challengeToken: challengeToken.substring(0, 8) + '...', method }));
+            this.logger.endOperation('verifyMfa', operationId, false);
             throw error;
         }
     }
@@ -491,6 +576,49 @@ let AuthService = class AuthService {
                 success: false,
                 message: 'Erreur lors de l\'envoi de l\'email de vérification',
             };
+        }
+    }
+    async getVerificationStatus(userId) {
+        const operationId = this.logger.startOperation('getVerificationStatus', {
+            userId,
+        });
+        try {
+            const dbUser = await this.prisma.users.findUnique({
+                where: { id: userId },
+                select: {
+                    email_verified: true,
+                    is_active: true,
+                    email: true,
+                },
+            });
+            if (!dbUser) {
+                this.logger.warn('User not found for verification status', JSON.stringify({
+                    userId,
+                }));
+                throw new common_1.NotFoundException('Utilisateur introuvable');
+            }
+            const emailVerified = !!dbUser.email_verified;
+            const canResend = !emailVerified && dbUser.is_active;
+            this.logger.logBusinessEvent('VERIFICATION_STATUS_CHECKED', {
+                userId,
+                emailVerified,
+                canResend,
+            }, userId);
+            this.logger.endOperation('getVerificationStatus', operationId, true);
+            return {
+                emailVerified,
+                canResend,
+            };
+        }
+        catch (error) {
+            this.logger.endOperation('getVerificationStatus', operationId, false, undefined, {
+                error: error.message,
+            });
+            if (error instanceof common_1.NotFoundException) {
+                throw error;
+            }
+            this.logger.error('Failed to get verification status', error.stack, 'AuthService.getVerificationStatus', JSON.stringify({ userId }));
+            throw new common_1.InternalServerErrorException('Erreur lors de la récupération du statut de vérification');
         }
     }
     async validatePasswordStrength(password) {
@@ -609,47 +737,26 @@ let AuthService = class AuthService {
             permissions: [],
         };
     }
-    async getVerificationStatus(userId) {
-        const operationId = this.logger.startOperation('getVerificationStatus', {
-            userId,
-        });
+    async generateMfaChallenge(userId, email, deviceInfo) {
         try {
-            const dbUser = await this.prisma.users.findUnique({
-                where: { id: userId },
-                select: {
-                    email_verified: true,
-                    is_active: true,
-                    email: true,
-                },
-            });
-            if (!dbUser) {
-                this.logger.warn('User not found for verification status', JSON.stringify({
-                    userId,
-                }));
-                throw new common_1.NotFoundException('Utilisateur introuvable');
-            }
-            const emailVerified = !!dbUser.email_verified;
-            const canResend = !emailVerified && dbUser.is_active;
-            this.logger.logBusinessEvent('VERIFICATION_STATUS_CHECKED', {
-                userId,
-                emailVerified,
-                canResend,
-            }, userId);
-            this.logger.endOperation('getVerificationStatus', operationId, true);
-            return {
-                emailVerified,
-                canResend,
-            };
+            return await this.mfaService.generateChallengeForAuth(userId, email, deviceInfo);
         }
         catch (error) {
-            this.logger.endOperation('getVerificationStatus', operationId, false, undefined, {
+            this.logger.logErrorEvent(error, 'AuthService.generateMfaChallenge', userId, JSON.stringify({ email, deviceInfo: { ipAddress: deviceInfo.ipAddress } }));
+            throw error;
+        }
+    }
+    async isMfaRequired(userId, riskScore) {
+        try {
+            return await this.mfaService.isMfaRequiredForRisk(userId, riskScore);
+        }
+        catch (error) {
+            this.logger.warn('Erreur vérification MFA requis', JSON.stringify({
+                userId,
+                riskScore,
                 error: error.message,
-            });
-            if (error instanceof common_1.NotFoundException) {
-                throw error;
-            }
-            this.logger.error('Failed to get verification status', error.stack, 'AuthService.getVerificationStatus', JSON.stringify({ userId }));
-            throw new common_1.InternalServerErrorException('Erreur lors de la récupération du statut de vérification');
+            }));
+            return true;
         }
     }
 };
@@ -664,6 +771,7 @@ exports.AuthService = AuthService = __decorate([
         email_verification_service_1.EmailVerificationService,
         security_service_1.SecurityService,
         password_service_1.PasswordService,
+        mfa_service_1.MfaService,
         logger_service_1.LoggerService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

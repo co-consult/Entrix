@@ -16,6 +16,7 @@ const config_1 = require("@nestjs/config");
 const logger_service_1 = require("../../../shared/logger/logger.service");
 const redis_service_1 = require("../../../shared/redis/redis.service");
 const auth_constants_1 = require("../constants/auth.constants");
+const session_constants_1 = require("../constants/session.constants");
 let TokenService = class TokenService {
     jwtService;
     configService;
@@ -97,17 +98,27 @@ let TokenService = class TokenService {
     async verifyAccessToken(token) {
         const operationId = this.logger.startOperation('verifyAccessToken');
         try {
+            const cacheKey = `token_payload:access:${this.getTokenHash(token)}`;
+            const cachedPayload = await this.redis.getCache(cacheKey);
+            if (cachedPayload) {
+                this.logger.endOperation('verifyAccessToken', operationId, true);
+                return cachedPayload;
+            }
+            const isBlacklisted = await this.isTokenBlacklisted(token);
+            if (isBlacklisted) {
+                throw new Error('Token is blacklisted');
+            }
             const payload = this.jwtService.verify(token, {
                 secret: this.accessTokenSecret,
                 issuer: 'entrix-v3',
                 audience: 'entrix-users',
             });
-            const isBlacklisted = await this.isTokenBlacklisted(token);
-            if (isBlacklisted) {
-                throw new Error('Token blacklisté');
-            }
             if (!this.validateAccessTokenPayload(payload)) {
                 throw new Error('Payload JWT invalide');
+            }
+            const ttl = Math.max(0, payload.exp - Math.floor(Date.now() / 1000));
+            if (ttl > 0) {
+                await this.redis.setCache(cacheKey, payload, Math.min(ttl, 300));
             }
             this.logger.endOperation('verifyAccessToken', operationId, true);
             return payload;
@@ -118,9 +129,19 @@ let TokenService = class TokenService {
             throw error;
         }
     }
+    getTokenHash(token) {
+        const crypto = require('crypto');
+        return crypto.createHash('sha256').update(token).digest('hex').substring(0, 16);
+    }
     async verifyRefreshToken(token) {
         const operationId = this.logger.startOperation('verifyRefreshToken');
         try {
+            const cacheKey = `token_payload:refresh:${this.getTokenHash(token)}`;
+            const cachedPayload = await this.redis.getCache(cacheKey);
+            if (cachedPayload) {
+                this.logger.endOperation('verifyRefreshToken', operationId, true);
+                return cachedPayload;
+            }
             const payload = this.jwtService.verify(token, {
                 secret: this.refreshTokenSecret,
                 issuer: 'entrix-v3',
@@ -132,6 +153,10 @@ let TokenService = class TokenService {
             }
             if (!this.validateRefreshTokenPayload(payload)) {
                 throw new Error('Payload refresh token invalide');
+            }
+            const ttl = Math.max(0, payload.exp - Math.floor(Date.now() / 1000));
+            if (ttl > 0) {
+                await this.redis.setCache(cacheKey, payload, Math.min(ttl, 300));
             }
             this.logger.endOperation('verifyRefreshToken', operationId, true);
             return payload;
@@ -145,46 +170,43 @@ let TokenService = class TokenService {
     async blacklistToken(token) {
         const operationId = this.logger.startOperation('blacklistToken');
         try {
-            let payload;
+            let ttl = auth_constants_1.AUTH_CONSTANTS.JWT.ACCESS_TOKEN_EXPIRY;
             try {
-                payload = this.jwtService.decode(token);
-            }
-            catch {
-                payload = this.jwtService.decode(token);
-            }
-            if (payload && payload.exp && payload.iat) {
-                const now = Math.floor(Date.now() / 1000);
-                const ttl = Math.max(0, payload.exp - now);
-                if (ttl > 0) {
-                    const blacklistKey = `blacklist:token:${payload.sessionId || 'unknown'}:${payload.iat}`;
-                    await this.redis.setCache(blacklistKey, 'revoked', ttl);
-                    this.logger.logBusinessEvent('TOKEN_BLACKLISTED', {
-                        userId: payload.sub,
-                        sessionId: payload.sessionId || 'unknown',
-                        reason: 'manual_revocation',
-                        ttl,
-                    }, payload.sub);
+                const decoded = this.jwtService.decode(token);
+                if (decoded && decoded.exp) {
+                    ttl = Math.max(0, decoded.exp - Math.floor(Date.now() / 1000));
                 }
             }
+            catch {
+            }
+            const blacklistKey = `${session_constants_1.SESSION_CONSTANTS.REDIS_KEYS.BLACKLISTED_TOKEN_PREFIX}${this.getTokenHash(token)}`;
+            await this.redis.setCache(blacklistKey, 'blacklisted', ttl);
+            const tokenHash = this.getTokenHash(token);
+            const cacheKeys = [
+                `token_payload:access:${tokenHash}`,
+                `token_payload:refresh:${tokenHash}`
+            ];
+            await Promise.all(cacheKeys.map(key => this.redis.delCache(key)));
+            this.logger.logBusinessEvent('TOKEN_BLACKLISTED', {
+                tokenHash: this.getTokenHash(token),
+                ttl,
+            });
             this.logger.endOperation('blacklistToken', operationId, true);
         }
         catch (error) {
             this.logger.endOperation('blacklistToken', operationId, false);
             this.logger.error('Failed to blacklist token', error.stack, 'TokenService.blacklistToken', JSON.stringify({ errorMessage: error.message }));
+            throw error;
         }
     }
     async isTokenBlacklisted(token) {
         try {
-            const payload = this.jwtService.decode(token);
-            if (!payload || !payload.sessionId || !payload.iat) {
-                return false;
-            }
-            const blacklistKey = `blacklist:token:${payload.sessionId}:${payload.iat}`;
-            const isBlacklisted = await this.redis.exists(blacklistKey);
-            return isBlacklisted;
+            const blacklistKey = `${session_constants_1.SESSION_CONSTANTS.REDIS_KEYS.BLACKLISTED_TOKEN_PREFIX}${this.getTokenHash(token)}`;
+            const result = await this.redis.getCache(blacklistKey);
+            return result !== null;
         }
         catch (error) {
-            this.logger.error('Error checking token blacklist', error.stack, 'TokenService.isTokenBlacklisted', JSON.stringify({ errorMessage: error.message }));
+            this.logger.warn('Failed to check token blacklist', error.message);
             return false;
         }
     }

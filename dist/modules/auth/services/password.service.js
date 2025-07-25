@@ -106,50 +106,6 @@ let PasswordService = class PasswordService {
             return false;
         }
     }
-    async verifyUserPasswordByEmail(email, password) {
-        const operationId = this.logger.startOperation('verifyUserPasswordByEmail', { email });
-        try {
-            console.log('🔍 DEBUG verifyUserPasswordByEmail - Vérification pour email:', email);
-            const user = await this.prisma.users.findUnique({
-                where: { email: email.toLowerCase() },
-                select: {
-                    id: true,
-                    email: true,
-                    password: true,
-                    is_active: true
-                }
-            });
-            if (!user) {
-                console.log('🔍 DEBUG verifyUserPasswordByEmail - User not found for email:', email);
-                this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { reason: 'user_not_found' });
-                return false;
-            }
-            if (!user.is_active) {
-                console.log('🔍 DEBUG verifyUserPasswordByEmail - User inactive for email:', email);
-                this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { reason: 'user_inactive' });
-                return false;
-            }
-            console.log('🔍 DEBUG verifyUserPasswordByEmail - User trouvé, vérification password');
-            console.log('🔍 DEBUG verifyUserPasswordByEmail - Password input:', password);
-            console.log('🔍 DEBUG verifyUserPasswordByEmail - Password length:', password.length);
-            console.log('🔍 DEBUG verifyUserPasswordByEmail - Hash from DB length:', user.password.length);
-            const isValid = await crypto_util_1.CryptoUtil.verifyPassword(password, user.password);
-            console.log('🔍 DEBUG verifyUserPasswordByEmail - bcrypt.compare result:', isValid);
-            this.logger.logBusinessEvent('PASSWORD_VERIFICATION_BY_EMAIL', {
-                userId: user.id,
-                email: user.email,
-                success: isValid,
-            }, user.id);
-            this.logger.endOperation('verifyUserPasswordByEmail', operationId, true);
-            return isValid;
-        }
-        catch (error) {
-            console.log('🔍 DEBUG verifyUserPasswordByEmail - Erreur:', error.message);
-            this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { error: error.message });
-            this.logger.error(`Error verifying password for email ${email}:`, error);
-            return false;
-        }
-    }
     async validatePasswordStrength(password) {
         const operationId = this.logger.startOperation('validatePasswordStrength');
         try {
@@ -349,6 +305,48 @@ let PasswordService = class PasswordService {
         const attemptsRaw = await this.redis.getCache(key);
         const attempts = typeof attemptsRaw === 'number' ? attemptsRaw : 0;
         await this.redis.setCache(key, attempts + 1, 3600);
+    }
+    async verifyUserPasswordByEmail(email, password) {
+        const operationId = this.logger.startOperation('verifyUserPasswordByEmail', { email });
+        try {
+            const user = await this.prisma.users.findUnique({
+                where: { email: email.toLowerCase() },
+                select: {
+                    id: true,
+                    email: true,
+                    password: true,
+                    is_active: true
+                }
+            });
+            if (!user) {
+                this.logger.warn('User not found for password verification', JSON.stringify({ email }));
+                this.logger.endOperation('verifyUserPasswordByEmail', operationId, false);
+                return false;
+            }
+            if (!user.is_active) {
+                this.logger.warn('Inactive user attempted password verification', JSON.stringify({ email }));
+                this.logger.endOperation('verifyUserPasswordByEmail', operationId, false);
+                return false;
+            }
+            const isValid = await crypto_util_1.CryptoUtil.verifyPassword(password, user.password);
+            this.logger.logBusinessEvent('PASSWORD_VERIFICATION', {
+                userId: user.id,
+                email: user.email,
+                success: isValid,
+            }, user.id);
+            this.logger.endOperation('verifyUserPasswordByEmail', operationId, isValid);
+            return isValid;
+        }
+        catch (error) {
+            this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, {
+                error: error.message
+            });
+            this.logger.error('Password verification failed', error.stack, 'PasswordService.verifyUserPasswordByEmail', JSON.stringify({
+                email,
+                error: error.message,
+            }));
+            return false;
+        }
     }
 };
 exports.PasswordService = PasswordService;

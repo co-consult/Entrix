@@ -36,7 +36,8 @@ let SessionService = class SessionService {
         });
         try {
             console.log('🔍 DEBUG handleUserLogin - Début gestion session pour user:', userId);
-            await this.cleanupExpiredSessionsForUser(userId);
+            const cleanedSessions = await this.cleanupExpiredSessionsForUser(userId);
+            console.log(`🔍 DEBUG handleUserLogin - ${cleanedSessions} sessions expirées nettoyées`);
             const existingSessions = await this.getUserActiveSessions(userId);
             console.log('🔍 DEBUG handleUserLogin - Sessions actives trouvées:', existingSessions.length);
             const compatibleSession = await this.findCompatibleSession(existingSessions, deviceInfo, rememberMe);
@@ -46,44 +47,154 @@ let SessionService = class SessionService {
                 const lastActivity = new Date(compatibleSession.last_activity);
                 const inactiveMinutes = (now.getTime() - lastActivity.getTime()) / (1000 * 60);
                 if (inactiveMinutes <= 60) {
-                    console.log('🔍 DEBUG handleUserLogin - Session fraîche, réutilisation');
+                    console.log('🔍 DEBUG handleUserLogin - Session fraîche, réutilisation avec tokens intelligents');
                     const updatedSession = await this.refreshExistingSession(compatibleSession, deviceInfo, rememberMe);
-                    const tokens = await this.tokenService.generateTokenPair(userId, updatedSession.user_id, updatedSession.id, rememberMe, deviceInfo.deviceFingerprint, [], []);
+                    const tokenResult = await this.getOrGenerateTokensForSession(updatedSession, rememberMe, deviceInfo.deviceFingerprint);
+                    this.logger.logBusinessEvent('SESSION_REUSED', {
+                        sessionId: updatedSession.id,
+                        userId,
+                        tokensReused: tokenResult.tokensReused,
+                        inactiveMinutes,
+                    }, userId);
                     this.logger.endOperation('handleUserLogin', operationId, true);
                     return {
                         session: updatedSession,
-                        tokens,
+                        tokens: tokenResult.tokens,
                         type: 'reused',
                         isReused: true,
+                        tokensReused: tokenResult.tokensReused,
                     };
                 }
                 else {
                     console.log('🔍 DEBUG handleUserLogin - Session ancienne, rafraîchissement');
                     const refreshedSession = await this.refreshExistingSession(compatibleSession, deviceInfo, rememberMe);
-                    const tokens = await this.tokenService.generateTokenPair(userId, refreshedSession.user_id, refreshedSession.id, rememberMe, deviceInfo.deviceFingerprint, [], []);
+                    const tokenResult = await this.getOrGenerateTokensForSession(refreshedSession, rememberMe, deviceInfo.deviceFingerprint);
+                    this.logger.logBusinessEvent('SESSION_REFRESHED_ON_LOGIN', {
+                        sessionId: refreshedSession.id,
+                        userId,
+                        tokensReused: tokenResult.tokensReused,
+                        inactiveMinutes,
+                    }, userId);
                     this.logger.endOperation('handleUserLogin', operationId, true);
                     return {
                         session: refreshedSession,
-                        tokens,
+                        tokens: tokenResult.tokens,
                         type: 'refreshed',
                         isReused: false,
+                        tokensReused: tokenResult.tokensReused,
                     };
                 }
             }
             console.log('🔍 DEBUG handleUserLogin - Aucune session compatible, création nouvelle session');
             const newSession = await this.createSession(userId, deviceInfo, rememberMe);
-            const tokens = await this.tokenService.generateTokenPair(userId, newSession.user_id, newSession.id, rememberMe, deviceInfo.deviceFingerprint, [], []);
+            const tokenResult = await this.getOrGenerateTokensForSession(newSession, rememberMe, deviceInfo.deviceFingerprint);
+            this.logger.logBusinessEvent('NEW_SESSION_CREATED_ON_LOGIN', {
+                sessionId: newSession.id,
+                userId,
+                reason: 'no_compatible_session',
+            }, userId);
             this.logger.endOperation('handleUserLogin', operationId, true);
             return {
                 session: newSession,
-                tokens,
+                tokens: tokenResult.tokens,
                 type: 'new',
                 isReused: false,
+                tokensReused: false,
             };
         }
         catch (error) {
             this.logger.logErrorEvent(error, 'SessionService.handleUserLogin', userId, JSON.stringify({ deviceInfo, rememberMe }));
             this.logger.endOperation('handleUserLogin', operationId, false);
+            throw error;
+        }
+    }
+    async getOrGenerateTokensForSession(session, rememberMe, deviceFingerprint) {
+        const operationId = this.logger.startOperation('getOrGenerateTokensForSession', {
+            sessionId: session.id,
+            userId: session.user_id,
+        });
+        try {
+            console.log('🔍 DEBUG getOrGenerateTokensForSession - Vérification tokens existants pour session:', session.id);
+            const existingTokens = await this.getActiveTokensForSession(session.id);
+            if (existingTokens) {
+                console.log('🔍 DEBUG - Tokens existants trouvés, vérification validité');
+                try {
+                    const [accessValid, refreshValid, accessBlacklisted, refreshBlacklisted] = await Promise.all([
+                        this.tokenService.verifyAccessToken(existingTokens.accessToken).then(() => true).catch(() => false),
+                        this.tokenService.verifyRefreshToken(existingTokens.refreshToken).then(() => true).catch(() => false),
+                        this.tokenService.isTokenBlacklisted(existingTokens.accessToken),
+                        this.tokenService.isTokenBlacklisted(existingTokens.refreshToken)
+                    ]);
+                    if (accessValid && refreshValid && !accessBlacklisted && !refreshBlacklisted) {
+                        console.log('🔍 DEBUG - Tokens existants valides et non blacklistés, réutilisation');
+                        await this.extendTokensCacheTTL(session.id, existingTokens);
+                        this.logger.logBusinessEvent('TOKENS_REUSED', {
+                            sessionId: session.id,
+                            userId: session.user_id,
+                            reason: 'valid_cached_tokens',
+                        }, session.user_id);
+                        this.logger.endOperation('getOrGenerateTokensForSession', operationId, true);
+                        return {
+                            tokens: existingTokens,
+                            tokensReused: true,
+                        };
+                    }
+                    else {
+                        console.log('🔍 DEBUG - Tokens existants invalides, blacklistage et régénération');
+                        await this.blacklistTokenPair(existingTokens);
+                    }
+                }
+                catch (tokenError) {
+                    console.log('🔍 DEBUG - Erreur vérification tokens:', tokenError.message);
+                }
+            }
+            console.log('🔍 DEBUG - Génération nouveaux tokens pour session:', session.id);
+            const user = await this.prisma.users.findUnique({
+                where: { id: session.user_id },
+                select: {
+                    id: true,
+                    email: true,
+                    user_roles_user_roles_user_idTousers: {
+                        where: {
+                            status: 'ACTIVE',
+                            OR: [
+                                { valid_until: null },
+                                { valid_until: { gt: new Date() } }
+                            ]
+                        },
+                        include: {
+                            roles: {
+                                select: {
+                                    name: true,
+                                    code: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            if (!user) {
+                throw new Error(`User not found: ${session.user_id}`);
+            }
+            const userRoles = user.user_roles_user_roles_user_idTousers
+                ?.filter(ur => ur.status === 'ACTIVE')
+                .map(ur => ur.roles.name) || [];
+            const newTokens = await this.tokenService.generateTokenPair(session.user_id, user.email, session.id, rememberMe, deviceFingerprint, userRoles, []);
+            await this.cacheTokensForSession(session.id, newTokens, rememberMe);
+            this.logger.logBusinessEvent('NEW_TOKENS_GENERATED', {
+                sessionId: session.id,
+                userId: session.user_id,
+                reason: 'expired_or_missing',
+            }, session.user_id);
+            this.logger.endOperation('getOrGenerateTokensForSession', operationId, true);
+            return {
+                tokens: newTokens,
+                tokensReused: false,
+            };
+        }
+        catch (error) {
+            this.logger.logErrorEvent(error, 'SessionService.getOrGenerateTokensForSession', session.user_id, JSON.stringify({ sessionId: session.id }));
+            this.logger.endOperation('getOrGenerateTokensForSession', operationId, false);
             throw error;
         }
     }
@@ -119,7 +230,7 @@ let SessionService = class SessionService {
                 },
             });
             console.log('🔍 DEBUG createSession - Session créée avec ID:', session.id);
-            await this.cacheSession(session);
+            await this.cacheSession(session, rememberMe);
             this.logger.logBusinessEvent('SESSION_CREATED', {
                 sessionId: session.id,
                 userId,
@@ -218,7 +329,10 @@ let SessionService = class SessionService {
             const sessionDuration = sessionData.expires_at.getTime() - sessionData.created_at.getTime();
             const isRememberMe = sessionDuration > session_constants_1.SESSION_CONSTANTS.DURATION.DEFAULT_SESSION * 1000;
             const tokens = await this.tokenService.generateTokenPair(sessionData.user_id, user.email, sessionData.id, isRememberMe, sessionData.device_fingerprint, userRoles, []);
-            this.logger.logBusinessEvent('TOKEN_REFRESHED', {
+            await this.tokenService.blacklistToken(refreshToken);
+            await this.updateLastActivity(sessionData.id);
+            await this.cacheTokensForSession(sessionData.id, tokens, isRememberMe);
+            this.logger.logBusinessEvent('TOKENS_REFRESHED', {
                 sessionId: sessionData.id,
                 userId: sessionData.user_id,
             }, sessionData.user_id);
@@ -226,7 +340,7 @@ let SessionService = class SessionService {
             return tokens;
         }
         catch (error) {
-            this.logger.logErrorEvent(error, 'SessionService.refreshSession', undefined, JSON.stringify({ refreshToken: refreshToken.substring(0, 10) + '...' }));
+            this.logger.logErrorEvent(error, 'SessionService.refreshSession', undefined, JSON.stringify({ refreshToken: '***' }));
             this.logger.endOperation('refreshSession', operationId, false);
             throw error;
         }
@@ -234,19 +348,18 @@ let SessionService = class SessionService {
     async revokeSession(sessionId) {
         const operationId = this.logger.startOperation('revokeSession', { sessionId });
         try {
-            const result = await this.prisma.user_sessions.updateMany({
+            const result = await this.prisma.user_sessions.update({
                 where: { id: sessionId },
                 data: { is_active: false },
             });
             await this.removeCachedSessionById(sessionId);
-            const success = result.count > 0;
-            if (success) {
-                this.logger.logBusinessEvent('SESSION_REVOKED', {
-                    sessionId,
-                });
-            }
-            this.logger.endOperation('revokeSession', operationId, success);
-            return success;
+            await this.removeTokensFromCache(sessionId);
+            this.logger.logBusinessEvent('SESSION_REVOKED', {
+                sessionId,
+                userId: result.user_id,
+            }, result.user_id);
+            this.logger.endOperation('revokeSession', operationId, true);
+            return true;
         }
         catch (error) {
             this.logger.logErrorEvent(error, 'SessionService.revokeSession', undefined, JSON.stringify({ sessionId }));
@@ -257,11 +370,15 @@ let SessionService = class SessionService {
     async revokeAllUserSessions(userId) {
         const operationId = this.logger.startOperation('revokeAllUserSessions', { userId });
         try {
+            const sessionsToRevoke = await this.getUserActiveSessions(userId);
             const result = await this.prisma.user_sessions.updateMany({
                 where: { user_id: userId },
                 data: { is_active: false },
             });
             await this.cleanupUserSessionsFromCache(userId);
+            for (const session of sessionsToRevoke) {
+                await this.removeTokensFromCache(session.id);
+            }
             this.logger.logBusinessEvent('ALL_USER_SESSIONS_REVOKED', {
                 userId,
                 sessionsCount: result.count,
@@ -329,8 +446,10 @@ let SessionService = class SessionService {
             const lastActivity = new Date(s.last_activity);
             const now = new Date();
             const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
-            return s.ip_address === deviceInfo.ipAddress &&
-                s.user_agent === deviceInfo.userAgent &&
+            const ipMatch = s.ip_address === deviceInfo.ipAddress ||
+                this.isSimilarSubnet(s.ip_address, deviceInfo.ipAddress);
+            return ipMatch &&
+                this.isSimilarUserAgent(s.user_agent, deviceInfo.userAgent) &&
                 hoursSinceActivity <= 2;
         });
         if (recentIpMatch) {
@@ -370,7 +489,7 @@ let SessionService = class SessionService {
                 geolocation: deviceInfo.geolocation || session.geolocation,
             },
         });
-        await this.cacheSession(updatedSession);
+        await this.cacheSession(updatedSession, rememberMe);
         this.logger.logBusinessEvent('SESSION_REFRESHED', {
             sessionId: session.id,
             userId: session.user_id,
@@ -394,6 +513,95 @@ let SessionService = class SessionService {
         }
         return deletedCount.count;
     }
+    async getActiveTokensForSession(sessionId) {
+        try {
+            const tokensKey = `${session_constants_1.SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}tokens:${sessionId}`;
+            const cachedTokens = await this.redis.getCache(tokensKey);
+            if (cachedTokens && cachedTokens.accessToken && cachedTokens.refreshToken) {
+                console.log('🔍 DEBUG getActiveTokensForSession - Tokens trouvés en cache pour session:', sessionId);
+                return cachedTokens;
+            }
+            console.log('🔍 DEBUG getActiveTokensForSession - Aucun token en cache pour session:', sessionId);
+            return null;
+        }
+        catch (error) {
+            console.log('🔍 DEBUG getActiveTokensForSession - Erreur cache:', error.message);
+            return null;
+        }
+    }
+    async cacheTokensForSession(sessionId, tokens, rememberMe = false) {
+        try {
+            const tokensKey = `${session_constants_1.SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}tokens:${sessionId}`;
+            const accessTokenTTL = tokens.expiresIn || (rememberMe ? 7200 : 900);
+            await this.redis.setCache(tokensKey, tokens, accessTokenTTL);
+            console.log('🔍 DEBUG cacheTokensForSession - Tokens mis en cache pour session:', sessionId, 'TTL:', accessTokenTTL);
+        }
+        catch (error) {
+            this.logger.warn('Failed to cache tokens for session', JSON.stringify({
+                sessionId,
+                error: error.message,
+            }));
+        }
+    }
+    async extendTokensCacheTTL(sessionId, tokens) {
+        try {
+            const tokensKey = `${session_constants_1.SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}tokens:${sessionId}`;
+            const extendedTTL = 1800;
+            await this.redis.setCache(tokensKey, tokens, extendedTTL);
+            console.log('🔍 DEBUG extendTokensCacheTTL - TTL prolongé pour tokens session:', sessionId);
+        }
+        catch (error) {
+            this.logger.warn('Failed to extend tokens cache TTL', error.message);
+        }
+    }
+    async blacklistTokenPair(tokens) {
+        try {
+            console.log('🔍 DEBUG blacklistTokenPair - Blacklist anciens tokens');
+            await Promise.all([
+                this.tokenService.blacklistToken(tokens.accessToken),
+                this.tokenService.blacklistToken(tokens.refreshToken)
+            ]);
+            console.log('🔍 DEBUG blacklistTokenPair - Tokens blacklistés avec succès');
+        }
+        catch (error) {
+            this.logger.warn('Failed to blacklist token pair', error.message);
+        }
+    }
+    async removeTokensFromCache(sessionId) {
+        try {
+            const tokensKey = `${session_constants_1.SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}tokens:${sessionId}`;
+            await this.redis.delCache(tokensKey);
+            console.log('🔍 DEBUG removeTokensFromCache - Tokens supprimés du cache pour session:', sessionId);
+        }
+        catch (error) {
+            this.logger.warn('Failed to remove tokens from cache', error.message);
+        }
+    }
+    isSimilarSubnet(ip1, ip2) {
+        try {
+            const parts1 = ip1.split('.');
+            const parts2 = ip2.split('.');
+            if (parts1.length === 4 && parts2.length === 4) {
+                return parts1[0] === parts2[0] &&
+                    parts1[1] === parts2[1] &&
+                    parts1[2] === parts2[2];
+            }
+            return false;
+        }
+        catch {
+            return false;
+        }
+    }
+    isSimilarUserAgent(ua1, ua2) {
+        if (!ua1)
+            return false;
+        const getBrowserOS = (ua) => {
+            const browser = ua.match(/(Chrome|Firefox|Safari|Edge)/)?.[0] || '';
+            const os = ua.match(/(Windows|Mac|Linux|Android|iOS)/)?.[0] || '';
+            return `${browser}-${os}`;
+        };
+        return getBrowserOS(ua1) === getBrowserOS(ua2);
+    }
     async enforceSessionLimits(userId) {
         const activeSessions = await this.getUserActiveSessions(userId);
         if (activeSessions.length >= session_constants_1.SESSION_CONSTANTS.LIMITS.MAX_CONCURRENT_SESSIONS) {
@@ -411,10 +619,13 @@ let SessionService = class SessionService {
         const fingerprint = `${deviceInfo.userAgent}-${deviceInfo.ipAddress}`;
         return crypto.createHash('sha256').update(fingerprint).digest('hex');
     }
-    async cacheSession(session) {
+    async cacheSession(session, rememberMe = false) {
         try {
             const sessionKey = `${session_constants_1.SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}${session.session_token}`;
-            await this.redis.setCache(sessionKey, session, session_constants_1.SESSION_CONSTANTS.DURATION.DEFAULT_SESSION);
+            const cacheTTL = rememberMe
+                ? session_constants_1.SESSION_CONSTANTS.DURATION.REMEMBER_ME_SESSION
+                : session_constants_1.SESSION_CONSTANTS.DURATION.DEFAULT_SESSION;
+            await this.redis.setCache(sessionKey, session, cacheTTL);
         }
         catch (error) {
             this.logger.warn('Failed to cache session', JSON.stringify({
@@ -444,6 +655,7 @@ let SessionService = class SessionService {
             data: { is_active: false },
         });
         await this.removeCachedSessionById(sessionId);
+        await this.removeTokensFromCache(sessionId);
     }
     async removeCachedSessionById(sessionId) {
         try {

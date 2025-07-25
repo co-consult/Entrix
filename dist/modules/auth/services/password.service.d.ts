@@ -14,7 +14,6 @@ export declare class PasswordService implements IPasswordService {
     hashPassword(password: string): Promise<string>;
     verifyPassword(password: string, hash: string): Promise<boolean>;
     verifyUserPassword(userId: string, password: string): Promise<boolean>;
-    verifyUserPasswordByEmail(email: string, password: string): Promise<boolean>;
     validatePasswordStrength(password: string): Promise<IPasswordValidation>;
     generateResetToken(email: string): Promise<string>;
     validateResetToken(token: string): Promise<IPasswordReset | null>;
@@ -22,4 +21,5 @@ export declare class PasswordService implements IPasswordService {
     changePassword(userId: string, oldPassword: string, newPassword: string): Promise<boolean>;
     private checkResetRateLimit;
     private incrementResetAttempts;
+    verifyUserPasswordByEmail(email: string, password: string): Promise<boolean>;
 }

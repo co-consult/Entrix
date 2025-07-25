@@ -2,7 +2,7 @@ import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
 import { EmailService } from '../../../shared/email/email.service';
-import { IMfaService, IMfaSetup, IMfaVerification, IMfaChallenge } from '../interfaces/mfa.interface';
+import { IMfaService, IMfaSetup, IMfaVerification, IMfaChallenge, IDeviceInfo } from '../interfaces';
 import { MfaProvider } from '../constants/auth.constants';
 export declare class MfaService implements IMfaService {
     private readonly prisma;
@@ -40,4 +40,7 @@ export declare class MfaService implements IMfaService {
     private sendSmsOtp;
     private sendEmailOtp;
     private cleanupUserChallenges;
+    generateChallengeForAuth(userId: string, email: string, deviceInfo: IDeviceInfo): Promise<IMfaChallenge>;
+    getUserAvailableMethods(userId: string): Promise<MfaProvider[]>;
+    isMfaRequiredForRisk(userId: string, riskScore: number): Promise<boolean>;
 }

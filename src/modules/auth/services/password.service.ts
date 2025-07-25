@@ -145,72 +145,6 @@ export class PasswordService implements IPasswordService {
   }
 
   /**
-   * ✅ NOUVELLE MÉTHODE : Vérification mot de passe par email
-   * Méthode centralisée pour éviter la duplication dans UsersService
-   * RÉSOUT LE PROBLÈME CRITIQUE de double hashage
-   */
-  async verifyUserPasswordByEmail(email: string, password: string): Promise<boolean> {
-    const operationId = this.logger.startOperation('verifyUserPasswordByEmail', { email });
-
-    try {
-      console.log('🔍 DEBUG verifyUserPasswordByEmail - Vérification pour email:', email);
-
-      // Récupérer l'utilisateur avec le password depuis Prisma
-      const user = await this.prisma.users.findUnique({
-        where: { email: email.toLowerCase() },
-        select: { 
-          id: true, 
-          email: true,
-          password: true, 
-          is_active: true 
-        }
-      });
-
-      if (!user) {
-        console.log('🔍 DEBUG verifyUserPasswordByEmail - User not found for email:', email);
-        this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { reason: 'user_not_found' });
-        return false;
-      }
-
-      if (!user.is_active) {
-        console.log('🔍 DEBUG verifyUserPasswordByEmail - User inactive for email:', email);
-        this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { reason: 'user_inactive' });
-        return false;
-      }
-
-      console.log('🔍 DEBUG verifyUserPasswordByEmail - User trouvé, vérification password');
-      console.log('🔍 DEBUG verifyUserPasswordByEmail - Password input:', password);
-      console.log('🔍 DEBUG verifyUserPasswordByEmail - Password length:', password.length);
-      console.log('🔍 DEBUG verifyUserPasswordByEmail - Hash from DB length:', user.password.length);
-
-      // ✅ CORRECTION CRITIQUE : Supprimer le double hashage !
-      // ❌ ANCIEN CODE BUGGÉ dans UsersService :
-      // const hashedPassword = await this.hashingService.hashPassword(password);
-      // const isValid = await this.hashingService.compare(password, user.password);
-
-      // ✅ NOUVEAU CODE CORRECT : 
-      const isValid = await CryptoUtil.verifyPassword(password, user.password);
-      
-      console.log('🔍 DEBUG verifyUserPasswordByEmail - bcrypt.compare result:', isValid);
-
-      this.logger.logBusinessEvent('PASSWORD_VERIFICATION_BY_EMAIL', {
-        userId: user.id,
-        email: user.email,
-        success: isValid,
-      }, user.id);
-
-      this.logger.endOperation('verifyUserPasswordByEmail', operationId, true);
-      return isValid;
-
-    } catch (error) {
-      console.log('🔍 DEBUG verifyUserPasswordByEmail - Erreur:', error.message);
-      this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { error: error.message });
-      this.logger.error(`Error verifying password for email ${email}:`, error);
-      return false;
-    }
-  }
-
-  /**
    * ✅ STANDARDISÉ : Validation force mot de passe cohérente
    */
   async validatePasswordStrength(password: string): Promise<IPasswordValidation> {
@@ -517,4 +451,61 @@ export class PasswordService implements IPasswordService {
     const attempts = typeof attemptsRaw === 'number' ? attemptsRaw : 0;
     await this.redis.setCache(key, attempts + 1, 3600); // 1 heure
   }
+
+  /**
+ * ✅ NOUVELLE MÉTHODE : Vérifie le mot de passe d'un utilisateur par email
+ * Utilisée par auth.service.ts pour éviter le double hashage
+ */
+async verifyUserPasswordByEmail(email: string, password: string): Promise<boolean> {
+  const operationId = this.logger.startOperation('verifyUserPasswordByEmail', { email });
+
+  try {
+    // 1. Récupérer utilisateur avec hash password
+    const user = await this.prisma.users.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { 
+        id: true, 
+        email: true,
+        password: true, 
+        is_active: true 
+      }
+    });
+
+    if (!user) {
+      this.logger.warn('User not found for password verification', JSON.stringify({ email }));
+      this.logger.endOperation('verifyUserPasswordByEmail', operationId, false);
+      return false;
+    }
+
+    if (!user.is_active) {
+      this.logger.warn('Inactive user attempted password verification', JSON.stringify({ email }));
+      this.logger.endOperation('verifyUserPasswordByEmail', operationId, false);
+      return false;
+    }
+
+    // 2. Vérifier password avec CryptoUtil (évite double hashage)
+    const isValid = await CryptoUtil.verifyPassword(password, user.password);
+    
+    this.logger.logBusinessEvent('PASSWORD_VERIFICATION', {
+      userId: user.id,
+      email: user.email,
+      success: isValid,
+    }, user.id);
+
+    this.logger.endOperation('verifyUserPasswordByEmail', operationId, isValid);
+    return isValid;
+
+  } catch (error) {
+    this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { 
+      error: error.message 
+    });
+    
+    this.logger.error('Password verification failed', error.stack, 'PasswordService.verifyUserPasswordByEmail', JSON.stringify({
+      email,
+      error: error.message,
+    }));
+    
+    return false;
+  }
+}
 }

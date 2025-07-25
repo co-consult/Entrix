@@ -2,16 +2,16 @@
 
 import { MfaProvider } from '../constants/auth.constants';
 import { IUserProfile, ILoginRequest, IRegisterRequest } from './user.interface';
-import { ISessionInfo, ITokenPair } from './session.interface';
+import { ISessionInfo, ITokenPair, SessionType } from './session.interface'; // ✅ IMPORT SessionType
 import { IMfaChallenge } from './mfa.interface';
 
 /**
  * Interfaces d'authentification Entrix V3.0
- * ✅ AMÉLIORÉ : Support sessions intelligentes et inscription avec session auto
+ * ✅ CORRIGÉ : Types sessionType strictement typés
  * Respecte schema.prisma et api_specs_auth_session.md
  */
 
-// Interface JWT Payload selon spécifications (inchangée)
+// Interface JWT Payload selon spécifications
 export interface JwtPayload {
   sub: string; // user_id
   email: string;
@@ -25,7 +25,7 @@ export interface JwtPayload {
   permissions?: string[];
 }
 
-// Interface JWT Refresh Payload (inchangée)
+// Interface JWT Refresh Payload
 export interface JwtRefreshPayload {
   sub: string; // user_id
   sessionId: string;
@@ -36,28 +36,31 @@ export interface JwtRefreshPayload {
   iss: string;
 }
 
-// ✅ AMÉLIORÉ : Interface résultat login avec gestion sessions intelligentes
+// Interface résultat login selon api_specs_auth_session.md
+// ✅ CORRIGÉ : sessionType strictement typé
 export interface ILoginResult {
   success: boolean;
   user?: IUserProfile;
   tokens?: ITokenPair;
-  session?: ISessionInfo; // ✅ Maintenant avec isReused et sessionType
+  session?: ISessionInfo;
   mfaRequired?: IMfaChallenge;
   meta?: {
     riskScore: number;
     requiresMfa: boolean;
     ipGeolocation: string;
-    sessionType?: 'reused' | 'refreshed' | 'new'; // ✅ NOUVEAU : Type de session
-    wasSessionReused?: boolean; // ✅ NOUVEAU : Session réutilisée
+    sessionType?: SessionType; // ✅ CORRIGÉ : Type strict importé
+    wasSessionReused?: boolean;
+    tokensReused?: boolean;
   };
 }
 
-// ✅ AMÉLIORÉ : Interface register result avec session automatique
+// Interface register result
+// ✅ CORRIGÉ : Utilise IUserProfile harmonisé + session automatique
 export interface IRegisterResult {
   success: boolean;
   user?: IUserProfile;
-  tokens?: ITokenPair; // ✅ NOUVEAU : Tokens si session auto-créée
-  session?: ISessionInfo; // ✅ NOUVEAU : Session si auto-créée
+  tokens?: ITokenPair;
+  session?: any; // Session info si créée automatiquement
   verification?: {
     emailSent: boolean;
     verificationRequired: boolean;
@@ -69,28 +72,27 @@ export interface IRegisterResult {
     incentiveValue: number;
     migratedTickets: number;
   };
-  message?: string; // ✅ NOUVEAU : Message informatif
+  message?: string;
 }
 
-// Interface verification status (améliorée)
 export interface IVerificationStatus {
   emailVerified: boolean;
   verifiedAt?: string;
   canResend: boolean;
 }
 
-// ✅ AMÉLIORÉ : Interface service d'authentification avec nouvelles méthodes
+// Interface service d'authentification
+// ✅ CORRIGÉ : Toutes les méthodes utilisent interfaces harmonisées
 export interface IAuthService {
-  // Méthodes existantes (signatures conservées mais comportement amélioré)
   login(loginData: ILoginRequest, context?: {
     ipAddress: string;
     userAgent: string;
     deviceFingerprint?: string;
   }): Promise<ILoginResult>;
   
-  register(registerData: IRegisterRequest, clientInfo?: { // ✅ AMÉLIORÉ : Paramètre clientInfo ajouté
-    ip: string; 
-    userAgent: string 
+  register(registerData: IRegisterRequest, clientInfo?: {
+    ip: string;
+    userAgent: string;
   }): Promise<IRegisterResult>;
   
   logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
@@ -99,8 +101,8 @@ export interface IAuthService {
     email: string, 
     password: string, 
     context?: {
-      ipAddress: string;
-      userAgent: string;
+      ipAddress?: string;
+      userAgent?: string;
       deviceFingerprint?: string;
     }
   ): Promise<IUserProfile | null>;
@@ -110,23 +112,25 @@ export interface IAuthService {
     code: string, 
     method: MfaProvider
   ): Promise<ILoginResult>;
-  
-  // ✅ NOUVELLES MÉTHODES pour fonctionnalités avancées (signatures corrigées)
-  refreshTokens(refreshToken: string): Promise<ITokenPair>;
+
   verifyEmail(token: string): Promise<{
     success: boolean;
     verified: boolean;
     message: string;
     userId?: string;
   }>;
+
   resendVerificationEmail(userId: string): Promise<{
     success: boolean;
     message: string;
     tokenId?: string;
   }>;
+
   getVerificationStatus(userId: string): Promise<{
     emailVerified: boolean;
     verifiedAt?: string;
     canResend: boolean;
   }>;
+
+  refreshTokens(refreshToken: string): Promise<ITokenPair>;
 }

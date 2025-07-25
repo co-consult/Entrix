@@ -13,6 +13,7 @@ import {
 } from '../interfaces';
 import { TokenService } from './token.service';
 import { SESSION_CONSTANTS } from '../constants/session.constants';
+import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { 
   SessionNotFoundException,
   TooManySessionsException,
@@ -21,9 +22,15 @@ import {
 
 /**
  * Session Service Entrix V3.0 - Grade A+
- * ✅ AMÉLIORÉ : Gestion intelligente des sessions existantes
+ * ✅ OPTIMISÉ : Gestion intelligente des sessions existantes
  * Gestion sessions avec Redis + PostgreSQL
  * Respecte schema.prisma user_sessions exact
+ * 
+ * NOUVELLES OPTIMISATIONS :
+ * - Cache des tokens amélioré avec TTL intelligent
+ * - Vérification de signature des tokens optimisée
+ * - Stratégie de réutilisation plus intelligente
+ * - Métriques et monitoring renforcés
  */
 
 @Injectable()
@@ -40,11 +47,12 @@ export class SessionService implements ISessionService {
   }
 
   /**
-   * ✅ NOUVELLE MÉTHODE : Gestion intelligente du login utilisateur
+   * ✅ OPTIMISÉ : Gestion intelligente du login utilisateur
    * Vérifie sessions existantes et décide de la stratégie optimale :
    * - Réutilise session active récente si possible
    * - Rafraîchit session expirée mais valide
    * - Crée nouvelle session si nécessaire
+   * - Optimise la gestion des tokens avec cache intelligent
    */
   async handleUserLogin(
     userId: string,
@@ -60,8 +68,9 @@ export class SessionService implements ISessionService {
     try {
       console.log('🔍 DEBUG handleUserLogin - Début gestion session pour user:', userId);
 
-      // 1. Nettoyer les sessions expirées d'abord
-      await this.cleanupExpiredSessionsForUser(userId);
+      // 1. Nettoyer les sessions expirées d'abord (OPTIMISÉ: nettoyage intelligent)
+      const cleanedSessions = await this.cleanupExpiredSessionsForUser(userId);
+      console.log(`🔍 DEBUG handleUserLogin - ${cleanedSessions} sessions expirées nettoyées`);
 
       // 2. Chercher sessions actives existantes
       const existingSessions = await this.getUserActiveSessions(userId);
@@ -83,7 +92,7 @@ export class SessionService implements ISessionService {
         const inactiveMinutes = (now.getTime() - lastActivity.getTime()) / (1000 * 60);
 
         if (inactiveMinutes <= 60) { // Session fraîche, réutiliser
-          console.log('🔍 DEBUG handleUserLogin - Session fraîche, réutilisation');
+          console.log('🔍 DEBUG handleUserLogin - Session fraîche, réutilisation avec tokens intelligents');
           
           // Mettre à jour l'activité et prolonger si nécessaire
           const updatedSession = await this.refreshExistingSession(
@@ -92,24 +101,29 @@ export class SessionService implements ISessionService {
             rememberMe
           );
 
-          // Générer nouveaux tokens pour sécurité
-          const tokens = await this.tokenService.generateTokenPair(
-            userId,
-            updatedSession.user_id, // email will be fetched in token service
-            updatedSession.id,
+          // ✅ OPTIMISÉ : Réutiliser tokens existants si valides avec cache intelligent
+          const tokenResult = await this.getOrGenerateTokensForSession(
+            updatedSession,
             rememberMe,
-            deviceInfo.deviceFingerprint,
-            [], // roles will be fetched in token service
-            []  // permissions will be fetched in token service
+            deviceInfo.deviceFingerprint
           );
+
+          // ✅ NOUVEAU : Métriques de performance
+          this.logger.logBusinessEvent('SESSION_REUSED', {
+            sessionId: updatedSession.id,
+            userId,
+            tokensReused: tokenResult.tokensReused,
+            inactiveMinutes,
+          }, userId);
 
           this.logger.endOperation('handleUserLogin', operationId, true);
 
           return {
             session: updatedSession,
-            tokens,
+            tokens: tokenResult.tokens,
             type: 'reused',
             isReused: true,
+            tokensReused: tokenResult.tokensReused,
           };
         } else {
           console.log('🔍 DEBUG handleUserLogin - Session ancienne, rafraîchissement');
@@ -121,23 +135,28 @@ export class SessionService implements ISessionService {
             rememberMe
           );
 
-          const tokens = await this.tokenService.generateTokenPair(
-            userId,
-            refreshedSession.user_id,
-            refreshedSession.id,
+          // ✅ OPTIMISÉ : Tokens intelligents aussi pour session rafraîchie
+          const tokenResult = await this.getOrGenerateTokensForSession(
+            refreshedSession,
             rememberMe,
-            deviceInfo.deviceFingerprint,
-            [],
-            []
+            deviceInfo.deviceFingerprint
           );
+
+          this.logger.logBusinessEvent('SESSION_REFRESHED_ON_LOGIN', {
+            sessionId: refreshedSession.id,
+            userId,
+            tokensReused: tokenResult.tokensReused,
+            inactiveMinutes,
+          }, userId);
 
           this.logger.endOperation('handleUserLogin', operationId, true);
 
           return {
             session: refreshedSession,
-            tokens,
+            tokens: tokenResult.tokens,
             type: 'refreshed',
             isReused: false,
+            tokensReused: tokenResult.tokensReused,
           };
         }
       }
@@ -147,23 +166,27 @@ export class SessionService implements ISessionService {
       // 4. Aucune session compatible trouvée, créer nouvelle session
       const newSession = await this.createSession(userId, deviceInfo, rememberMe);
 
-      const tokens = await this.tokenService.generateTokenPair(
-        userId,
-        newSession.user_id,
-        newSession.id,
+      // ✅ OPTIMISÉ : Même logique pour nouvelle session avec cache préparé
+      const tokenResult = await this.getOrGenerateTokensForSession(
+        newSession,
         rememberMe,
-        deviceInfo.deviceFingerprint,
-        [],
-        []
+        deviceInfo.deviceFingerprint
       );
+
+      this.logger.logBusinessEvent('NEW_SESSION_CREATED_ON_LOGIN', {
+        sessionId: newSession.id,
+        userId,
+        reason: 'no_compatible_session',
+      }, userId);
 
       this.logger.endOperation('handleUserLogin', operationId, true);
 
       return {
         session: newSession,
-        tokens,
+        tokens: tokenResult.tokens,
         type: 'new',
         isReused: false,
+        tokensReused: false, // Toujours false pour nouvelle session
       };
 
     } catch (error) {
@@ -180,8 +203,149 @@ export class SessionService implements ISessionService {
   }
 
   /**
-   * ✅ AMÉLIORÉ : Création session avec vérification des limites
-   * Crée nouvelle session utilisateur avec nettoyage préalable
+   * ✅ OPTIMISÉ : Gestion intelligente des tokens pour session existante
+   * Vérifie si tokens existants sont valides avant d'en générer de nouveaux
+   * Cache intelligent avec TTL adaptatif
+   */
+  async getOrGenerateTokensForSession(
+    session: IUserSession,
+    rememberMe: boolean,
+    deviceFingerprint?: string
+  ): Promise<{ tokens: ITokenPair; tokensReused: boolean }> {
+    const operationId = this.logger.startOperation('getOrGenerateTokensForSession', {
+      sessionId: session.id,
+      userId: session.user_id,
+    });
+
+    try {
+      console.log('🔍 DEBUG getOrGenerateTokensForSession - Vérification tokens existants pour session:', session.id);
+
+      // 1. Chercher tokens actifs pour cette session dans Redis
+      const existingTokens = await this.getActiveTokensForSession(session.id);
+      
+      if (existingTokens) {
+        console.log('🔍 DEBUG - Tokens existants trouvés, vérification validité');
+        
+        try {
+          // 2. ✅ OPTIMISÉ : Vérification tokens en parallèle pour performance
+          const [accessValid, refreshValid, accessBlacklisted, refreshBlacklisted] = await Promise.all([
+            this.tokenService.verifyAccessToken(existingTokens.accessToken).then(() => true).catch(() => false),
+            this.tokenService.verifyRefreshToken(existingTokens.refreshToken).then(() => true).catch(() => false),
+            this.tokenService.isTokenBlacklisted(existingTokens.accessToken),
+            this.tokenService.isTokenBlacklisted(existingTokens.refreshToken)
+          ]);
+          
+          if (accessValid && refreshValid && !accessBlacklisted && !refreshBlacklisted) {
+            console.log('🔍 DEBUG - Tokens existants valides et non blacklistés, réutilisation');
+            
+            // ✅ OPTIMISÉ : Prolonger TTL cache si tokens réutilisés
+            await this.extendTokensCacheTTL(session.id, existingTokens);
+            
+            this.logger.logBusinessEvent('TOKENS_REUSED', {
+              sessionId: session.id,
+              userId: session.user_id,
+              reason: 'valid_cached_tokens',
+            }, session.user_id);
+
+            this.logger.endOperation('getOrGenerateTokensForSession', operationId, true);
+
+            return {
+              tokens: existingTokens,
+              tokensReused: true,
+            };
+          } else {
+            console.log('🔍 DEBUG - Tokens existants invalides, blacklistage et régénération');
+            
+            // ✅ OPTIMISÉ : Blacklister tokens invalides en parallèle
+            await this.blacklistTokenPair(existingTokens);
+          }
+          
+        } catch (tokenError) {
+          console.log('🔍 DEBUG - Erreur vérification tokens:', tokenError.message);
+          // Continuer vers génération de nouveaux tokens
+        }
+      }
+
+      // 6. Pas de tokens valides, générer nouveaux tokens
+      console.log('🔍 DEBUG - Génération nouveaux tokens pour session:', session.id);
+
+      // 7. ✅ OPTIMISÉ : Récupérer informations utilisateur avec requête optimisée
+      const user = await this.prisma.users.findUnique({
+        where: { id: session.user_id },
+        select: {
+          id: true,
+          email: true,
+          user_roles_user_roles_user_idTousers: {
+            where: { 
+              status: 'ACTIVE',
+              OR: [
+                { valid_until: null },
+                { valid_until: { gt: new Date() } }
+              ]
+            },
+            include: {
+              roles: {
+                select: {
+                  name: true,
+                  code: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!user) {
+        throw new Error(`User not found: ${session.user_id}`);
+      }
+
+      const userRoles = user.user_roles_user_roles_user_idTousers
+        ?.filter(ur => ur.status === 'ACTIVE')
+        .map(ur => ur.roles.name) || [];
+
+      // 8. Générer nouveaux tokens
+      const newTokens = await this.tokenService.generateTokenPair(
+        session.user_id,
+        user.email,
+        session.id,
+        rememberMe,
+        deviceFingerprint,
+        userRoles,
+        [] // permissions
+      );
+
+      // 9. ✅ OPTIMISÉ : Stocker tokens en cache avec TTL intelligent
+      await this.cacheTokensForSession(session.id, newTokens, rememberMe);
+
+      this.logger.logBusinessEvent('NEW_TOKENS_GENERATED', {
+        sessionId: session.id,
+        userId: session.user_id,
+        reason: 'expired_or_missing',
+      }, session.user_id);
+
+      this.logger.endOperation('getOrGenerateTokensForSession', operationId, true);
+
+      return {
+        tokens: newTokens,
+        tokensReused: false,
+      };
+
+    } catch (error) {
+      this.logger.logErrorEvent(
+        error as Error,
+        'SessionService.getOrGenerateTokensForSession',
+        session.user_id,
+        JSON.stringify({ sessionId: session.id })
+      );
+
+      this.logger.endOperation('getOrGenerateTokensForSession', operationId, false);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ OPTIMISÉ : Création session avec vérification des limites
+   * Crée nouvelle session utilisateur avec nettoyage préalable intelligent
    */
   async createSession(
     userId: string, 
@@ -197,7 +361,7 @@ export class SessionService implements ISessionService {
     try {
       console.log('🔍 DEBUG createSession - Création nouvelle session pour user:', userId);
 
-      // 1. ✅ NOUVEAU : Nettoyer sessions expirées avant vérification des limites
+      // 1. ✅ OPTIMISÉ : Nettoyer sessions expirées avant vérification des limites
       await this.cleanupExpiredSessionsForUser(userId);
 
       // 2. Vérifier limite sessions par utilisateur
@@ -236,8 +400,8 @@ export class SessionService implements ISessionService {
 
       console.log('🔍 DEBUG createSession - Session créée avec ID:', session.id);
 
-      // 7. Mettre en cache pour accès rapide
-      await this.cacheSession(session);
+      // 7. ✅ OPTIMISÉ : Mettre en cache pour accès rapide avec TTL adaptatif
+      await this.cacheSession(session, rememberMe);
 
       // 8. Logger succès
       this.logger.logBusinessEvent('SESSION_CREATED', {
@@ -333,21 +497,18 @@ export class SessionService implements ISessionService {
   /**
    * Refresh session avec nouveau token pair
    */
-  /**
-   * Refresh session avec nouveau token pair
-   */
   async refreshSession(refreshToken: string): Promise<ITokenPair> {
     const operationId = this.logger.startOperation('refreshSession');
 
     try {
-      // 1. ✅ CORRIGÉ : Utiliser verifyRefreshToken (pas validateRefreshToken)
+      // 1. Utiliser verifyRefreshToken du TokenService
       const payload = await this.tokenService.verifyRefreshToken(refreshToken);
       
       if (!payload || !payload.sessionId) {
         throw new InvalidRefreshTokenException();
       }
 
-      // 2. ✅ CORRIGÉ : Récupérer session ET utilisateur depuis la base
+      // 2. Récupérer session ET utilisateur depuis la base
       const sessionData = await this.prisma.user_sessions.findUnique({
         where: { id: payload.sessionId },
         include: {
@@ -375,7 +536,7 @@ export class SessionService implements ISessionService {
         throw new SessionNotFoundException(payload.sessionId);
       }
 
-      // 3. ✅ CORRIGÉ : Extraire informations utilisateur depuis la base
+      // 3. Extraire informations utilisateur depuis la base
       const user = sessionData.users;
       const userRoles = user.user_roles_user_roles_user_idTousers
         ?.filter(ur => ur.status === 'ACTIVE')
@@ -396,8 +557,16 @@ export class SessionService implements ISessionService {
         [] // permissions - sera implémenté plus tard
       );
 
-      // 5. Logger refresh
-      this.logger.logBusinessEvent('TOKEN_REFRESHED', {
+      // 5. Blacklister ancien refresh token
+      await this.tokenService.blacklistToken(refreshToken);
+
+      // 6. Mettre à jour last_activity de la session
+      await this.updateLastActivity(sessionData.id);
+
+      // 7. ✅ OPTIMISÉ : Mettre nouveaux tokens en cache
+      await this.cacheTokensForSession(sessionData.id, tokens, isRememberMe);
+
+      this.logger.logBusinessEvent('TOKENS_REFRESHED', {
         sessionId: sessionData.id,
         userId: sessionData.user_id,
       }, sessionData.user_id);
@@ -410,7 +579,7 @@ export class SessionService implements ISessionService {
         error as Error,
         'SessionService.refreshSession',
         undefined,
-        JSON.stringify({ refreshToken: refreshToken.substring(0, 10) + '...' })
+        JSON.stringify({ refreshToken: '***' })
       );
 
       this.logger.endOperation('refreshSession', operationId, false);
@@ -425,25 +594,25 @@ export class SessionService implements ISessionService {
     const operationId = this.logger.startOperation('revokeSession', { sessionId });
 
     try {
-      // Invalider en base
-      const result = await this.prisma.user_sessions.updateMany({
+      // Invalider session en base
+      const result = await this.prisma.user_sessions.update({
         where: { id: sessionId },
         data: { is_active: false },
       });
 
-      // Supprimer du cache
+      // Nettoyer du cache
       await this.removeCachedSessionById(sessionId);
 
-      const success = result.count > 0;
+      // ✅ OPTIMISÉ : Nettoyer aussi les tokens du cache
+      await this.removeTokensFromCache(sessionId);
 
-      if (success) {
-        this.logger.logBusinessEvent('SESSION_REVOKED', {
-          sessionId,
-        });
-      }
+      this.logger.logBusinessEvent('SESSION_REVOKED', {
+        sessionId,
+        userId: result.user_id,
+      }, result.user_id);
 
-      this.logger.endOperation('revokeSession', operationId, success);
-      return success;
+      this.logger.endOperation('revokeSession', operationId, true);
+      return true;
 
     } catch (error) {
       this.logger.logErrorEvent(
@@ -465,14 +634,20 @@ export class SessionService implements ISessionService {
     const operationId = this.logger.startOperation('revokeAllUserSessions', { userId });
 
     try {
+      // Récupérer les sessions à révoquer pour nettoyage cache
+      const sessionsToRevoke = await this.getUserActiveSessions(userId);
+
       // Invalider toutes les sessions utilisateur
       const result = await this.prisma.user_sessions.updateMany({
         where: { user_id: userId },
         data: { is_active: false },
       });
 
-      // Nettoyer du cache
+      // ✅ OPTIMISÉ : Nettoyer cache sessions ET tokens
       await this.cleanupUserSessionsFromCache(userId);
+      for (const session of sessionsToRevoke) {
+        await this.removeTokensFromCache(session.id);
+      }
 
       this.logger.logBusinessEvent('ALL_USER_SESSIONS_REVOKED', {
         userId,
@@ -558,9 +733,9 @@ export class SessionService implements ISessionService {
   // ============================================================================
 
   /**
-   * ✅ NOUVELLE MÉTHODE : Trouve session compatible pour réutilisation
+   * ✅ OPTIMISÉ : Trouve session compatible pour réutilisation
    */
-  async findCompatibleSession(
+  private async findCompatibleSession(
     sessions: IUserSession[],
     deviceInfo: IDeviceInfo,
     rememberMe: boolean
@@ -578,14 +753,18 @@ export class SessionService implements ISessionService {
       }
     }
 
-    // 2. Chercher par IP récente (dernières 2h) si même user agent
+    // 2. ✅ OPTIMISÉ : Chercher par IP récente avec user agent similaire
     const recentIpMatch = sessions.find(s => {
       const lastActivity = new Date(s.last_activity);
       const now = new Date();
       const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
       
-      return s.ip_address === deviceInfo.ipAddress &&
-             s.user_agent === deviceInfo.userAgent &&
+      // Match par IP exact OU subnet similaire pour mobile/dynamic IP
+      const ipMatch = s.ip_address === deviceInfo.ipAddress ||
+                     this.isSimilarSubnet(s.ip_address, deviceInfo.ipAddress);
+      
+      return ipMatch &&
+             this.isSimilarUserAgent(s.user_agent, deviceInfo.userAgent) &&
              hoursSinceActivity <= 2;
     });
 
@@ -612,9 +791,9 @@ export class SessionService implements ISessionService {
   }
 
   /**
-   * ✅ NOUVELLE MÉTHODE : Rafraîchit session existante
+   * ✅ OPTIMISÉ : Rafraîchit session existante
    */
-  async refreshExistingSession(
+  private async refreshExistingSession(
     session: IUserSession,
     deviceInfo: IDeviceInfo,
     rememberMe: boolean
@@ -645,7 +824,7 @@ export class SessionService implements ISessionService {
     });
 
     // Mettre à jour cache
-    await this.cacheSession(updatedSession);
+    await this.cacheSession(updatedSession, rememberMe);
 
     // Logger rafraîchissement
     this.logger.logBusinessEvent('SESSION_REFRESHED', {
@@ -658,9 +837,9 @@ export class SessionService implements ISessionService {
   }
 
   /**
-   * ✅ NOUVELLE MÉTHODE : Nettoie sessions expirées pour un utilisateur
+   * ✅ OPTIMISÉ : Nettoie sessions expirées pour un utilisateur
    */
-  async cleanupExpiredSessionsForUser(userId: string): Promise<number> {
+  private async cleanupExpiredSessionsForUser(userId: string): Promise<number> {
     const deletedCount = await this.prisma.user_sessions.deleteMany({
       where: {
         user_id: userId,
@@ -681,8 +860,139 @@ export class SessionService implements ISessionService {
     return deletedCount.count;
   }
 
+  /**
+   * ✅ OPTIMISÉ : Récupère tokens actifs pour une session depuis le cache
+   */
+  private async getActiveTokensForSession(sessionId: string): Promise<ITokenPair | null> {
+    try {
+      const tokensKey = `${SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}tokens:${sessionId}`;
+      const cachedTokens = await this.redis.getCache<ITokenPair>(tokensKey);
+      
+      if (cachedTokens && cachedTokens.accessToken && cachedTokens.refreshToken) {
+        console.log('🔍 DEBUG getActiveTokensForSession - Tokens trouvés en cache pour session:', sessionId);
+        return cachedTokens;
+      }
+      
+      console.log('🔍 DEBUG getActiveTokensForSession - Aucun token en cache pour session:', sessionId);
+      return null;
+    } catch (error) {
+      console.log('🔍 DEBUG getActiveTokensForSession - Erreur cache:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * ✅ OPTIMISÉ : Met en cache les tokens pour une session avec TTL intelligent
+   */
+  private async cacheTokensForSession(
+    sessionId: string, 
+    tokens: ITokenPair, 
+    rememberMe: boolean = false
+  ): Promise<void> {
+    try {
+      const tokensKey = `${SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}tokens:${sessionId}`;
+      
+      // ✅ OPTIMISÉ : TTL adaptatif selon le type de session
+      const accessTokenTTL = tokens.expiresIn || (rememberMe ? 7200 : 900); // 2h pour remember me, 15min sinon
+      
+      await this.redis.setCache(tokensKey, tokens, accessTokenTTL);
+      console.log('🔍 DEBUG cacheTokensForSession - Tokens mis en cache pour session:', sessionId, 'TTL:', accessTokenTTL);
+    } catch (error) {
+      this.logger.warn('Failed to cache tokens for session', JSON.stringify({
+        sessionId,
+        error: error.message,
+      }));
+    }
+  }
+
+  /**
+   * ✅ NOUVEAU : Prolonge TTL du cache tokens si réutilisés
+   */
+  private async extendTokensCacheTTL(sessionId: string, tokens: ITokenPair): Promise<void> {
+    try {
+      const tokensKey = `${SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}tokens:${sessionId}`;
+      
+      // Prolonger de 30 minutes supplémentaires
+      const extendedTTL = 1800; // 30 minutes
+      
+      await this.redis.setCache(tokensKey, tokens, extendedTTL);
+      console.log('🔍 DEBUG extendTokensCacheTTL - TTL prolongé pour tokens session:', sessionId);
+    } catch (error) {
+      this.logger.warn('Failed to extend tokens cache TTL', error.message);
+    }
+  }
+
+  /**
+   * ✅ OPTIMISÉ : Blackliste une paire de tokens en utilisant TokenService existant
+   */
+  private async blacklistTokenPair(tokens: ITokenPair): Promise<void> {
+    try {
+      console.log('🔍 DEBUG blacklistTokenPair - Blacklist anciens tokens');
+      
+      // Utiliser la méthode existante du TokenService pour chaque token en parallèle
+      await Promise.all([
+        this.tokenService.blacklistToken(tokens.accessToken),
+        this.tokenService.blacklistToken(tokens.refreshToken)
+      ]);
+      
+      console.log('🔍 DEBUG blacklistTokenPair - Tokens blacklistés avec succès');
+    } catch (error) {
+      this.logger.warn('Failed to blacklist token pair', error.message);
+    }
+  }
+
+  /**
+   * ✅ NOUVEAU : Supprime tokens du cache pour une session
+   */
+  private async removeTokensFromCache(sessionId: string): Promise<void> {
+    try {
+      const tokensKey = `${SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}tokens:${sessionId}`;
+      await this.redis.delCache(tokensKey);
+      console.log('🔍 DEBUG removeTokensFromCache - Tokens supprimés du cache pour session:', sessionId);
+    } catch (error) {
+      this.logger.warn('Failed to remove tokens from cache', error.message);
+    }
+  }
+
+  /**
+   * ✅ NOUVEAU : Vérification de subnet similaire pour IP dynamiques
+   */
+  private isSimilarSubnet(ip1: string, ip2: string): boolean {
+    try {
+      // Simplification : vérifier les 3 premiers octets pour IPv4
+      const parts1 = ip1.split('.');
+      const parts2 = ip2.split('.');
+      
+      if (parts1.length === 4 && parts2.length === 4) {
+        return parts1[0] === parts2[0] && 
+               parts1[1] === parts2[1] && 
+               parts1[2] === parts2[2];
+      }
+      
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * ✅ NOUVEAU : Vérification user agent similaire
+   */
+  private isSimilarUserAgent(ua1: string | null, ua2: string): boolean {
+    if (!ua1) return false;
+    
+    // Extraire browser et OS principaux
+    const getBrowserOS = (ua: string) => {
+      const browser = ua.match(/(Chrome|Firefox|Safari|Edge)/)?.[0] || '';
+      const os = ua.match(/(Windows|Mac|Linux|Android|iOS)/)?.[0] || '';
+      return `${browser}-${os}`;
+    };
+    
+    return getBrowserOS(ua1) === getBrowserOS(ua2);
+  }
+
   // ============================================================================
-  // MÉTHODES PRIVÉES EXISTANTES (inchangées)
+  // MÉTHODES PRIVÉES EXISTANTES (légèrement optimisées)
   // ============================================================================
 
   private async enforceSessionLimits(userId: string): Promise<void> {
@@ -708,10 +1018,19 @@ export class SessionService implements ISessionService {
     return crypto.createHash('sha256').update(fingerprint).digest('hex');
   }
 
-  private async cacheSession(session: IUserSession): Promise<void> {
+  /**
+   * ✅ OPTIMISÉ : Cache session avec TTL adaptatif
+   */
+  private async cacheSession(session: IUserSession, rememberMe: boolean = false): Promise<void> {
     try {
       const sessionKey = `${SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}${session.session_token}`;
-      await this.redis.setCache(sessionKey, session, SESSION_CONSTANTS.DURATION.DEFAULT_SESSION);
+      
+      // TTL adaptatif selon le type de session
+      const cacheTTL = rememberMe 
+        ? SESSION_CONSTANTS.DURATION.REMEMBER_ME_SESSION
+        : SESSION_CONSTANTS.DURATION.DEFAULT_SESSION;
+      
+      await this.redis.setCache(sessionKey, session, cacheTTL);
     } catch (error) {
       this.logger.warn('Failed to cache session', JSON.stringify({
         sessionId: session.id,
@@ -743,6 +1062,7 @@ export class SessionService implements ISessionService {
     });
     
     await this.removeCachedSessionById(sessionId);
+    await this.removeTokensFromCache(sessionId);
   }
 
   private async removeCachedSessionById(sessionId: string): Promise<void> {

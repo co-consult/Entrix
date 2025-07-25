@@ -1,6 +1,6 @@
 import { MfaProvider } from '../constants/auth.constants';
 import { IUserProfile, ILoginRequest, IRegisterRequest } from './user.interface';
-import { ISessionInfo, ITokenPair } from './session.interface';
+import { ISessionInfo, ITokenPair, SessionType } from './session.interface';
 import { IMfaChallenge } from './mfa.interface';
 export interface JwtPayload {
     sub: string;
@@ -33,15 +33,16 @@ export interface ILoginResult {
         riskScore: number;
         requiresMfa: boolean;
         ipGeolocation: string;
-        sessionType?: 'reused' | 'refreshed' | 'new';
+        sessionType?: SessionType;
         wasSessionReused?: boolean;
+        tokensReused?: boolean;
     };
 }
 export interface IRegisterResult {
     success: boolean;
     user?: IUserProfile;
     tokens?: ITokenPair;
-    session?: ISessionInfo;
+    session?: any;
     verification?: {
         emailSent: boolean;
         verificationRequired: boolean;
@@ -72,12 +73,11 @@ export interface IAuthService {
     }): Promise<IRegisterResult>;
     logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
     validateUser(email: string, password: string, context?: {
-        ipAddress: string;
-        userAgent: string;
+        ipAddress?: string;
+        userAgent?: string;
         deviceFingerprint?: string;
     }): Promise<IUserProfile | null>;
     verifyMfa(challengeToken: string, code: string, method: MfaProvider): Promise<ILoginResult>;
-    refreshTokens(refreshToken: string): Promise<ITokenPair>;
     verifyEmail(token: string): Promise<{
         success: boolean;
         verified: boolean;
@@ -94,4 +94,5 @@ export interface IAuthService {
         verifiedAt?: string;
         canResend: boolean;
     }>;
+    refreshTokens(refreshToken: string): Promise<ITokenPair>;
 }

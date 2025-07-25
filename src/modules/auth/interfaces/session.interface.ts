@@ -2,11 +2,14 @@
 
 /**
  * Interfaces de gestion des sessions Entrix V3.0
- * ✅ AMÉLIORÉ : Support des sessions intelligentes avec réutilisation
+ * ✅ CORRIGÉ : Types sessionType strictement typés
  * Respecte schema.prisma user_sessions
  */
 
-// Interface session selon schema.prisma exact (inchangée)
+// ✅ NOUVEAU : Type strict pour sessionType défini ici pour éviter imports circulaires
+export type SessionType = 'reused' | 'refreshed' | 'new';
+
+// Interface session selon schema.prisma exact
 export interface IUserSession {
   id: string;
   session_token: string;
@@ -22,18 +25,19 @@ export interface IUserSession {
   updated_at: Date;
 }
 
-// Interface informations session pour API (améliorée)
+// Interface informations session pour API
 export interface ISessionInfo {
   sessionId: string;
   expiresAt: string; // ISO 8601
   deviceInfo: IDeviceInfo;
   isActive: boolean;
   lastActivity: string;
-  isReused?: boolean; // ✅ NOUVEAU : Indique si session réutilisée
-  sessionType?: 'reused' | 'refreshed' | 'new'; // ✅ NOUVEAU : Type de session
+  isReused?: boolean;
+  sessionType?: SessionType; // ✅ CORRIGÉ : Type strict
 }
 
-// Interface Device Info (inchangée, déjà correcte)
+// ✅ CORRIGÉ : Interface Device Info avec deviceFingerprint
+// Respecte schema.prisma user_sessions.device_fingerprint
 export interface IDeviceInfo {
   deviceId?: string;
   userAgent: string;
@@ -41,7 +45,7 @@ export interface IDeviceInfo {
   os?: string;
   isMobile: boolean;
   ipAddress: string;
-  deviceFingerprint?: string;
+  deviceFingerprint?: string; // ✅ AJOUTÉ : Champ manquant selon schema.prisma
   geolocation?: {
     country: string;
     city: string;
@@ -49,7 +53,7 @@ export interface IDeviceInfo {
   };
 }
 
-// Interface paire de tokens (inchangée)
+// Interface paire de tokens
 export interface ITokenPair {
   accessToken: string;
   refreshToken: string;
@@ -57,45 +61,17 @@ export interface ITokenPair {
   expiresIn: number; // secondes
 }
 
-// ✅ NOUVELLES INTERFACES pour gestion intelligente des sessions
-
-/**
- * Interface pour résultat de gestion de session lors du login
- */
+// ✅ INTERFACE : Résultat de gestion de login session avec types stricts
 export interface ISessionLoginResult {
   session: IUserSession;
   tokens: ITokenPair;
-  type: 'reused' | 'refreshed' | 'new';
+  type: SessionType; // ✅ CORRIGÉ : Type strict
   isReused: boolean;
+  tokensReused?: boolean; // Indique si tokens ont été réutilisés
 }
 
-/**
- * Interface pour compatibilité de session
- */
-export interface ISessionCompatibility {
-  session: IUserSession;
-  score: number; // Score de compatibilité 0-100
-  factors: {
-    deviceFingerprint: boolean;
-    ipAddress: boolean;
-    userAgent: boolean;
-    recentActivity: boolean;
-  };
-}
-
-/**
- * Interface pour stratégie de gestion de session
- */
-export interface ISessionStrategy {
-  reuseThresholdMinutes: number; // Seuil pour réutiliser une session (ex: 60 min)
-  maxConcurrentSessions: number; // Nombre max de sessions simultanées
-  preferDeviceFingerprint: boolean; // Priorité au device fingerprint
-  allowIpBasedMatching: boolean; // Autoriser matching par IP
-}
-
-// Interface service de session (améliorée)
+// Interface service de session
 export interface ISessionService {
-  // Méthodes existantes (inchangées)
   createSession(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<IUserSession>;
   validateSession(sessionToken: string): Promise<IUserSession | null>;
   refreshSession(refreshToken: string): Promise<ITokenPair>;
@@ -103,10 +79,5 @@ export interface ISessionService {
   revokeAllUserSessions(userId: string): Promise<number>;
   getUserActiveSessions(userId: string): Promise<IUserSession[]>;
   cleanupExpiredSessions(): Promise<number>;
-  
-  // ✅ NOUVELLES MÉTHODES pour gestion intelligente
   handleUserLogin(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<ISessionLoginResult>;
-  findCompatibleSession(sessions: IUserSession[], deviceInfo: IDeviceInfo, rememberMe: boolean): Promise<IUserSession | null>;
-  refreshExistingSession(session: IUserSession, deviceInfo: IDeviceInfo, rememberMe: boolean): Promise<IUserSession>;
-  cleanupExpiredSessionsForUser(userId: string): Promise<number>;
 }

@@ -536,6 +536,61 @@ let MfaService = class MfaService {
             this.logger.error('Cleanup user challenges failed', error.stack, 'MfaService.cleanupUserChallenges');
         }
     }
+    async generateChallengeForAuth(userId, email, deviceInfo) {
+        const operationId = this.logger.startOperation('generateChallengeForAuth', { userId });
+        try {
+            const availableMethods = await this.getUserAvailableMethods(userId);
+            const challenge = await this.generateMfaChallenge(userId, availableMethods, deviceInfo.deviceFingerprint);
+            this.logger.logBusinessEvent('MFA_CHALLENGE_FOR_AUTH', {
+                userId,
+                email,
+                methods: availableMethods,
+                deviceFingerprint: deviceInfo.deviceFingerprint,
+            }, userId);
+            this.logger.endOperation('generateChallengeForAuth', operationId, true);
+            return challenge;
+        }
+        catch (error) {
+            this.logger.logErrorEvent(error, 'MfaService.generateChallengeForAuth', userId, JSON.stringify({ email, deviceInfo: { ipAddress: deviceInfo.ipAddress } }));
+            this.logger.endOperation('generateChallengeForAuth', operationId, false);
+            throw error;
+        }
+    }
+    async getUserAvailableMethods(userId) {
+        const methods = [];
+        try {
+            const hasMfaConfigured = await this.userHasMfaConfigured(userId);
+            if (!hasMfaConfigured) {
+                methods.push('EMAIL_OTP');
+                return methods;
+            }
+            const [totpSecret, smsEnabled, emailEnabled] = await Promise.all([
+                this.redis.getCache(`mfa_totp_secret:${userId}`),
+                this.redis.getCache(`mfa_sms_enabled:${userId}`),
+                this.redis.getCache(`mfa_email_enabled:${userId}`)
+            ]);
+            if (totpSecret)
+                methods.push('TOTP_APP');
+            if (smsEnabled)
+                methods.push('SMS_OTP');
+            if (emailEnabled)
+                methods.push('EMAIL_OTP');
+            if (methods.length === 0) {
+                methods.push('EMAIL_OTP');
+            }
+        }
+        catch (error) {
+            this.logger.warn('Erreur getUserAvailableMethods', JSON.stringify({
+                userId,
+                error: error.message,
+            }));
+            methods.push('EMAIL_OTP');
+        }
+        return methods;
+    }
+    async isMfaRequiredForRisk(userId, riskScore) {
+        return await this.requiresMfa(userId, riskScore);
+    }
 };
 exports.MfaService = MfaService;
 exports.MfaService = MfaService = __decorate([

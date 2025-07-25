@@ -14,6 +14,7 @@ export declare class TokenService implements ITokenService {
     generateAccessToken(payload: JwtPayload): Promise<string>;
     generateRefreshToken(payload: JwtRefreshPayload): Promise<string>;
     verifyAccessToken(token: string): Promise<JwtPayload>;
+    private getTokenHash;
     verifyRefreshToken(token: string): Promise<JwtRefreshPayload>;
     blacklistToken(token: string): Promise<void>;
     isTokenBlacklisted(token: string): Promise<boolean>;

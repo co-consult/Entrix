@@ -9,6 +9,7 @@ import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordService } from './password.service';
+import { MfaService } from './mfa.service';
 export declare class AuthService implements IAuthService {
     private readonly prisma;
     private readonly redis;
@@ -18,8 +19,9 @@ export declare class AuthService implements IAuthService {
     private readonly emailVerificationService;
     private readonly securityService;
     private readonly passwordService;
+    private readonly mfaService;
     private readonly logger;
-    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, emailVerificationService: EmailVerificationService, securityService: SecurityService, passwordService: PasswordService, loggerService: LoggerService);
+    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, emailVerificationService: EmailVerificationService, securityService: SecurityService, passwordService: PasswordService, mfaService: MfaService, loggerService: LoggerService);
     login(loginData: ILoginRequest, context?: {
         ipAddress: string;
         userAgent: string;
@@ -29,6 +31,7 @@ export declare class AuthService implements IAuthService {
         ip: string;
         userAgent: string;
     }): Promise<IRegisterResult>;
+    private handleSuccessfulLogin;
     validateUser(email: string, password: string, context?: {
         ipAddress?: string;
         userAgent?: string;
@@ -48,6 +51,11 @@ export declare class AuthService implements IAuthService {
         message: string;
         tokenId?: string;
     }>;
+    getVerificationStatus(userId: string): Promise<{
+        emailVerified: boolean;
+        verifiedAt?: string;
+        canResend: boolean;
+    }>;
     private validatePasswordStrength;
     private checkEmailExists;
     private checkRegistrationRateLimit;
@@ -57,9 +65,6 @@ export declare class AuthService implements IAuthService {
     private processOnboardingSecret;
     private getUserProfile;
     private mapDbUserToProfile;
-    getVerificationStatus(userId: string): Promise<{
-        emailVerified: boolean;
-        verifiedAt?: string;
-        canResend: boolean;
-    }>;
+    private generateMfaChallenge;
+    private isMfaRequired;
 }

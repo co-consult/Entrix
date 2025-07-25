@@ -10,6 +10,10 @@ export declare class SessionService implements ISessionService {
     private readonly logger;
     constructor(prisma: PrismaService, redis: RedisService, tokenService: TokenService, loggerService: LoggerService);
     handleUserLogin(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<ISessionLoginResult>;
+    getOrGenerateTokensForSession(session: IUserSession, rememberMe: boolean, deviceFingerprint?: string): Promise<{
+        tokens: ITokenPair;
+        tokensReused: boolean;
+    }>;
     createSession(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<IUserSession>;
     validateSession(sessionToken: string): Promise<IUserSession | null>;
     refreshSession(refreshToken: string): Promise<ITokenPair>;
@@ -17,9 +21,16 @@ export declare class SessionService implements ISessionService {
     revokeAllUserSessions(userId: string): Promise<number>;
     getUserActiveSessions(userId: string): Promise<IUserSession[]>;
     cleanupExpiredSessions(): Promise<number>;
-    findCompatibleSession(sessions: IUserSession[], deviceInfo: IDeviceInfo, rememberMe: boolean): Promise<IUserSession | null>;
-    refreshExistingSession(session: IUserSession, deviceInfo: IDeviceInfo, rememberMe: boolean): Promise<IUserSession>;
-    cleanupExpiredSessionsForUser(userId: string): Promise<number>;
+    private findCompatibleSession;
+    private refreshExistingSession;
+    private cleanupExpiredSessionsForUser;
+    private getActiveTokensForSession;
+    private cacheTokensForSession;
+    private extendTokensCacheTTL;
+    private blacklistTokenPair;
+    private removeTokensFromCache;
+    private isSimilarSubnet;
+    private isSimilarUserAgent;
     private enforceSessionLimits;
     private generateSessionToken;
     private generateDeviceFingerprint;
