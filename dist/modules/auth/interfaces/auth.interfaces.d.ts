@@ -33,12 +33,15 @@ export interface ILoginResult {
         riskScore: number;
         requiresMfa: boolean;
         ipGeolocation: string;
+        sessionType?: 'reused' | 'refreshed' | 'new';
+        wasSessionReused?: boolean;
     };
 }
 export interface IRegisterResult {
     success: boolean;
     user?: IUserProfile;
     tokens?: ITokenPair;
+    session?: ISessionInfo;
     verification?: {
         emailSent: boolean;
         verificationRequired: boolean;
@@ -50,6 +53,7 @@ export interface IRegisterResult {
         incentiveValue: number;
         migratedTickets: number;
     };
+    message?: string;
 }
 export interface IVerificationStatus {
     emailVerified: boolean;
@@ -62,7 +66,10 @@ export interface IAuthService {
         userAgent: string;
         deviceFingerprint?: string;
     }): Promise<ILoginResult>;
-    register(registerData: IRegisterRequest): Promise<IRegisterResult>;
+    register(registerData: IRegisterRequest, clientInfo?: {
+        ip: string;
+        userAgent: string;
+    }): Promise<IRegisterResult>;
     logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
     validateUser(email: string, password: string, context?: {
         ipAddress: string;
@@ -70,4 +77,21 @@ export interface IAuthService {
         deviceFingerprint?: string;
     }): Promise<IUserProfile | null>;
     verifyMfa(challengeToken: string, code: string, method: MfaProvider): Promise<ILoginResult>;
+    refreshTokens(refreshToken: string): Promise<ITokenPair>;
+    verifyEmail(token: string): Promise<{
+        success: boolean;
+        verified: boolean;
+        message: string;
+        userId?: string;
+    }>;
+    resendVerificationEmail(userId: string): Promise<{
+        success: boolean;
+        message: string;
+        tokenId?: string;
+    }>;
+    getVerificationStatus(userId: string): Promise<{
+        emailVerified: boolean;
+        verifiedAt?: string;
+        canResend: boolean;
+    }>;
 }

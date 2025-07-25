@@ -33,6 +33,8 @@ export declare class SessionInfoDto implements ISessionInfo {
     deviceInfo: any;
     isActive: boolean;
     lastActivity: string;
+    isReused?: boolean;
+    sessionType?: 'reused' | 'refreshed' | 'new';
 }
 export declare class MfaChallengeDto implements IMfaChallenge {
     methods: any[];
@@ -51,7 +53,10 @@ export declare class LoginResponseDto {
         riskScore: number;
         requiresMfa: boolean;
         ipGeolocation: string;
+        sessionType?: 'reused' | 'refreshed' | 'new';
+        wasSessionReused?: boolean;
     };
+    message?: string;
 }
 export declare class UserProfileMapper {
     static toDto(userProfile: IUserProfile): UserProfileDto;

@@ -10,10 +10,6 @@ export declare class PasswordController {
     changePassword(changePasswordDto: ChangePasswordDto, userId: string): Promise<ChangePasswordResponseDto>;
     validatePassword(password: string): Promise<{
         success: boolean;
-        data: {
-            isValid: boolean;
-            score: number;
-            suggestions: string[];
-        };
+        data: import("../interfaces").IPasswordValidation;
     }>;
 }

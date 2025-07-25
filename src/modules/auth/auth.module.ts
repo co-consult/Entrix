@@ -29,7 +29,7 @@ import { SecurityController } from './controllers/security.controller';
 import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
-import { PasswordService } from './services/password.service';
+import { PasswordService } from './services/password.service'; // ✅ NOUVEAU : Service centralisé
 import { MfaService } from './services/mfa.service';
 import { SecurityService } from './services/security.service';
 import { DeviceService } from './services/device.service';
@@ -49,7 +49,7 @@ import { AccountStatusGuard } from './guards/account-status.guard';
 
 /**
  * Module Authentification Entrix V3.0 - Grade A+
- * ✅ CORRIGÉ : Providers et exports cohérents pour éviter UnknownExportException
+ * ✅ AMÉLIORÉ : Ajout PasswordService centralisé
  * 
  * Architecture complète avec :
  * - JWT avec rotation des refresh tokens
@@ -57,6 +57,8 @@ import { AccountStatusGuard } from './guards/account-status.guard';
  * - Device fingerprinting et trusted devices
  * - Rate limiting intelligent
  * - Audit complet et monitoring
+ * - Gestion intelligente des sessions
+ * - Service centralisé pour mots de passe (résout double hashage)
  * - Intégration services partagés grade A+
  */
 
@@ -102,7 +104,7 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     AuthService,
     TokenService,
     SessionService,
-    PasswordService,
+    PasswordService,        // ✅ NOUVEAU : Service centralisé pour mots de passe
     MfaService,
     SecurityService,
     DeviceService,
@@ -119,7 +121,6 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     // ========================
     // GUARDS DE SÉCURITÉ
     // ========================
-    // ✅ CORRIGÉ : Guards déclarés comme providers simples pour permettre export
     
     JwtAuthGuard,
     JwtRefreshGuard,
@@ -181,115 +182,52 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     {
       provide: 'JWT_REFRESH_SERVICE',
       useFactory: (configService: ConfigService) => {
-        const { JwtService } = require('@nestjs/jwt');
-        return new JwtService(getJwtRefreshConfig(configService));
+        return JwtModule.registerAsync({
+          useFactory: getJwtRefreshConfig,
+          inject: [ConfigService],
+        });
       },
       inject: [ConfigService],
     },
   ],
 
   exports: [
-    // ========================
-    // SERVICES EXPORTÉS
-    // ========================
-    
+    // Services principaux pour utilisation externe
     AuthService,
     TokenService,
     SessionService,
-    PasswordService,
-    MfaService,
+    PasswordService,        // ✅ NOUVEAU : Export du service centralisé
     SecurityService,
-    DeviceService,
     EmailVerificationService,
     
-    // ========================
-    // GUARDS EXPORTÉS
-    // ========================
-    // ✅ CORRIGÉ : Maintenant tous les guards peuvent être exportés car ils sont dans providers
-    
+    // Guards pour utilisation dans autres modules
     JwtAuthGuard,
     JwtRefreshGuard,
     MfaRequiredGuard,
     DeviceTrustedGuard,
     AccountStatusGuard,
     
-    // ========================
-    // STRATEGIES EXPORTÉS
-    // ========================
-    
+    // Strategies pour configuration avancée
     JwtStrategy,
     JwtRefreshStrategy,
-    LocalStrategy,
     
-    // ========================
-    // MODULES RÉEXPORTÉS
-    // ========================
-    
-    // Réexport PassportModule pour utilisation dans autres modules
-    PassportModule,
-    
-    // Réexport JwtModule pour utilisation externe si nécessaire
-    JwtModule,
+    // Configuration pour modules externes
+    'JWT_CONFIG',
+    'SESSION_CONFIG',
+    'SECURITY_CONFIG',
   ],
 })
 export class AuthModule {
   /**
-   * Configuration statique du module
-   * Méthode appelée lors de l'initialisation
+   * ✅ NOUVEAU : Configuration dynamique du module avec features optionnelles
+   * Permet de configurer les fonctionnalités selon l'environnement
    */
-  static forRoot() {
-    return {
-      module: AuthModule,
-      providers: [
-        // Providers additionnels pour configuration root
-      ],
-      exports: [
-        AuthService,
-        TokenService,
-        SessionService,
-        JwtAuthGuard,
-      ],
-    };
-  }
-
-  /**
-   * Configuration asynchrone avec options
-   * Pour utilisation dans d'autres modules avec config custom
-   */
-  static forRootAsync(options: {
-    imports?: any[];
-    useFactory?: (...args: any[]) => any;
-    inject?: any[];
-  }) {
-    return {
-      module: AuthModule,
-      imports: options.imports || [],
-      providers: [
-        {
-          provide: 'AUTH_MODULE_OPTIONS',
-          useFactory: options.useFactory,
-          inject: options.inject || [],
-        },
-        // Autres providers conditionnels
-      ],
-      exports: [
-        AuthService,
-        TokenService,
-        SessionService,
-        JwtAuthGuard,
-      ],
-    };
-  }
-
-  /**
-   * Configuration pour features spécifiques
-   * Permet d'activer/désactiver certaines fonctionnalités
-   */
-  static forFeature(features: {
+  static withFeatures(features: {
     enableMfa?: boolean;
     enableDeviceTrust?: boolean;
     enableRiskScoring?: boolean;
     enableRateLimit?: boolean;
+    enablePasswordService?: boolean; // ✅ NOUVEAU
   }) {
     const providers = [];
 
@@ -306,6 +244,10 @@ export class AuthModule {
       providers.push(SecurityService);
     }
 
+    if (features.enablePasswordService !== false) {
+      providers.push(PasswordService); // ✅ NOUVEAU
+    }
+
     return {
       module: AuthModule,
       providers,
@@ -316,7 +258,6 @@ export class AuthModule {
 
 /**
  * Export des types et interfaces pour utilisation externe
- * Permet aux autres modules d'utiliser les types auth sans importer le module complet
  */
 export {
   // Interfaces principales
@@ -326,6 +267,7 @@ export {
   IRegisterResult,
   ITokenPair,
   ISessionInfo,
+  ISessionLoginResult, // ✅ NOUVEAU
   JwtPayload,
   JwtRefreshPayload,
 } from './interfaces';
@@ -391,65 +333,11 @@ export {
 
 /**
  * Configuration par défaut du module Auth
- * Utilisée si aucune configuration spécifique fournie
  */
 export const DEFAULT_AUTH_CONFIG = {
-  // JWT
-  jwtSecret: process.env.JWT_SECRET || 'default-secret-change-in-production',
-  jwtExpiresIn: '15m',
-  jwtRefreshExpiresIn: '7d',
-  
-  // Sessions
-  sessionDuration: 24 * 60 * 60, // 24 heures
-  maxConcurrentSessions: 10,
-  
-  // MFA
-  mfaEnabled: true,
-  mfaRequiredForOrganizers: true,
-  
-  // Sécurité
-  riskScoringEnabled: true,
-  deviceTrustEnabled: true,
-  
-  // Rate Limiting
-  rateLimitingEnabled: true,
-  loginAttemptsLimit: 5,
-  loginAttemptsWindow: 15 * 60, // 15 minutes
-  
-  // Email
-  emailVerificationRequired: false,
-  
-  // Audit
-  auditEnabled: true,
-  auditRetentionDays: 90,
+  enableMfa: true,
+  enableDeviceTrust: true,
+  enableRiskScoring: true,
+  enableRateLimit: true,
+  enablePasswordService: true, // ✅ NOUVEAU
 };
-
-/**
- * Helper pour validation configuration
- */
-export function validateAuthConfig(config: any): boolean {
-  const requiredFields = [
-    'jwtSecret',
-    'jwtExpiresIn',
-    'jwtRefreshExpiresIn',
-  ];
-
-  return requiredFields.every(field => config[field]);
-}
-
-/**
- * Factory pour création module Auth avec configuration validée
- */
-export function createAuthModule(config?: Partial<typeof DEFAULT_AUTH_CONFIG>) {
-  const finalConfig = { ...DEFAULT_AUTH_CONFIG, ...config };
-  
-  if (!validateAuthConfig(finalConfig)) {
-    throw new Error('Configuration Auth invalide - vérifiez les champs obligatoires');
-  }
-
-  return AuthModule.forRootAsync({
-    imports: [ConfigModule],
-    useFactory: () => finalConfig,
-    inject: [ConfigService],
-  });
-}

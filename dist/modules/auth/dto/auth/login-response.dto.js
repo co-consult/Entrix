@@ -118,6 +118,8 @@ class SessionInfoDto {
     deviceInfo;
     isActive;
     lastActivity;
+    isReused;
+    sessionType;
 }
 exports.SessionInfoDto = SessionInfoDto;
 __decorate([
@@ -140,6 +142,17 @@ __decorate([
     (0, swagger_1.ApiProperty)({ description: 'Dernière activité (ISO 8601)' }),
     __metadata("design:type", String)
 ], SessionInfoDto.prototype, "lastActivity", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: 'Session réutilisée' }),
+    __metadata("design:type", Boolean)
+], SessionInfoDto.prototype, "isReused", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        enum: ['reused', 'refreshed', 'new'],
+        description: 'Type de session'
+    }),
+    __metadata("design:type", String)
+], SessionInfoDto.prototype, "sessionType", void 0);
 class MfaChallengeDto {
     methods;
     challengeToken;
@@ -166,6 +179,7 @@ class LoginResponseDto {
     success;
     data;
     meta;
+    message;
 }
 exports.LoginResponseDto = LoginResponseDto;
 __decorate([
@@ -180,6 +194,10 @@ __decorate([
     (0, swagger_1.ApiPropertyOptional)({ description: 'Métadonnées de sécurité' }),
     __metadata("design:type", Object)
 ], LoginResponseDto.prototype, "meta", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: 'Message informatif' }),
+    __metadata("design:type", String)
+], LoginResponseDto.prototype, "message", void 0);
 class UserProfileMapper {
     static toDto(userProfile) {
         return {

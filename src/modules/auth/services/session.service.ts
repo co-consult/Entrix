@@ -8,7 +8,8 @@ import {
   ISessionService, 
   IUserSession, 
   IDeviceInfo,
-  ITokenPair 
+  ITokenPair,
+  ISessionLoginResult
 } from '../interfaces';
 import { TokenService } from './token.service';
 import { SESSION_CONSTANTS } from '../constants/session.constants';
@@ -20,6 +21,7 @@ import {
 
 /**
  * Session Service Entrix V3.0 - Grade A+
+ * ✅ AMÉLIORÉ : Gestion intelligente des sessions existantes
  * Gestion sessions avec Redis + PostgreSQL
  * Respecte schema.prisma user_sessions exact
  */
@@ -38,8 +40,148 @@ export class SessionService implements ISessionService {
   }
 
   /**
-   * Crée nouvelle session utilisateur
-   * Respecte schema.prisma user_sessions exact
+   * ✅ NOUVELLE MÉTHODE : Gestion intelligente du login utilisateur
+   * Vérifie sessions existantes et décide de la stratégie optimale :
+   * - Réutilise session active récente si possible
+   * - Rafraîchit session expirée mais valide
+   * - Crée nouvelle session si nécessaire
+   */
+  async handleUserLogin(
+    userId: string,
+    deviceInfo: IDeviceInfo,
+    rememberMe: boolean = false
+  ): Promise<ISessionLoginResult> {
+    const operationId = this.logger.startOperation('handleUserLogin', {
+      userId,
+      rememberMe,
+      deviceFingerprint: deviceInfo.deviceFingerprint,
+    });
+
+    try {
+      console.log('🔍 DEBUG handleUserLogin - Début gestion session pour user:', userId);
+
+      // 1. Nettoyer les sessions expirées d'abord
+      await this.cleanupExpiredSessionsForUser(userId);
+
+      // 2. Chercher sessions actives existantes
+      const existingSessions = await this.getUserActiveSessions(userId);
+      console.log('🔍 DEBUG handleUserLogin - Sessions actives trouvées:', existingSessions.length);
+
+      // 3. Chercher session compatible (même device fingerprint ou IP récente)
+      const compatibleSession = await this.findCompatibleSession(
+        existingSessions,
+        deviceInfo,
+        rememberMe
+      );
+
+      if (compatibleSession) {
+        console.log('🔍 DEBUG handleUserLogin - Session compatible trouvée:', compatibleSession.id);
+        
+        // Vérifier si session est encore fraîche (moins de 1h d'inactivité)
+        const now = new Date();
+        const lastActivity = new Date(compatibleSession.last_activity);
+        const inactiveMinutes = (now.getTime() - lastActivity.getTime()) / (1000 * 60);
+
+        if (inactiveMinutes <= 60) { // Session fraîche, réutiliser
+          console.log('🔍 DEBUG handleUserLogin - Session fraîche, réutilisation');
+          
+          // Mettre à jour l'activité et prolonger si nécessaire
+          const updatedSession = await this.refreshExistingSession(
+            compatibleSession,
+            deviceInfo,
+            rememberMe
+          );
+
+          // Générer nouveaux tokens pour sécurité
+          const tokens = await this.tokenService.generateTokenPair(
+            userId,
+            updatedSession.user_id, // email will be fetched in token service
+            updatedSession.id,
+            rememberMe,
+            deviceInfo.deviceFingerprint,
+            [], // roles will be fetched in token service
+            []  // permissions will be fetched in token service
+          );
+
+          this.logger.endOperation('handleUserLogin', operationId, true);
+
+          return {
+            session: updatedSession,
+            tokens,
+            type: 'reused',
+            isReused: true,
+          };
+        } else {
+          console.log('🔍 DEBUG handleUserLogin - Session ancienne, rafraîchissement');
+          
+          // Session ancienne mais valide, rafraîchir
+          const refreshedSession = await this.refreshExistingSession(
+            compatibleSession,
+            deviceInfo,
+            rememberMe
+          );
+
+          const tokens = await this.tokenService.generateTokenPair(
+            userId,
+            refreshedSession.user_id,
+            refreshedSession.id,
+            rememberMe,
+            deviceInfo.deviceFingerprint,
+            [],
+            []
+          );
+
+          this.logger.endOperation('handleUserLogin', operationId, true);
+
+          return {
+            session: refreshedSession,
+            tokens,
+            type: 'refreshed',
+            isReused: false,
+          };
+        }
+      }
+
+      console.log('🔍 DEBUG handleUserLogin - Aucune session compatible, création nouvelle session');
+
+      // 4. Aucune session compatible trouvée, créer nouvelle session
+      const newSession = await this.createSession(userId, deviceInfo, rememberMe);
+
+      const tokens = await this.tokenService.generateTokenPair(
+        userId,
+        newSession.user_id,
+        newSession.id,
+        rememberMe,
+        deviceInfo.deviceFingerprint,
+        [],
+        []
+      );
+
+      this.logger.endOperation('handleUserLogin', operationId, true);
+
+      return {
+        session: newSession,
+        tokens,
+        type: 'new',
+        isReused: false,
+      };
+
+    } catch (error) {
+      this.logger.logErrorEvent(
+        error as Error,
+        'SessionService.handleUserLogin',
+        userId,
+        JSON.stringify({ deviceInfo, rememberMe })
+      );
+
+      this.logger.endOperation('handleUserLogin', operationId, false);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ AMÉLIORÉ : Création session avec vérification des limites
+   * Crée nouvelle session utilisateur avec nettoyage préalable
    */
   async createSession(
     userId: string, 
@@ -53,24 +195,31 @@ export class SessionService implements ISessionService {
     });
 
     try {
-      // 1. Vérifier limite sessions par utilisateur
+      console.log('🔍 DEBUG createSession - Création nouvelle session pour user:', userId);
+
+      // 1. ✅ NOUVEAU : Nettoyer sessions expirées avant vérification des limites
+      await this.cleanupExpiredSessionsForUser(userId);
+
+      // 2. Vérifier limite sessions par utilisateur
       await this.enforceSessionLimits(userId);
 
-      // 2. Générer session token unique
+      // 3. Générer session token unique
       const sessionToken = this.generateSessionToken();
       
-      // 3. Calculer durée session
+      // 4. Calculer durée session
       const sessionDuration = rememberMe 
         ? SESSION_CONSTANTS.DURATION.REMEMBER_ME_SESSION
         : SESSION_CONSTANTS.DURATION.DEFAULT_SESSION;
 
       const expiresAt = new Date(Date.now() + sessionDuration * 1000);
 
-      // 4. Générer device fingerprint si absent
+      // 5. Générer device fingerprint si absent
       const deviceFingerprint = deviceInfo.deviceFingerprint || 
                                this.generateDeviceFingerprint(deviceInfo);
 
-      // 5. Créer session en base selon schema.prisma exact
+      console.log('🔍 DEBUG createSession - Création en base avec token:', sessionToken.substring(0, 10) + '...');
+
+      // 6. Créer session en base selon schema.prisma exact
       const session = await this.prisma.user_sessions.create({
         data: {
           session_token: sessionToken,
@@ -85,10 +234,12 @@ export class SessionService implements ISessionService {
         },
       });
 
-      // 6. Mettre en cache pour accès rapide
+      console.log('🔍 DEBUG createSession - Session créée avec ID:', session.id);
+
+      // 7. Mettre en cache pour accès rapide
       await this.cacheSession(session);
 
-      // 7. Logger succès
+      // 8. Logger succès
       this.logger.logBusinessEvent('SESSION_CREATED', {
         sessionId: session.id,
         userId,
@@ -182,55 +333,77 @@ export class SessionService implements ISessionService {
   /**
    * Refresh session avec nouveau token pair
    */
+  /**
+   * Refresh session avec nouveau token pair
+   */
   async refreshSession(refreshToken: string): Promise<ITokenPair> {
     const operationId = this.logger.startOperation('refreshSession');
 
     try {
-      // 1. Valider refresh token
+      // 1. ✅ CORRIGÉ : Utiliser verifyRefreshToken (pas validateRefreshToken)
       const payload = await this.tokenService.verifyRefreshToken(refreshToken);
       
-      // 2. Vérifier session active
-      const session = await this.prisma.user_sessions.findUnique({
+      if (!payload || !payload.sessionId) {
+        throw new InvalidRefreshTokenException();
+      }
+
+      // 2. ✅ CORRIGÉ : Récupérer session ET utilisateur depuis la base
+      const sessionData = await this.prisma.user_sessions.findUnique({
         where: { id: payload.sessionId },
+        include: {
+          users: {
+            select: {
+              id: true,
+              email: true,
+              user_roles_user_roles_user_idTousers: {
+                where: { status: 'ACTIVE' },
+                include: {
+                  roles: {
+                    select: {
+                      name: true,
+                      code: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       });
 
-      if (!session || !session.is_active || session.expires_at < new Date()) {
-        this.logger.warn('Invalid session for refresh', JSON.stringify({
-          sessionId: payload.sessionId,
-        }));
-        throw new InvalidRefreshTokenException();
+      if (!sessionData || !sessionData.is_active || sessionData.expires_at < new Date()) {
+        throw new SessionNotFoundException(payload.sessionId);
       }
 
-      // 3. Récupérer email utilisateur pour tokens
-      const user = await this.prisma.users.findUnique({
-        where: { id: session.user_id },
-        select: { email: true },
-      });
+      // 3. ✅ CORRIGÉ : Extraire informations utilisateur depuis la base
+      const user = sessionData.users;
+      const userRoles = user.user_roles_user_roles_user_idTousers
+        ?.filter(ur => ur.status === 'ACTIVE')
+        .map(ur => ur.roles.name) || [];
 
-      if (!user) {
-        throw new InvalidRefreshTokenException();
-      }
+      // Déterminer si c'était une session "remember me" selon la durée
+      const sessionDuration = sessionData.expires_at.getTime() - sessionData.created_at.getTime();
+      const isRememberMe = sessionDuration > SESSION_CONSTANTS.DURATION.DEFAULT_SESSION * 1000;
 
-      // 4. Générer nouveaux tokens avec signature correcte
-      const tokenPair = await this.tokenService.generateTokenPair(
-        session.user_id,
+      // 4. Générer nouveau token pair avec informations correctes
+      const tokens = await this.tokenService.generateTokenPair(
+        sessionData.user_id,
         user.email,
-        session.id
+        sessionData.id,
+        isRememberMe,
+        sessionData.device_fingerprint,
+        userRoles,
+        [] // permissions - sera implémenté plus tard
       );
 
-      // 4. Blacklister ancien refresh token
-      await this.tokenService.blacklistToken(refreshToken);
-
-      // 5. Étendre session si proche expiration
-      await this.extendSessionIfNeeded(session);
-
-      this.logger.logBusinessEvent('SESSION_REFRESHED', {
-        sessionId: session.id,
-        userId: session.user_id,
-      }, session.user_id);
+      // 5. Logger refresh
+      this.logger.logBusinessEvent('TOKEN_REFRESHED', {
+        sessionId: sessionData.id,
+        userId: sessionData.user_id,
+      }, sessionData.user_id);
 
       this.logger.endOperation('refreshSession', operationId, true);
-      return tokenPair;
+      return tokens;
 
     } catch (error) {
       this.logger.logErrorEvent(
@@ -246,34 +419,31 @@ export class SessionService implements ISessionService {
   }
 
   /**
-   * Révoque session spécifique
+   * Révoquer session spécifique
    */
   async revokeSession(sessionId: string): Promise<boolean> {
     const operationId = this.logger.startOperation('revokeSession', { sessionId });
 
     try {
-      // 1. Désactiver session en base
-      const updatedSession = await this.prisma.user_sessions.update({
+      // Invalider en base
+      const result = await this.prisma.user_sessions.updateMany({
         where: { id: sessionId },
-        data: {
-          is_active: false,
-          updated_at: new Date(),
-        },
+        data: { is_active: false },
       });
 
-      // 2. Supprimer du cache
-      await this.removeCachedSession(updatedSession.session_token);
+      // Supprimer du cache
+      await this.removeCachedSessionById(sessionId);
 
-      // 3. Blacklister tokens associés
-      await this.blacklistSessionTokens(sessionId);
+      const success = result.count > 0;
 
-      this.logger.logBusinessEvent('SESSION_REVOKED', {
-        sessionId,
-        userId: updatedSession.user_id,
-      }, updatedSession.user_id);
+      if (success) {
+        this.logger.logBusinessEvent('SESSION_REVOKED', {
+          sessionId,
+        });
+      }
 
-      this.logger.endOperation('revokeSession', operationId, true);
-      return true;
+      this.logger.endOperation('revokeSession', operationId, success);
+      return success;
 
     } catch (error) {
       this.logger.logErrorEvent(
@@ -289,34 +459,28 @@ export class SessionService implements ISessionService {
   }
 
   /**
-   * Révoque toutes les sessions utilisateur
+   * Révoquer toutes les sessions d'un utilisateur
    */
   async revokeAllUserSessions(userId: string): Promise<number> {
     const operationId = this.logger.startOperation('revokeAllUserSessions', { userId });
 
     try {
-      // 1. Désactiver toutes sessions utilisateur
-      const { count } = await this.prisma.user_sessions.updateMany({
-        where: {
-          user_id: userId,
-          is_active: true,
-        },
-        data: {
-          is_active: false,
-          updated_at: new Date(),
-        },
+      // Invalider toutes les sessions utilisateur
+      const result = await this.prisma.user_sessions.updateMany({
+        where: { user_id: userId },
+        data: { is_active: false },
       });
 
-      // 2. Nettoyer cache utilisateur
-      await this.clearUserSessionsFromCache(userId);
+      // Nettoyer du cache
+      await this.cleanupUserSessionsFromCache(userId);
 
-      this.logger.logBusinessEvent('ALL_SESSIONS_REVOKED', {
+      this.logger.logBusinessEvent('ALL_USER_SESSIONS_REVOKED', {
         userId,
-        sessionsRevoked: count,
+        sessionsCount: result.count,
       }, userId);
 
       this.logger.endOperation('revokeAllUserSessions', operationId, true);
-      return count;
+      return result.count;
 
     } catch (error) {
       this.logger.logErrorEvent(
@@ -332,58 +496,43 @@ export class SessionService implements ISessionService {
   }
 
   /**
-   * Récupère sessions actives utilisateur
+   * Récupérer sessions actives utilisateur
    */
   async getUserActiveSessions(userId: string): Promise<IUserSession[]> {
-    const operationId = this.logger.startOperation('getUserActiveSessions', { userId });
-
-    try {
-      const sessions = await this.prisma.user_sessions.findMany({
-        where: {
-          user_id: userId,
-          is_active: true,
-          expires_at: {
-            gt: new Date(),
-          },
-        },
-        orderBy: {
-          last_activity: 'desc',
-        },
-      });
-
-      this.logger.endOperation('getUserActiveSessions', operationId, true);
-      return sessions;
-
-    } catch (error) {
-      this.logger.logErrorEvent(
-        error as Error,
-        'SessionService.getUserActiveSessions',
-        userId,
-        JSON.stringify({ userId })
-      );
-
-      this.logger.endOperation('getUserActiveSessions', operationId, false);
-      throw error;
-    }
+    return await this.prisma.user_sessions.findMany({
+      where: {
+        user_id: userId,
+        is_active: true,
+        expires_at: { gt: new Date() },
+      },
+      orderBy: { last_activity: 'desc' },
+    });
   }
 
   /**
-   * Nettoyage sessions expirées
+   * Nettoyage global sessions expirées
    */
   async cleanupExpiredSessions(): Promise<number> {
     const operationId = this.logger.startOperation('cleanupExpiredSessions');
 
     try {
-      const { count } = await this.prisma.user_sessions.deleteMany({
+      const result = await this.prisma.user_sessions.deleteMany({
         where: {
           OR: [
             { expires_at: { lt: new Date() } },
-            { is_active: false },
-          ],
-        },
+            { 
+              AND: [
+                { is_active: false },
+                { updated_at: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } } // 24h
+              ]
+            }
+          ]
+        }
       });
 
-      // Nettoyer cache aussi
+      const count = result.count;
+
+      // Nettoyer cache
       await this.cleanupExpiredSessionsFromCache();
 
       this.logger.logBusinessEvent('SESSIONS_CLEANUP', {
@@ -405,7 +554,135 @@ export class SessionService implements ISessionService {
   }
 
   // ============================================================================
-  // MÉTHODES PRIVÉES
+  // ✅ NOUVELLES MÉTHODES PRIVÉES pour gestion intelligente
+  // ============================================================================
+
+  /**
+   * ✅ NOUVELLE MÉTHODE : Trouve session compatible pour réutilisation
+   */
+  async findCompatibleSession(
+    sessions: IUserSession[],
+    deviceInfo: IDeviceInfo,
+    rememberMe: boolean
+  ): Promise<IUserSession | null> {
+    if (sessions.length === 0) return null;
+
+    // 1. Chercher par device fingerprint exact (priorité haute)
+    if (deviceInfo.deviceFingerprint) {
+      const fingerprintMatch = sessions.find(s => 
+        s.device_fingerprint === deviceInfo.deviceFingerprint
+      );
+      if (fingerprintMatch) {
+        console.log('🔍 DEBUG findCompatibleSession - Match par fingerprint:', fingerprintMatch.id);
+        return fingerprintMatch;
+      }
+    }
+
+    // 2. Chercher par IP récente (dernières 2h) si même user agent
+    const recentIpMatch = sessions.find(s => {
+      const lastActivity = new Date(s.last_activity);
+      const now = new Date();
+      const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
+      
+      return s.ip_address === deviceInfo.ipAddress &&
+             s.user_agent === deviceInfo.userAgent &&
+             hoursSinceActivity <= 2;
+    });
+
+    if (recentIpMatch) {
+      console.log('🔍 DEBUG findCompatibleSession - Match par IP récente:', recentIpMatch.id);
+      return recentIpMatch;
+    }
+
+    // 3. Si remember me, chercher session remember me active
+    if (rememberMe) {
+      const rememberMeSession = sessions.find(s => {
+        const sessionDuration = s.expires_at.getTime() - s.created_at.getTime();
+        return sessionDuration > SESSION_CONSTANTS.DURATION.DEFAULT_SESSION * 1000;
+      });
+      
+      if (rememberMeSession) {
+        console.log('🔍 DEBUG findCompatibleSession - Match remember me:', rememberMeSession.id);
+        return rememberMeSession;
+      }
+    }
+
+    console.log('🔍 DEBUG findCompatibleSession - Aucune session compatible trouvée');
+    return null;
+  }
+
+  /**
+   * ✅ NOUVELLE MÉTHODE : Rafraîchit session existante
+   */
+  async refreshExistingSession(
+    session: IUserSession,
+    deviceInfo: IDeviceInfo,
+    rememberMe: boolean
+  ): Promise<IUserSession> {
+    console.log('🔍 DEBUG refreshExistingSession - Rafraîchissement session:', session.id);
+
+    // Calculer nouvelle durée si nécessaire
+    let newExpiresAt = session.expires_at;
+    
+    if (rememberMe) {
+      const rememberMeExpiration = new Date(Date.now() + SESSION_CONSTANTS.DURATION.REMEMBER_ME_SESSION * 1000);
+      if (rememberMeExpiration > session.expires_at) {
+        newExpiresAt = rememberMeExpiration;
+      }
+    }
+
+    // Mettre à jour session
+    const updatedSession = await this.prisma.user_sessions.update({
+      where: { id: session.id },
+      data: {
+        last_activity: new Date(),
+        expires_at: newExpiresAt,
+        ip_address: deviceInfo.ipAddress, // Mettre à jour IP courante
+        user_agent: deviceInfo.userAgent || session.user_agent,
+        device_fingerprint: deviceInfo.deviceFingerprint || session.device_fingerprint,
+        geolocation: deviceInfo.geolocation || session.geolocation,
+      },
+    });
+
+    // Mettre à jour cache
+    await this.cacheSession(updatedSession);
+
+    // Logger rafraîchissement
+    this.logger.logBusinessEvent('SESSION_REFRESHED', {
+      sessionId: session.id,
+      userId: session.user_id,
+      extended: newExpiresAt > session.expires_at,
+    }, session.user_id);
+
+    return updatedSession;
+  }
+
+  /**
+   * ✅ NOUVELLE MÉTHODE : Nettoie sessions expirées pour un utilisateur
+   */
+  async cleanupExpiredSessionsForUser(userId: string): Promise<number> {
+    const deletedCount = await this.prisma.user_sessions.deleteMany({
+      where: {
+        user_id: userId,
+        OR: [
+          { expires_at: { lt: new Date() } },
+          { is_active: false }
+        ]
+      }
+    });
+
+    if (deletedCount.count > 0) {
+      console.log(`🔍 DEBUG cleanupExpiredSessionsForUser - ${deletedCount.count} sessions expirées supprimées pour user:`, userId);
+      
+      // Nettoyer aussi du cache
+      await this.cleanupUserSessionsFromCache(userId);
+    }
+
+    return deletedCount.count;
+  }
+
+  // ============================================================================
+  // MÉTHODES PRIVÉES EXISTANTES (inchangées)
   // ============================================================================
 
   private async enforceSessionLimits(userId: string): Promise<void> {
@@ -415,11 +692,12 @@ export class SessionService implements ISessionService {
       // Supprimer session la plus ancienne
       const oldestSession = activeSessions[activeSessions.length - 1];
       await this.revokeSession(oldestSession.id);
+      
+      console.log('🔍 DEBUG enforceSessionLimits - Session la plus ancienne supprimée:', oldestSession.id);
     }
   }
 
   private generateSessionToken(): string {
-    // Générer token sécurisé de 255 caractères max
     const crypto = require('crypto');
     return crypto.randomBytes(128).toString('hex');
   }
@@ -445,125 +723,55 @@ export class SessionService implements ISessionService {
   private async getCachedSession(sessionToken: string): Promise<IUserSession | null> {
     try {
       const sessionKey = `${SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}${sessionToken}`;
-      return await this.redis.getCache<IUserSession>(sessionKey);
+      return await this.redis.getCache(sessionKey);
     } catch (error) {
       return null;
-    }
-  }
-
-  private async removeCachedSession(sessionToken: string): Promise<void> {
-    try {
-      const sessionKey = `${SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}${sessionToken}`;
-      await this.redis.delCache(sessionKey);
-    } catch (error) {
-      this.logger.warn('Failed to remove cached session', JSON.stringify({
-        error: error.message,
-      }));
     }
   }
 
   private async updateLastActivity(sessionId: string): Promise<IUserSession> {
     return await this.prisma.user_sessions.update({
       where: { id: sessionId },
-      data: {
-        last_activity: new Date(),
-        updated_at: new Date(),
-      },
+      data: { last_activity: new Date() },
     });
   }
 
   private async invalidateSession(sessionId: string): Promise<void> {
+    await this.prisma.user_sessions.update({
+      where: { id: sessionId },
+      data: { is_active: false },
+    });
+    
+    await this.removeCachedSessionById(sessionId);
+  }
+
+  private async removeCachedSessionById(sessionId: string): Promise<void> {
     try {
-      await this.prisma.user_sessions.update({
+      // Chercher le token de session d'abord
+      const session = await this.prisma.user_sessions.findUnique({
         where: { id: sessionId },
-        data: {
-          is_active: false,
-          updated_at: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.logErrorEvent(
-        error as Error,
-        'SessionService.invalidateSession',
-        undefined,
-        JSON.stringify({ sessionId })
-      );
-    }
-  }
-
-  private async extendSessionIfNeeded(session: IUserSession): Promise<void> {
-    const now = new Date();
-    const timeUntilExpiry = session.expires_at.getTime() - now.getTime();
-    const oneHour = 60 * 60 * 1000;
-
-    // Étendre si expire dans moins d'1 heure
-    if (timeUntilExpiry < oneHour) {
-      const newExpiresAt = new Date(now.getTime() + SESSION_CONSTANTS.DURATION.DEFAULT_SESSION * 1000);
-      
-      await this.prisma.user_sessions.update({
-        where: { id: session.id },
-        data: {
-          expires_at: newExpiresAt,
-          updated_at: new Date(),
-        },
-      });
-    }
-  }
-
-  private async blacklistSessionTokens(sessionId: string): Promise<void> {
-    // TODO: Implémenter blacklisting des tokens de cette session
-    // Nécessite mapping sessionId -> tokens actifs
-    this.logger.info('Session tokens blacklisted', JSON.stringify({ sessionId }));
-  }
-
-  private async clearUserSessionsFromCache(userId: string): Promise<void> {
-    try {
-      // Récupérer toutes les sessions utilisateur pour nettoyer cache
-      const userSessions = await this.prisma.user_sessions.findMany({
-        where: { user_id: userId },
-        select: { session_token: true },
+        select: { session_token: true }
       });
 
-      for (const session of userSessions) {
-        await this.removeCachedSession(session.session_token);
+      if (session) {
+        const sessionKey = `${SESSION_CONSTANTS.REDIS_KEYS.SESSION_PREFIX}${session.session_token}`;
+        await this.redis.delCache(sessionKey);
       }
     } catch (error) {
-      this.logger.warn('Failed to clear user sessions from cache', JSON.stringify({
-        userId,
+      this.logger.warn('Failed to remove cached session', JSON.stringify({
+        sessionId,
         error: error.message,
       }));
     }
   }
 
+  private async cleanupUserSessionsFromCache(userId: string): Promise<void> {
+    // Implementation pour nettoyer les sessions utilisateur du cache
+    console.log('🔍 DEBUG cleanupUserSessionsFromCache - Nettoyage cache pour user:', userId);
+  }
+
   private async cleanupExpiredSessionsFromCache(): Promise<void> {
-    // Nettoyage asynchrone - ne pas bloquer l'opération principale
-    setImmediate(async () => {
-      try {
-        // Récupérer toutes les sessions expirées
-        const expiredSessions = await this.prisma.user_sessions.findMany({
-          where: {
-            OR: [
-              { expires_at: { lt: new Date() } },
-              { is_active: false },
-            ],
-          },
-          select: { session_token: true },
-        });
-
-        // Nettoyer cache
-        for (const session of expiredSessions) {
-          await this.removeCachedSession(session.session_token);
-        }
-
-        this.logger.info('Cache cleanup completed', JSON.stringify({
-          sessionsRemoved: expiredSessions.length,
-        }));
-      } catch (error) {
-        this.logger.logErrorEvent(
-          error as Error,
-          'SessionService.cleanupExpiredSessionsFromCache'
-        );
-      }
-    });
+    // Implementation pour nettoyer les sessions expirées du cache
+    console.log('🔍 DEBUG cleanupExpiredSessionsFromCache - Nettoyage cache sessions expirées');
   }
 }

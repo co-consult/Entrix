@@ -7,7 +7,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 };
 var AuthModule_1;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createAuthModule = exports.validateAuthConfig = exports.DEFAULT_AUTH_CONFIG = exports.RiskScoringUtil = exports.SecurityUtil = exports.TokenUtil = exports.GeolocationUtil = exports.DeviceUtil = exports.CryptoUtil = exports.ERROR_CONSTANTS = exports.SECURITY_CONSTANTS = exports.MFA_CONSTANTS = exports.SESSION_CONSTANTS = exports.AUTH_CONSTANTS = exports.SuspiciousActivityException = exports.InvalidRefreshTokenException = exports.SessionExpiredException = exports.DeviceNotTrustedException = exports.InvalidMfaCodeException = exports.MfaRequiredException = exports.EmailNotVerifiedException = exports.AccountLockedException = exports.InvalidCredentialsException = exports.Permissions = exports.Roles = exports.RateLimit = exports.AuditLog = exports.RequireTrustedDevice = exports.RequireMfa = exports.Public = exports.SessionId = exports.CurrentSession = exports.CurrentUserId = exports.CurrentUser = exports.MfaVerifyDto = exports.MfaSetupDto = exports.ChangePasswordDto = exports.ResetPasswordDto = exports.ForgotPasswordDto = exports.RefreshTokenDto = exports.RegisterDto = exports.LoginDto = exports.AuthModule = void 0;
+exports.DEFAULT_AUTH_CONFIG = exports.RiskScoringUtil = exports.SecurityUtil = exports.TokenUtil = exports.GeolocationUtil = exports.DeviceUtil = exports.CryptoUtil = exports.ERROR_CONSTANTS = exports.SECURITY_CONSTANTS = exports.MFA_CONSTANTS = exports.SESSION_CONSTANTS = exports.AUTH_CONSTANTS = exports.SuspiciousActivityException = exports.InvalidRefreshTokenException = exports.SessionExpiredException = exports.DeviceNotTrustedException = exports.InvalidMfaCodeException = exports.MfaRequiredException = exports.EmailNotVerifiedException = exports.AccountLockedException = exports.InvalidCredentialsException = exports.Permissions = exports.Roles = exports.RateLimit = exports.AuditLog = exports.RequireTrustedDevice = exports.RequireMfa = exports.Public = exports.SessionId = exports.CurrentSession = exports.CurrentUserId = exports.CurrentUser = exports.MfaVerifyDto = exports.MfaSetupDto = exports.ChangePasswordDto = exports.ResetPasswordDto = exports.ForgotPasswordDto = exports.RefreshTokenDto = exports.RegisterDto = exports.LoginDto = exports.AuthModule = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const passport_1 = require("@nestjs/passport");
@@ -41,38 +41,7 @@ const mfa_required_guard_1 = require("./guards/mfa-required.guard");
 const device_trusted_guard_1 = require("./guards/device-trusted.guard");
 const account_status_guard_1 = require("./guards/account-status.guard");
 let AuthModule = AuthModule_1 = class AuthModule {
-    static forRoot() {
-        return {
-            module: AuthModule_1,
-            providers: [],
-            exports: [
-                auth_service_1.AuthService,
-                token_service_1.TokenService,
-                session_service_1.SessionService,
-                jwt_auth_guard_1.JwtAuthGuard,
-            ],
-        };
-    }
-    static forRootAsync(options) {
-        return {
-            module: AuthModule_1,
-            imports: options.imports || [],
-            providers: [
-                {
-                    provide: 'AUTH_MODULE_OPTIONS',
-                    useFactory: options.useFactory,
-                    inject: options.inject || [],
-                },
-            ],
-            exports: [
-                auth_service_1.AuthService,
-                token_service_1.TokenService,
-                session_service_1.SessionService,
-                jwt_auth_guard_1.JwtAuthGuard,
-            ],
-        };
-    }
-    static forFeature(features) {
+    static withFeatures(features) {
         const providers = [];
         if (features.enableMfa !== false) {
             providers.push(mfa_service_1.MfaService, mfa_required_guard_1.MfaRequiredGuard);
@@ -82,6 +51,9 @@ let AuthModule = AuthModule_1 = class AuthModule {
         }
         if (features.enableRiskScoring !== false) {
             providers.push(security_service_1.SecurityService);
+        }
+        if (features.enablePasswordService !== false) {
+            providers.push(password_service_1.PasswordService);
         }
         return {
             module: AuthModule_1,
@@ -165,8 +137,10 @@ exports.AuthModule = AuthModule = AuthModule_1 = __decorate([
             {
                 provide: 'JWT_REFRESH_SERVICE',
                 useFactory: (configService) => {
-                    const { JwtService } = require('@nestjs/jwt');
-                    return new JwtService((0, jwt_config_1.getJwtRefreshConfig)(configService));
+                    return jwt_1.JwtModule.registerAsync({
+                        useFactory: jwt_config_1.getJwtRefreshConfig,
+                        inject: [config_1.ConfigService],
+                    });
                 },
                 inject: [config_1.ConfigService],
             },
@@ -176,9 +150,7 @@ exports.AuthModule = AuthModule = AuthModule_1 = __decorate([
             token_service_1.TokenService,
             session_service_1.SessionService,
             password_service_1.PasswordService,
-            mfa_service_1.MfaService,
             security_service_1.SecurityService,
-            device_service_1.DeviceService,
             email_verification_service_1.EmailVerificationService,
             jwt_auth_guard_1.JwtAuthGuard,
             jwt_refresh_guard_1.JwtRefreshGuard,
@@ -187,9 +159,9 @@ exports.AuthModule = AuthModule = AuthModule_1 = __decorate([
             account_status_guard_1.AccountStatusGuard,
             jwt_strategy_1.JwtStrategy,
             jwt_refresh_strategy_1.JwtRefreshStrategy,
-            local_strategy_1.LocalStrategy,
-            passport_1.PassportModule,
-            jwt_1.JwtModule,
+            'JWT_CONFIG',
+            'SESSION_CONFIG',
+            'SECURITY_CONFIG',
         ],
     })
 ], AuthModule);
@@ -238,41 +210,10 @@ Object.defineProperty(exports, "TokenUtil", { enumerable: true, get: function ()
 Object.defineProperty(exports, "SecurityUtil", { enumerable: true, get: function () { return utils_1.SecurityUtil; } });
 Object.defineProperty(exports, "RiskScoringUtil", { enumerable: true, get: function () { return utils_1.RiskScoringUtil; } });
 exports.DEFAULT_AUTH_CONFIG = {
-    jwtSecret: process.env.JWT_SECRET || 'default-secret-change-in-production',
-    jwtExpiresIn: '15m',
-    jwtRefreshExpiresIn: '7d',
-    sessionDuration: 24 * 60 * 60,
-    maxConcurrentSessions: 10,
-    mfaEnabled: true,
-    mfaRequiredForOrganizers: true,
-    riskScoringEnabled: true,
-    deviceTrustEnabled: true,
-    rateLimitingEnabled: true,
-    loginAttemptsLimit: 5,
-    loginAttemptsWindow: 15 * 60,
-    emailVerificationRequired: false,
-    auditEnabled: true,
-    auditRetentionDays: 90,
+    enableMfa: true,
+    enableDeviceTrust: true,
+    enableRiskScoring: true,
+    enableRateLimit: true,
+    enablePasswordService: true,
 };
-function validateAuthConfig(config) {
-    const requiredFields = [
-        'jwtSecret',
-        'jwtExpiresIn',
-        'jwtRefreshExpiresIn',
-    ];
-    return requiredFields.every(field => config[field]);
-}
-exports.validateAuthConfig = validateAuthConfig;
-function createAuthModule(config) {
-    const finalConfig = { ...exports.DEFAULT_AUTH_CONFIG, ...config };
-    if (!validateAuthConfig(finalConfig)) {
-        throw new Error('Configuration Auth invalide - vérifiez les champs obligatoires');
-    }
-    return AuthModule.forRootAsync({
-        imports: [config_1.ConfigModule],
-        useFactory: () => finalConfig,
-        inject: [config_1.ConfigService],
-    });
-}
-exports.createAuthModule = createAuthModule;
 //# sourceMappingURL=auth.module.js.map

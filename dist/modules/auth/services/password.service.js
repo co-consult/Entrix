@@ -17,15 +17,13 @@ const redis_service_1 = require("../../../shared/redis/redis.service");
 const email_service_1 = require("../../../shared/email/email.service");
 const crypto_util_1 = require("../utils/crypto.util");
 const auth_constants_1 = require("../constants/auth.constants");
-const security_constants_1 = require("../constants/security.constants");
-const auth_exceptions_1 = require("../exceptions/auth.exceptions");
 let PasswordService = class PasswordService {
     prisma;
     redis;
     email;
     logger;
     RESET_TOKEN_PREFIX = 'password_reset:';
-    RESET_ATTEMPTS_PREFIX = 'reset_attempts:';
+    RATE_LIMIT_PREFIX = 'password_reset_attempts:';
     constructor(prisma, redis, email, loggerService) {
         this.prisma = prisma;
         this.redis = redis;
@@ -35,9 +33,12 @@ let PasswordService = class PasswordService {
     async hashPassword(password) {
         const operationId = this.logger.startOperation('hashPassword');
         try {
-            const hashedPassword = await crypto_util_1.CryptoUtil.hashPassword(password);
+            if (!password || typeof password !== 'string') {
+                throw new common_1.BadRequestException('Le mot de passe doit être une chaîne non vide');
+            }
+            const hash = await crypto_util_1.CryptoUtil.hashPassword(password);
             this.logger.endOperation('hashPassword', operationId, true);
-            return hashedPassword;
+            return hash;
         }
         catch (error) {
             this.logger.endOperation('hashPassword', operationId, false, undefined, { errorMessage: error.message });
@@ -48,6 +49,10 @@ let PasswordService = class PasswordService {
     async verifyPassword(password, hash) {
         const operationId = this.logger.startOperation('verifyPassword');
         try {
+            if (!password || !hash) {
+                this.logger.endOperation('verifyPassword', operationId, false, undefined, { reason: 'missing_parameters' });
+                return false;
+            }
             const isValid = await crypto_util_1.CryptoUtil.verifyPassword(password, hash);
             this.logger.endOperation('verifyPassword', operationId, true);
             return isValid;
@@ -56,6 +61,116 @@ let PasswordService = class PasswordService {
             this.logger.endOperation('verifyPassword', operationId, false, undefined, { errorMessage: error.message });
             this.logger.error('Password verification failed', error.stack, 'PasswordService.verifyPassword');
             return false;
+        }
+    }
+    async verifyUserPassword(userId, password) {
+        const operationId = this.logger.startOperation('verifyUserPassword', { userId });
+        try {
+            console.log('🔍 DEBUG verifyUserPassword - Vérification pour user:', userId);
+            const user = await this.prisma.users.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    password: true,
+                    is_active: true,
+                    email: true
+                }
+            });
+            if (!user) {
+                console.log('🔍 DEBUG verifyUserPassword - User not found:', userId);
+                this.logger.endOperation('verifyUserPassword', operationId, false, undefined, { reason: 'user_not_found' });
+                return false;
+            }
+            if (!user.is_active) {
+                console.log('🔍 DEBUG verifyUserPassword - User inactive:', userId);
+                this.logger.endOperation('verifyUserPassword', operationId, false, undefined, { reason: 'user_inactive' });
+                return false;
+            }
+            console.log('🔍 DEBUG verifyUserPassword - User trouvé, vérification password');
+            console.log('🔍 DEBUG verifyUserPassword - Password input length:', password.length);
+            console.log('🔍 DEBUG verifyUserPassword - Hash from DB length:', user.password.length);
+            const isValid = await crypto_util_1.CryptoUtil.verifyPassword(password, user.password);
+            console.log('🔍 DEBUG verifyUserPassword - Résultat verification:', isValid);
+            this.logger.logBusinessEvent('PASSWORD_VERIFICATION', {
+                userId: user.id,
+                email: user.email,
+                success: isValid,
+            }, user.id);
+            this.logger.endOperation('verifyUserPassword', operationId, true);
+            return isValid;
+        }
+        catch (error) {
+            console.log('🔍 DEBUG verifyUserPassword - Erreur:', error.message);
+            this.logger.endOperation('verifyUserPassword', operationId, false, undefined, { error: error.message });
+            this.logger.error(`Error verifying password for user ${userId}:`, error);
+            return false;
+        }
+    }
+    async verifyUserPasswordByEmail(email, password) {
+        const operationId = this.logger.startOperation('verifyUserPasswordByEmail', { email });
+        try {
+            console.log('🔍 DEBUG verifyUserPasswordByEmail - Vérification pour email:', email);
+            const user = await this.prisma.users.findUnique({
+                where: { email: email.toLowerCase() },
+                select: {
+                    id: true,
+                    email: true,
+                    password: true,
+                    is_active: true
+                }
+            });
+            if (!user) {
+                console.log('🔍 DEBUG verifyUserPasswordByEmail - User not found for email:', email);
+                this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { reason: 'user_not_found' });
+                return false;
+            }
+            if (!user.is_active) {
+                console.log('🔍 DEBUG verifyUserPasswordByEmail - User inactive for email:', email);
+                this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { reason: 'user_inactive' });
+                return false;
+            }
+            console.log('🔍 DEBUG verifyUserPasswordByEmail - User trouvé, vérification password');
+            console.log('🔍 DEBUG verifyUserPasswordByEmail - Password input:', password);
+            console.log('🔍 DEBUG verifyUserPasswordByEmail - Password length:', password.length);
+            console.log('🔍 DEBUG verifyUserPasswordByEmail - Hash from DB length:', user.password.length);
+            const isValid = await crypto_util_1.CryptoUtil.verifyPassword(password, user.password);
+            console.log('🔍 DEBUG verifyUserPasswordByEmail - bcrypt.compare result:', isValid);
+            this.logger.logBusinessEvent('PASSWORD_VERIFICATION_BY_EMAIL', {
+                userId: user.id,
+                email: user.email,
+                success: isValid,
+            }, user.id);
+            this.logger.endOperation('verifyUserPasswordByEmail', operationId, true);
+            return isValid;
+        }
+        catch (error) {
+            console.log('🔍 DEBUG verifyUserPasswordByEmail - Erreur:', error.message);
+            this.logger.endOperation('verifyUserPasswordByEmail', operationId, false, undefined, { error: error.message });
+            this.logger.error(`Error verifying password for email ${email}:`, error);
+            return false;
+        }
+    }
+    async validatePasswordStrength(password) {
+        const operationId = this.logger.startOperation('validatePasswordStrength');
+        try {
+            const validation = crypto_util_1.CryptoUtil.validatePasswordStrength(password);
+            this.logger.endOperation('validatePasswordStrength', operationId, true);
+            return {
+                isValid: validation.isValid,
+                score: validation.score,
+                strength: validation.score >= 80 ? 'strong' : validation.score >= 50 ? 'medium' : 'weak',
+                suggestions: validation.suggestions
+            };
+        }
+        catch (error) {
+            this.logger.endOperation('validatePasswordStrength', operationId, false, undefined, { error: error.message });
+            this.logger.error('Password strength validation failed', error.stack);
+            return {
+                isValid: false,
+                score: 0,
+                strength: 'weak',
+                suggestions: ['Erreur lors de la validation du mot de passe']
+            };
         }
     }
     async generateResetToken(email) {
@@ -91,52 +206,51 @@ let PasswordService = class PasswordService {
             await this.redis.setCache(`${this.RESET_TOKEN_PREFIX}${resetToken}`, resetData, auth_constants_1.AUTH_CONSTANTS.JWT.PASSWORD_RESET_TOKEN_EXPIRY);
             await this.email.sendPasswordResetEmail(user.email, resetToken);
             await this.incrementResetAttempts(email);
-            this.logger.logSecurityEvent('PASSWORD_RESET_REQUESTED', user.id, undefined, undefined, { email, tokenGenerated: true });
+            this.logger.logBusinessEvent('PASSWORD_RESET_REQUESTED', {
+                userId: user.id,
+                email: user.email,
+            }, user.id);
             this.logger.endOperation('generateResetToken', operationId, true);
             return resetToken;
         }
         catch (error) {
-            this.logger.endOperation('generateResetToken', operationId, false, undefined, {
-                errorMessage: error.message,
-                email
-            });
+            this.logger.endOperation('generateResetToken', operationId, false, undefined, { error: error.message });
             if (error instanceof common_1.BadRequestException) {
                 throw error;
             }
-            this.logger.error('Failed to generate reset token', error.stack, 'PasswordService.generateResetToken', JSON.stringify({ email }));
-            throw new Error('Erreur génération token réinitialisation');
+            this.logger.error('Reset token generation failed', error.stack, 'PasswordService.generateResetToken');
+            throw new Error('Erreur lors de la génération du token de réinitialisation');
         }
     }
     async validateResetToken(token) {
         const operationId = this.logger.startOperation('validateResetToken');
         try {
-            if (!token || typeof token !== 'string') {
-                this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: 'Invalid token format' });
+            const resetDataRaw = await this.redis.getCache(`${this.RESET_TOKEN_PREFIX}${token}`);
+            if (!resetDataRaw) {
+                this.logger.endOperation('validateResetToken', operationId, true);
                 return null;
             }
-            const resetData = await this.redis.getCache(`${this.RESET_TOKEN_PREFIX}${token}`);
-            if (!resetData) {
-                this.logger.warn('Reset token not found or expired', undefined, 'PasswordService.validateResetToken', JSON.stringify({ tokenPrefix: token.substring(0, 8) }));
-                this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: 'Token not found' });
+            const resetData = resetDataRaw;
+            if (!resetData.email || !resetData.token || !resetData.expiresAt) {
+                this.logger.warn('Invalid reset data structure', JSON.stringify({
+                    hasEmail: !!resetData.email,
+                    hasToken: !!resetData.token,
+                    hasExpiresAt: !!resetData.expiresAt
+                }));
+                this.logger.endOperation('validateResetToken', operationId, true);
                 return null;
             }
-            if (resetData.used) {
-                this.logger.warn('Reset token already used', undefined, 'PasswordService.validateResetToken', JSON.stringify({ email: resetData.email }));
-                this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: 'Token already used' });
-                return null;
-            }
-            if (new Date() > new Date(resetData.expiresAt)) {
-                this.logger.warn('Reset token expired', undefined, 'PasswordService.validateResetToken', JSON.stringify({ email: resetData.email }));
-                await this.redis.delCache(`${this.RESET_TOKEN_PREFIX}${token}`);
-                this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: 'Token expired' });
+            const expirationDate = new Date(resetData.expiresAt);
+            if (resetData.used || expirationDate < new Date()) {
+                this.logger.endOperation('validateResetToken', operationId, true);
                 return null;
             }
             this.logger.endOperation('validateResetToken', operationId, true);
             return resetData;
         }
         catch (error) {
-            this.logger.endOperation('validateResetToken', operationId, false, undefined, { errorMessage: error.message });
-            this.logger.error('Failed to validate reset token', error.stack, 'PasswordService.validateResetToken');
+            this.logger.endOperation('validateResetToken', operationId, false, undefined, { error: error.message });
+            this.logger.error('Reset token validation failed', error.stack);
             return null;
         }
     }
@@ -145,156 +259,96 @@ let PasswordService = class PasswordService {
         try {
             const resetData = await this.validateResetToken(token);
             if (!resetData) {
-                throw new auth_exceptions_1.InvalidResetTokenException();
+                throw new common_1.BadRequestException('Token de réinitialisation invalide ou expiré');
             }
-            const passwordValidation = await this.validatePasswordStrength(newPassword);
-            if (!passwordValidation.isValid) {
-                throw new auth_exceptions_1.WeakPasswordException(passwordValidation.suggestions);
-            }
-            const user = await this.prisma.users.findUnique({
-                where: { email: resetData.email },
-                select: { id: true, email: true, first_name: true, last_name: true }
-            });
-            if (!user) {
-                this.logger.error('User not found during password reset', undefined, 'PasswordService.resetPassword', JSON.stringify({ email: resetData.email }));
-                throw new common_1.NotFoundException('Utilisateur introuvable');
+            const validation = await this.validatePasswordStrength(newPassword);
+            if (!validation.isValid) {
+                throw new common_1.BadRequestException(`Mot de passe trop faible: ${validation.suggestions.join(', ')}`);
             }
             const hashedPassword = await this.hashPassword(newPassword);
-            await this.prisma.users.update({
-                where: { id: user.id },
+            const user = await this.prisma.users.update({
+                where: { email: resetData.email },
                 data: {
                     password: hashedPassword,
-                    updated_at: new Date()
-                }
+                    updated_at: new Date(),
+                },
+                select: { id: true, email: true }
             });
-            await this.redis.setCache(`${this.RESET_TOKEN_PREFIX}${token}`, { ...resetData, used: true }, 300);
-            await this.redis.delCache(`${this.RESET_ATTEMPTS_PREFIX}${resetData.email}`);
-            this.logger.logSecurityEvent('PASSWORD_RESET_COMPLETED', user.id, undefined, undefined, { email: user.email, tokenUsed: true });
-            await this.email.sendMail({
-                to: user.email,
-                subject: 'Mot de passe modifié avec succès',
-                template: 'password-changed',
-                context: {
-                    firstName: user.first_name,
-                    lastName: user.last_name,
-                    changedAt: new Date().toLocaleString('fr-TN'),
-                    supportUrl: `${process.env.FRONTEND_URL}/support`
-                }
-            });
+            const updatedResetData = {
+                ...resetData,
+                used: true,
+            };
+            await this.redis.setCache(`${this.RESET_TOKEN_PREFIX}${token}`, updatedResetData, 300);
+            this.logger.logBusinessEvent('PASSWORD_RESET_COMPLETED', {
+                userId: user.id,
+                email: user.email,
+            }, user.id);
             this.logger.endOperation('resetPassword', operationId, true);
             return true;
         }
         catch (error) {
-            this.logger.endOperation('resetPassword', operationId, false, undefined, { errorMessage: error.message });
-            if (error instanceof auth_exceptions_1.InvalidResetTokenException ||
-                error instanceof auth_exceptions_1.WeakPasswordException ||
-                error instanceof common_1.NotFoundException) {
+            this.logger.endOperation('resetPassword', operationId, false, undefined, { error: error.message });
+            if (error instanceof common_1.BadRequestException) {
                 throw error;
             }
-            this.logger.error('Failed to reset password', error.stack, 'PasswordService.resetPassword');
-            throw new Error('Erreur lors de la réinitialisation');
+            this.logger.error('Password reset failed', error.stack);
+            throw new Error('Erreur lors de la réinitialisation du mot de passe');
         }
     }
     async changePassword(userId, oldPassword, newPassword) {
         const operationId = this.logger.startOperation('changePassword', { userId });
         try {
-            const user = await this.prisma.users.findUnique({
-                where: { id: userId },
-                select: {
-                    id: true,
-                    email: true,
-                    password: true,
-                    first_name: true,
-                    last_name: true,
-                    is_active: true
-                }
-            });
-            if (!user) {
-                throw new common_1.NotFoundException('Utilisateur introuvable');
+            const isCurrentPasswordValid = await this.verifyUserPassword(userId, oldPassword);
+            if (!isCurrentPasswordValid) {
+                throw new common_1.BadRequestException('Mot de passe actuel incorrect');
             }
-            if (!user.is_active) {
-                throw new common_1.BadRequestException('Compte utilisateur inactif');
+            const validation = await this.validatePasswordStrength(newPassword);
+            if (!validation.isValid) {
+                throw new common_1.BadRequestException(`Nouveau mot de passe trop faible: ${validation.suggestions.join(', ')}`);
             }
-            const isValidOldPassword = await this.verifyPassword(oldPassword, user.password);
-            if (!isValidOldPassword) {
-                this.logger.warn('Invalid old password during change', undefined, 'PasswordService.changePassword', JSON.stringify({ userId }));
-                throw new common_1.BadRequestException('Ancien mot de passe incorrect');
-            }
-            const passwordValidation = await this.validatePasswordStrength(newPassword);
-            if (!passwordValidation.isValid) {
-                throw new auth_exceptions_1.WeakPasswordException(passwordValidation.suggestions);
-            }
-            const isSamePassword = await this.verifyPassword(newPassword, user.password);
+            const isSamePassword = await this.verifyUserPassword(userId, newPassword);
             if (isSamePassword) {
                 throw new common_1.BadRequestException('Le nouveau mot de passe doit être différent de l\'ancien');
             }
             const hashedNewPassword = await this.hashPassword(newPassword);
-            await this.prisma.users.update({
+            const user = await this.prisma.users.update({
                 where: { id: userId },
                 data: {
                     password: hashedNewPassword,
-                    updated_at: new Date()
-                }
+                    updated_at: new Date(),
+                },
+                select: { id: true, email: true }
             });
-            this.logger.logSecurityEvent('PASSWORD_CHANGED', userId, undefined, undefined, {
+            this.logger.logBusinessEvent('PASSWORD_CHANGED', {
+                userId: user.id,
                 email: user.email,
-                changedAt: new Date().toISOString()
-            });
-            await this.email.sendMail({
-                to: user.email,
-                subject: 'Mot de passe modifié',
-                template: 'password-changed',
-                context: {
-                    firstName: user.first_name,
-                    lastName: user.last_name,
-                    changedAt: new Date().toLocaleString('fr-TN'),
-                    ipAddress: 'Non disponible',
-                    supportUrl: `${process.env.FRONTEND_URL}/support`
-                }
-            });
+            }, user.id);
             this.logger.endOperation('changePassword', operationId, true);
             return true;
         }
         catch (error) {
-            this.logger.endOperation('changePassword', operationId, false, undefined, { errorMessage: error.message });
-            if (error instanceof common_1.NotFoundException ||
-                error instanceof common_1.BadRequestException ||
-                error instanceof auth_exceptions_1.WeakPasswordException) {
+            this.logger.endOperation('changePassword', operationId, false, undefined, { error: error.message });
+            if (error instanceof common_1.BadRequestException) {
                 throw error;
             }
-            this.logger.error('Failed to change password', error.stack, 'PasswordService.changePassword', JSON.stringify({ userId }));
+            this.logger.error('Password change failed', error.stack);
             throw new Error('Erreur lors du changement de mot de passe');
         }
     }
-    async validatePasswordStrength(password) {
-        const operationId = this.logger.startOperation('validatePasswordStrength');
-        try {
-            const result = crypto_util_1.CryptoUtil.validatePasswordStrength(password);
-            this.logger.endOperation('validatePasswordStrength', operationId, true);
-            return result;
-        }
-        catch (error) {
-            this.logger.endOperation('validatePasswordStrength', operationId, false, undefined, { errorMessage: error.message });
-            this.logger.error('Failed to validate password strength', error.stack, 'PasswordService.validatePasswordStrength');
-            return {
-                isValid: false,
-                score: 0,
-                suggestions: ['Erreur validation mot de passe']
-            };
-        }
-    }
     async checkResetRateLimit(email) {
-        const key = `${this.RESET_ATTEMPTS_PREFIX}${email}`;
-        const attempts = await this.redis.get(key);
-        const currentAttempts = attempts ? parseInt(attempts, 10) : 0;
-        if (currentAttempts >= security_constants_1.SECURITY_CONSTANTS.RATE_LIMITS.PASSWORD_RESET.MAX_ATTEMPTS) {
-            this.logger.warn('Password reset rate limit exceeded', undefined, 'PasswordService.checkResetRateLimit', JSON.stringify({ email, attempts: currentAttempts }));
-            throw new common_1.BadRequestException(`Trop de tentatives de réinitialisation. Réessayez dans ${security_constants_1.SECURITY_CONSTANTS.RATE_LIMITS.PASSWORD_RESET.WINDOW_MS / (60 * 1000)} minutes.`);
+        const key = `${this.RATE_LIMIT_PREFIX}${email}`;
+        const attemptsRaw = await this.redis.getCache(key);
+        const attempts = typeof attemptsRaw === 'number' ? attemptsRaw : 0;
+        const maxAttempts = 3;
+        if (attempts >= maxAttempts) {
+            throw new common_1.BadRequestException('Trop de tentatives de réinitialisation. Réessayez plus tard.');
         }
     }
     async incrementResetAttempts(email) {
-        const key = `${this.RESET_ATTEMPTS_PREFIX}${email}`;
-        await this.redis.increment(key, security_constants_1.SECURITY_CONSTANTS.RATE_LIMITS.PASSWORD_RESET.WINDOW_MS / 1000);
+        const key = `${this.RATE_LIMIT_PREFIX}${email}`;
+        const attemptsRaw = await this.redis.getCache(key);
+        const attempts = typeof attemptsRaw === 'number' ? attemptsRaw : 0;
+        await this.redis.setCache(key, attempts + 1, 3600);
     }
 };
 exports.PasswordService = PasswordService;

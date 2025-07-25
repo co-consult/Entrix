@@ -7,11 +7,11 @@ import { IMfaChallenge } from './mfa.interface';
 
 /**
  * Interfaces d'authentification Entrix V3.0
- * CORRIGÉ : Utilise IUserProfile harmonisé (camelCase)
+ * ✅ AMÉLIORÉ : Support sessions intelligentes et inscription avec session auto
  * Respecte schema.prisma et api_specs_auth_session.md
  */
 
-// Interface JWT Payload selon spécifications
+// Interface JWT Payload selon spécifications (inchangée)
 export interface JwtPayload {
   sub: string; // user_id
   email: string;
@@ -25,7 +25,7 @@ export interface JwtPayload {
   permissions?: string[];
 }
 
-// Interface JWT Refresh Payload
+// Interface JWT Refresh Payload (inchangée)
 export interface JwtRefreshPayload {
   sub: string; // user_id
   sessionId: string;
@@ -36,31 +36,32 @@ export interface JwtRefreshPayload {
   iss: string;
 }
 
-// Interface résultat login selon api_specs_auth_session.md
-// ✅ CORRIGÉ : Utilise IUserProfile harmonisé
+// ✅ AMÉLIORÉ : Interface résultat login avec gestion sessions intelligentes
 export interface ILoginResult {
   success: boolean;
-  user?: IUserProfile;      // ✅ Utilise interface harmonisée
+  user?: IUserProfile;
   tokens?: ITokenPair;
-  session?: ISessionInfo;
+  session?: ISessionInfo; // ✅ Maintenant avec isReused et sessionType
   mfaRequired?: IMfaChallenge;
   meta?: {
     riskScore: number;
     requiresMfa: boolean;
     ipGeolocation: string;
+    sessionType?: 'reused' | 'refreshed' | 'new'; // ✅ NOUVEAU : Type de session
+    wasSessionReused?: boolean; // ✅ NOUVEAU : Session réutilisée
   };
 }
 
-// Interface register result
-// ✅ CORRIGÉ : Utilise IUserProfile harmonisé
+// ✅ AMÉLIORÉ : Interface register result avec session automatique
 export interface IRegisterResult {
   success: boolean;
-  user?: IUserProfile;      // ✅ Utilise interface harmonisée
-  tokens?: ITokenPair;
+  user?: IUserProfile;
+  tokens?: ITokenPair; // ✅ NOUVEAU : Tokens si session auto-créée
+  session?: ISessionInfo; // ✅ NOUVEAU : Session si auto-créée
   verification?: {
     emailSent: boolean;
     verificationRequired: boolean;
-    tokenId:string
+    tokenId: string;
   };
   onboarding?: {
     incentiveApplied: boolean;
@@ -68,25 +69,29 @@ export interface IRegisterResult {
     incentiveValue: number;
     migratedTickets: number;
   };
-
+  message?: string; // ✅ NOUVEAU : Message informatif
 }
 
+// Interface verification status (améliorée)
 export interface IVerificationStatus {
   emailVerified: boolean;
   verifiedAt?: string;
   canResend: boolean;
 }
 
-// Interface service d'authentification
-// ✅ CORRIGÉ : Toutes les méthodes utilisent interfaces harmonisées
+// ✅ AMÉLIORÉ : Interface service d'authentification avec nouvelles méthodes
 export interface IAuthService {
+  // Méthodes existantes (signatures conservées mais comportement amélioré)
   login(loginData: ILoginRequest, context?: {
     ipAddress: string;
     userAgent: string;
     deviceFingerprint?: string;
   }): Promise<ILoginResult>;
   
-  register(registerData: IRegisterRequest): Promise<IRegisterResult>;
+  register(registerData: IRegisterRequest, clientInfo?: { // ✅ AMÉLIORÉ : Paramètre clientInfo ajouté
+    ip: string; 
+    userAgent: string 
+  }): Promise<IRegisterResult>;
   
   logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
   
@@ -98,11 +103,30 @@ export interface IAuthService {
       userAgent: string;
       deviceFingerprint?: string;
     }
-  ): Promise<IUserProfile | null>;  // ✅ Retourne interface harmonisée
+  ): Promise<IUserProfile | null>;
   
   verifyMfa(
     challengeToken: string, 
     code: string, 
     method: MfaProvider
   ): Promise<ILoginResult>;
+  
+  // ✅ NOUVELLES MÉTHODES pour fonctionnalités avancées (signatures corrigées)
+  refreshTokens(refreshToken: string): Promise<ITokenPair>;
+  verifyEmail(token: string): Promise<{
+    success: boolean;
+    verified: boolean;
+    message: string;
+    userId?: string;
+  }>;
+  resendVerificationEmail(userId: string): Promise<{
+    success: boolean;
+    message: string;
+    tokenId?: string;
+  }>;
+  getVerificationStatus(userId: string): Promise<{
+    emailVerified: boolean;
+    verifiedAt?: string;
+    canResend: boolean;
+  }>;
 }

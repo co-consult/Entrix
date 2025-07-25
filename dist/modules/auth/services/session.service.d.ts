@@ -1,7 +1,7 @@
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
-import { ISessionService, IUserSession, IDeviceInfo, ITokenPair } from '../interfaces';
+import { ISessionService, IUserSession, IDeviceInfo, ITokenPair, ISessionLoginResult } from '../interfaces';
 import { TokenService } from './token.service';
 export declare class SessionService implements ISessionService {
     private readonly prisma;
@@ -9,6 +9,7 @@ export declare class SessionService implements ISessionService {
     private readonly tokenService;
     private readonly logger;
     constructor(prisma: PrismaService, redis: RedisService, tokenService: TokenService, loggerService: LoggerService);
+    handleUserLogin(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<ISessionLoginResult>;
     createSession(userId: string, deviceInfo: IDeviceInfo, rememberMe?: boolean): Promise<IUserSession>;
     validateSession(sessionToken: string): Promise<IUserSession | null>;
     refreshSession(refreshToken: string): Promise<ITokenPair>;
@@ -16,16 +17,17 @@ export declare class SessionService implements ISessionService {
     revokeAllUserSessions(userId: string): Promise<number>;
     getUserActiveSessions(userId: string): Promise<IUserSession[]>;
     cleanupExpiredSessions(): Promise<number>;
+    findCompatibleSession(sessions: IUserSession[], deviceInfo: IDeviceInfo, rememberMe: boolean): Promise<IUserSession | null>;
+    refreshExistingSession(session: IUserSession, deviceInfo: IDeviceInfo, rememberMe: boolean): Promise<IUserSession>;
+    cleanupExpiredSessionsForUser(userId: string): Promise<number>;
     private enforceSessionLimits;
     private generateSessionToken;
     private generateDeviceFingerprint;
     private cacheSession;
     private getCachedSession;
-    private removeCachedSession;
     private updateLastActivity;
     private invalidateSession;
-    private extendSessionIfNeeded;
-    private blacklistSessionTokens;
-    private clearUserSessionsFromCache;
+    private removeCachedSessionById;
+    private cleanupUserSessionsFromCache;
     private cleanupExpiredSessionsFromCache;
 }

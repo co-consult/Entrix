@@ -15,6 +15,7 @@ const login_response_dto_1 = require("./login-response.dto");
 class VerificationInfoDto {
     emailSent;
     verificationRequired;
+    tokenId;
 }
 exports.VerificationInfoDto = VerificationInfoDto;
 __decorate([
@@ -25,6 +26,10 @@ __decorate([
     (0, swagger_1.ApiProperty)({ description: 'Vérification email requise' }),
     __metadata("design:type", Boolean)
 ], VerificationInfoDto.prototype, "verificationRequired", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ description: 'ID du token de vérification' }),
+    __metadata("design:type", String)
+], VerificationInfoDto.prototype, "tokenId", void 0);
 class OnboardingInfoDto {
     incentiveApplied;
     incentiveType;
@@ -52,6 +57,7 @@ class RegisterResponseDto {
     success;
     data;
     message;
+    meta;
 }
 exports.RegisterResponseDto = RegisterResponseDto;
 __decorate([
@@ -66,22 +72,32 @@ __decorate([
     (0, swagger_1.ApiPropertyOptional)({ description: 'Message informatif' }),
     __metadata("design:type", String)
 ], RegisterResponseDto.prototype, "message", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: 'Métadonnées' }),
+    __metadata("design:type", Object)
+], RegisterResponseDto.prototype, "meta", void 0);
 class RegisterResponseMapper {
     static toDto(registerResult) {
         return {
             success: registerResult.success,
-            data: registerResult.user && registerResult.tokens ? {
+            data: registerResult.user ? {
                 user: login_response_dto_1.UserProfileMapper.toDto(registerResult.user),
                 tokens: registerResult.tokens,
+                session: registerResult.session,
                 verification: registerResult.verification || {
                     emailSent: false,
                     verificationRequired: false,
+                    tokenId: '',
                 },
                 onboarding: registerResult.onboarding,
             } : undefined,
-            message: registerResult.success
+            message: registerResult.message || (registerResult.success
                 ? 'Inscription réussie. Vérifiez votre email pour activer votre compte.'
-                : 'Erreur lors de l\'inscription.',
+                : 'Erreur lors de l\'inscription.'),
+            meta: {
+                autoLoginEnabled: !!(registerResult.tokens && registerResult.session),
+                sessionCreated: !!registerResult.session,
+            },
         };
     }
 }

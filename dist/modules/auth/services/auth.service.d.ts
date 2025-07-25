@@ -3,10 +3,12 @@ import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
 import { EmailService } from '../../../shared/email/email.service';
 import { IAuthService, ILoginResult, IRegisterResult, ILoginRequest, IRegisterRequest, IUserProfile } from '../interfaces';
+import { ITokenPair } from '../interfaces/session.interface';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordService } from './password.service';
 export declare class AuthService implements IAuthService {
     private readonly prisma;
     private readonly redis;
@@ -15,8 +17,9 @@ export declare class AuthService implements IAuthService {
     private readonly sessionService;
     private readonly emailVerificationService;
     private readonly securityService;
+    private readonly passwordService;
     private readonly logger;
-    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, emailVerificationService: EmailVerificationService, securityService: SecurityService, loggerService: LoggerService);
+    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, emailVerificationService: EmailVerificationService, securityService: SecurityService, passwordService: PasswordService, loggerService: LoggerService);
     login(loginData: ILoginRequest, context?: {
         ipAddress: string;
         userAgent: string;
@@ -31,16 +34,9 @@ export declare class AuthService implements IAuthService {
         userAgent?: string;
         deviceFingerprint?: string;
     }): Promise<IUserProfile | null>;
-    private validatePasswordStrength;
-    private mapDbUserToProfile;
-    private handleFailedLogin;
-    private updateLastLogin;
-    private processOnboardingSecret;
     logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
-    verifyMfa(challengeToken: string, code: string, method: string): Promise<ILoginResult>;
-    private validateAndNormalizeIp;
-    private isValidIpv4;
-    private isValidIpv6;
+    refreshTokens(refreshToken: string): Promise<ITokenPair>;
+    verifyMfa(challengeToken: string, code: string, method: any): Promise<ILoginResult>;
     verifyEmail(token: string): Promise<{
         success: boolean;
         verified: boolean;
@@ -52,6 +48,15 @@ export declare class AuthService implements IAuthService {
         message: string;
         tokenId?: string;
     }>;
+    private validatePasswordStrength;
+    private checkEmailExists;
+    private checkRegistrationRateLimit;
+    private handleFailedLogin;
+    private updateLastLogin;
+    private validateAndNormalizeIp;
+    private processOnboardingSecret;
+    private getUserProfile;
+    private mapDbUserToProfile;
     getVerificationStatus(userId: string): Promise<{
         emailVerified: boolean;
         verifiedAt?: string;

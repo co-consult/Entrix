@@ -7,11 +7,11 @@ import { IMfaChallenge } from '../../interfaces/mfa.interface';
 
 /**
  * DTO Login Response Entrix V3.0
- * CORRIGÉ : Utilise IUserProfile harmonisé (camelCase)
+ * ✅ AMÉLIORÉ : Support sessions intelligentes
  * Respecte api_specs_auth_session.md
  */
 
-// ✅ CORRIGÉ : UserProfileDto utilise camelCase
+// UserProfileDto (inchangé, déjà correct)
 export class UserProfileDto implements Omit<IUserProfile, 'createdAt' | 'updatedAt' | 'emailVerified' | 'phoneVerified' | 'lastLogin'> {
   @ApiProperty({ description: 'Identifiant unique utilisateur' })
   id: string;
@@ -20,10 +20,10 @@ export class UserProfileDto implements Omit<IUserProfile, 'createdAt' | 'updated
   email: string;
 
   @ApiProperty({ description: 'Prénom utilisateur' })
-  firstName: string;        // ✅ CORRIGÉ : camelCase
+  firstName: string;
 
   @ApiProperty({ description: 'Nom utilisateur' })
-  lastName: string;         // ✅ CORRIGÉ : camelCase
+  lastName: string;
 
   @ApiPropertyOptional({ description: 'Numéro de téléphone' })
   phone: string | null;
@@ -32,16 +32,16 @@ export class UserProfileDto implements Omit<IUserProfile, 'createdAt' | 'updated
   avatar: string | null;
 
   @ApiProperty({ description: 'Compte actif' })
-  isActive: boolean;        // ✅ CORRIGÉ : camelCase
+  isActive: boolean;
 
   @ApiPropertyOptional({ description: 'Email vérifié' })
-  emailVerified?: boolean;  // ✅ CORRIGÉ : camelCase (simplifié pour API)
+  emailVerified?: boolean;
 
   @ApiPropertyOptional({ description: 'Téléphone vérifié' })
-  phoneVerified?: boolean;  // ✅ CORRIGÉ : camelCase (simplifié pour API)
+  phoneVerified?: boolean;
 
   @ApiPropertyOptional({ description: 'Dernière connexion (ISO 8601)' })
-  lastLoginAt?: string;     // ✅ CORRIGÉ : Format ISO pour API
+  lastLoginAt?: string;
 
   @ApiPropertyOptional({ description: 'Rôles utilisateur' })
   roles?: string[];
@@ -62,6 +62,7 @@ export class UserProfileDto implements Omit<IUserProfile, 'createdAt' | 'updated
   metadata: any | null;
 }
 
+// TokenPairDto (inchangé)
 export class TokenPairDto implements ITokenPair {
   @ApiProperty({ description: 'Token d\'accès JWT' })
   accessToken: string;
@@ -76,6 +77,7 @@ export class TokenPairDto implements ITokenPair {
   expiresIn: number;
 }
 
+// ✅ AMÉLIORÉ : SessionInfoDto avec nouveaux champs
 export class SessionInfoDto implements ISessionInfo {
   @ApiProperty({ description: 'Identifiant de session' })
   sessionId: string;
@@ -91,8 +93,18 @@ export class SessionInfoDto implements ISessionInfo {
 
   @ApiProperty({ description: 'Dernière activité (ISO 8601)' })
   lastActivity: string;
+
+  @ApiPropertyOptional({ description: 'Session réutilisée' })
+  isReused?: boolean; // ✅ NOUVEAU
+
+  @ApiPropertyOptional({ 
+    enum: ['reused', 'refreshed', 'new'], 
+    description: 'Type de session' 
+  })
+  sessionType?: 'reused' | 'refreshed' | 'new'; // ✅ NOUVEAU
 }
 
+// MfaChallengeDto (inchangé)
 export class MfaChallengeDto implements IMfaChallenge {
   @ApiProperty({ 
     enum: ['SMS_OTP', 'EMAIL_OTP', 'TOTP_APP'], 
@@ -108,6 +120,7 @@ export class MfaChallengeDto implements IMfaChallenge {
   expiresIn: number;
 }
 
+// ✅ AMÉLIORÉ : LoginResponseDto avec nouveaux champs meta
 export class LoginResponseDto {
   @ApiProperty({ description: 'Statut de la requête' })
   success: boolean;
@@ -116,7 +129,7 @@ export class LoginResponseDto {
   data?: {
     user: UserProfileDto;
     tokens: TokenPairDto;
-    session: SessionInfoDto;
+    session: SessionInfoDto; // ✅ Maintenant avec isReused et sessionType
     mfaRequired?: MfaChallengeDto;
   };
 
@@ -125,26 +138,28 @@ export class LoginResponseDto {
     riskScore: number;
     requiresMfa: boolean;
     ipGeolocation: string;
+    sessionType?: 'reused' | 'refreshed' | 'new'; // ✅ NOUVEAU
+    wasSessionReused?: boolean; // ✅ NOUVEAU
   };
+
+  @ApiPropertyOptional({ description: 'Message informatif' })
+  message?: string; // ✅ NOUVEAU
 }
 
-/**
- * MAPPER : IUserProfile → UserProfileDto
- * Convertit interface interne vers DTO API
- */
+// UserProfileMapper (inchangé, déjà correct)
 export class UserProfileMapper {
   static toDto(userProfile: IUserProfile): UserProfileDto {
     return {
       id: userProfile.id,
       email: userProfile.email,
-      firstName: userProfile.firstName,     // ✅ Déjà camelCase
-      lastName: userProfile.lastName,       // ✅ Déjà camelCase
+      firstName: userProfile.firstName,
+      lastName: userProfile.lastName,
       phone: userProfile.phone,
       avatar: userProfile.avatar,
-      isActive: userProfile.isActive,       // ✅ Déjà camelCase
-      emailVerified: !!userProfile.emailVerified,  // Date → boolean
-      phoneVerified: !!userProfile.phoneVerified,  // Date → boolean
-      lastLoginAt: userProfile.lastLogin?.toISOString(),  // Date → ISO string
+      isActive: userProfile.isActive,
+      emailVerified: !!userProfile.emailVerified,
+      phoneVerified: !!userProfile.phoneVerified,
+      lastLoginAt: userProfile.lastLogin?.toISOString(),
       roles: userProfile.roles,
       permissions: userProfile.permissions,
       subscription: userProfile.subscription,
