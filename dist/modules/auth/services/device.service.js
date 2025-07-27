@@ -127,7 +127,7 @@ let DeviceService = class DeviceService {
                 throw new Error('Utilisateur introuvable');
             }
             try {
-                await this.email.sendMail({
+                await this.email.sendEmail({
                     to: user.email,
                     subject: '🔒 Nouvel appareil de confiance ajouté',
                     template: 'device-trusted',

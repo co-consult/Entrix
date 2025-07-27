@@ -69,7 +69,7 @@ export class WelcomeProcessor {
       };
 
       // Envoyer l'email de bienvenue avec la méthode correcte du EmailService
-      const emailResult = await this.emailService.sendMail({
+      const emailResult = await this.emailService.sendEmail({
         to: email,
         subject: `Bienvenue sur Entrix, ${user.first_name} ! 🎉`,
         template: 'welcome',
@@ -183,7 +183,7 @@ export class WelcomeProcessor {
       }
 
       // Envoyer l'email d'onboarding terminé
-      const emailResult = await this.emailService.sendMail({
+      const emailResult = await this.emailService.sendEmail({
         to: email,
         subject: emailSubject,
         template: 'onboarding-complete',
@@ -273,7 +273,7 @@ export class WelcomeProcessor {
         3: `${user.first_name}, votre compte Entrix vous attend toujours 💌`,
       };
 
-      const emailResult = await this.emailService.sendMail({
+      const emailResult = await this.emailService.sendEmail({
         to: email,
         subject: subjects[reminderNumber as keyof typeof subjects] || subjects[1],
         template: 'email-verification-reminder',

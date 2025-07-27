@@ -285,7 +285,7 @@ let AnonymousConversionProcessor = class AnonymousConversionProcessor {
             email,
         }));
         try {
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
                 to: email,
                 subject: '🎉 Bienvenue sur Entrix ! Votre conversion est réussie',
                 template: 'anonymous-conversion',
@@ -509,7 +509,7 @@ let AnonymousConversionProcessor = class AnonymousConversionProcessor {
     }
     async sendConversionConfirmationEmail(data) {
         try {
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
                 to: data.email,
                 subject: '🎉 Bienvenue sur Entrix ! Votre conversion est réussie',
                 template: 'anonymous-conversion',

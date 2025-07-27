@@ -21,7 +21,7 @@ let EmailProcessor = class EmailProcessor {
     async handleWelcomeEmail(job) {
         const { email, firstName } = job.data;
         try {
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
                 to: email,
                 subject: 'Bienvenue sur Entrix',
                 template: 'welcome',
@@ -37,7 +37,7 @@ let EmailProcessor = class EmailProcessor {
     async handleVerificationEmail(job) {
         const { email, token } = job.data;
         try {
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
                 to: email,
                 subject: 'Vérification de votre email',
                 template: 'verification',
@@ -53,7 +53,7 @@ let EmailProcessor = class EmailProcessor {
     async handlePasswordResetEmail(job) {
         const { email, token } = job.data;
         try {
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
                 to: email,
                 subject: 'Réinitialisation de votre mot de passe',
                 template: 'password-reset',
@@ -78,7 +78,7 @@ let EmailProcessor = class EmailProcessor {
                 totalAmount: 100,
                 qrCodeUrl: 'https://example.com/qr',
             };
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
                 to: email,
                 subject: 'Vos billets pour l’événement',
                 template: 'ticket',

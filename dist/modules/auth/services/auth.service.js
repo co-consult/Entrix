@@ -22,7 +22,7 @@ const email_verification_service_1 = require("./email-verification.service");
 const password_service_1 = require("./password.service");
 const device_util_1 = require("../utils/device.util");
 const mfa_service_1 = require("./mfa.service");
-const auth_exceptions_1 = require("../exceptions/auth.exceptions");
+const exceptions_1 = require("../exceptions");
 const security_constants_1 = require("../constants/security.constants");
 let AuthService = class AuthService {
     prisma;
@@ -74,7 +74,7 @@ let AuthService = class AuthService {
             const user = await this.validateUser(loginData.email, loginData.password, context);
             if (!user) {
                 await this.handleFailedLogin(loginData.email, context);
-                throw new auth_exceptions_1.InvalidCredentialsException();
+                throw new exceptions_1.InvalidCredentialsException();
             }
             console.log('🔍 DEBUG LOGIN - User validé, ID:', user.id);
             const deviceInfo = device_util_1.DeviceUtil.normalizeDeviceInfo({
@@ -162,9 +162,9 @@ let AuthService = class AuthService {
                 }
             }));
             this.logger.endOperation('login', operationId, false);
-            if (error instanceof auth_exceptions_1.InvalidCredentialsException ||
-                error instanceof auth_exceptions_1.AccountLockedException ||
-                error instanceof auth_exceptions_1.EmailNotVerifiedException) {
+            if (error instanceof exceptions_1.InvalidCredentialsException ||
+                error instanceof exceptions_1.AccountLockedException ||
+                error instanceof exceptions_1.EmailNotVerifiedException) {
                 throw error;
             }
             this.logger.error('Authentication failed with unexpected error', error.stack, 'AuthService.login', JSON.stringify({
@@ -276,8 +276,8 @@ let AuthService = class AuthService {
         }
         catch (error) {
             this.logger.endOperation('register', operationId, false, undefined, { error: error.message });
-            if (error instanceof auth_exceptions_1.EmailAlreadyExistsException ||
-                error instanceof auth_exceptions_1.WeakPasswordException) {
+            if (error instanceof exceptions_1.EmailAlreadyExistsException ||
+                error instanceof exceptions_1.WeakPasswordException) {
                 throw error;
             }
             this.logger.error('Registration failed with unexpected error', error.stack, 'AuthService', JSON.stringify({
@@ -353,11 +353,11 @@ let AuthService = class AuthService {
             }
             if (!dbUser.is_active) {
                 this.logger.warn('Login attempt on inactive account', JSON.stringify({ email }));
-                throw new auth_exceptions_1.AccountLockedException();
+                throw new exceptions_1.AccountLockedException();
             }
             const emailVerificationRequired = process.env.EMAIL_VERIFICATION_REQUIRED === 'true';
             if (emailVerificationRequired && !dbUser.email_verified) {
-                throw new auth_exceptions_1.EmailNotVerifiedException();
+                throw new exceptions_1.EmailNotVerifiedException();
             }
             console.log('🔍 DEBUG validateUser - Vérification password avec PasswordService pour:', email);
             const isPasswordValid = await this.passwordService.verifyUserPasswordByEmail(email, password);
@@ -377,7 +377,7 @@ let AuthService = class AuthService {
         }
         catch (error) {
             this.logger.endOperation('validateUser', operationId, false, undefined, { error: error.message });
-            if (error instanceof auth_exceptions_1.AccountLockedException || error instanceof auth_exceptions_1.EmailNotVerifiedException) {
+            if (error instanceof exceptions_1.AccountLockedException || error instanceof exceptions_1.EmailNotVerifiedException) {
                 throw error;
             }
             this.logger.error('User validation failed', error.stack, JSON.stringify({ email }));
@@ -627,7 +627,7 @@ let AuthService = class AuthService {
     async validatePasswordStrength(password) {
         const validation = await this.passwordService.validatePasswordStrength(password);
         if (!validation.isValid) {
-            throw new auth_exceptions_1.WeakPasswordException(validation.suggestions);
+            throw new exceptions_1.WeakPasswordException(validation.suggestions);
         }
     }
     async checkEmailExists(email) {
@@ -636,7 +636,7 @@ let AuthService = class AuthService {
             select: { id: true }
         });
         if (existingUser) {
-            throw new auth_exceptions_1.EmailAlreadyExistsException();
+            throw new exceptions_1.EmailAlreadyExistsException();
         }
     }
     async checkRegistrationRateLimit(ip) {
@@ -645,10 +645,14 @@ let AuthService = class AuthService {
         const key = `registration_attempts:${ip}`;
         const attempts = await this.redis.getCache(key);
         const currentAttempts = attempts ? parseInt(String(attempts), 10) : 0;
-        if (currentAttempts >= security_constants_1.SECURITY_CONSTANTS.RATE_LIMITS.REGISTRATION.MAX_ATTEMPTS) {
-            throw new Error('Trop de tentatives d\'inscription depuis cette IP');
+        const maxAttempts = security_constants_1.SECURITY_CONSTANTS.RATE_LIMITS.REGISTRATION.MAX_ATTEMPTS;
+        const windowMs = security_constants_1.SECURITY_CONSTANTS.RATE_LIMITS.REGISTRATION.WINDOW_MS;
+        if (currentAttempts >= maxAttempts) {
+            const retryAfter = Math.ceil(windowMs / 1000);
+            throw new exceptions_1.RegistrationRateLimitedException(retryAfter);
         }
-        await this.redis.setCache(key, currentAttempts + 1, 3600);
+        const ttl = Math.ceil(windowMs / 1000);
+        await this.redis.setCache(key, currentAttempts + 1, ttl);
     }
     async handleFailedLogin(email, context) {
         this.logger.logBusinessEvent('LOGIN_FAILED', {

@@ -5,10 +5,9 @@ import { AuthGuard } from '@nestjs/passport';
 import { LoggerService } from '../../../shared/logger/logger.service';
 
 /**
- * JWT Refresh Guard Entrix V3.0
- * Protège les endpoints de refresh token
- * 
- * ✅ CORRIGÉ : Signature logger.endOperation() avec paramètres dans le bon ordre
+ * JWT Refresh Guard Entrix V3.0 - Grade A+
+ * ✅ CORRIGÉ : Diagnostic amélioré des erreurs de refresh token
+ * Protège les endpoints de refresh token avec validation renforcée
  */
 
 @Injectable()
@@ -21,8 +20,7 @@ export class JwtRefreshGuard extends AuthGuard('jwt-refresh') {
   }
 
   /**
-   * Gestion des erreurs refresh token
-   * ✅ CORRIGÉ : Paramètres endOperation dans le bon ordre
+   * ✅ CORRIGÉ : Gestion des erreurs refresh token avec diagnostic détaillé
    */
   handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
@@ -32,46 +30,106 @@ export class JwtRefreshGuard extends AuthGuard('jwt-refresh') {
     });
 
     try {
+      // ✅ DIAGNOSTIC DÉTAILLÉ DES ERREURS
+      const authHeader = request.headers?.authorization;
+      const hasAuthHeader = !!authHeader;
+      const isValidFormat = authHeader?.startsWith('Bearer ');
+      const tokenPresent = isValidFormat && authHeader?.length > 7;
+      
+      // ✅ LOGGING DIAGNOSTIC COMPLET
+      this.logger.info('Refresh token validation attempt', JSON.stringify({
+        hasAuthHeader,
+        isValidFormat,
+        tokenPresent,
+        authHeaderLength: authHeader?.length || 0,
+        authHeaderPreview: authHeader?.substring(0, 20) + '...' || 'none',
+        errorType: err?.name || 'none',
+        errorMessage: err?.message || info?.message || 'none',
+        userPresent: !!user,
+        path: request.url,
+      }));
+
       if (err || !user) {
-        // Logger les détails de l'échec de validation
+        // ✅ MESSAGES D'ERREUR SPÉCIFIQUES SELON LE CAS
+        let errorMessage = 'Token de rafraîchissement invalide';
+        let errorCode = 'INVALID_REFRESH_TOKEN';
+
+        if (!hasAuthHeader) {
+          errorMessage = 'En-tête Authorization manquant pour le refresh token';
+          errorCode = 'MISSING_AUTH_HEADER';
+        } else if (!isValidFormat) {
+          errorMessage = 'Format d\'en-tête Authorization invalide (Bearer token requis)';
+          errorCode = 'INVALID_AUTH_FORMAT';
+        } else if (!tokenPresent) {
+          errorMessage = 'Token de rafraîchissement vide';
+          errorCode = 'EMPTY_REFRESH_TOKEN';
+        } else if (err?.message?.includes('expired') || info?.message?.includes('expired')) {
+          errorMessage = 'Token de rafraîchissement expiré';
+          errorCode = 'EXPIRED_REFRESH_TOKEN';
+        } else if (err?.message?.includes('invalid') || info?.message?.includes('invalid')) {
+          errorMessage = 'Token de rafraîchissement invalide ou corrompu';
+          errorCode = 'CORRUPTED_REFRESH_TOKEN';
+        }
+
+        // ✅ LOGGING STRUCTURÉ POUR DEBUG
         this.logger.warn('JWT refresh authentication failed', JSON.stringify({
-          error: err?.message || info?.message || 'No user found',
+          errorCode,
+          errorMessage,
+          originalError: err?.message || info?.message,
           path: request.url,
           method: request.method,
-          hasAuthHeader: !!request.headers?.authorization,
-          authHeaderFormat: request.headers?.authorization?.startsWith('Bearer ') ? 'Bearer' : 'Invalid',
+          hasAuthHeader,
+          isValidFormat,
+          tokenPresent,
+          ipAddress: request.ip,
+          userAgent: request.headers?.['user-agent'],
         }));
 
-        // Logger événement business pour analytics
+        // ✅ ÉVÉNEMENT BUSINESS POUR ANALYTICS
         this.logger.logBusinessEvent('REFRESH_AUTH_FAILED', {
-          error: err?.message || info?.message || 'authentication_failed',
+          errorCode,
+          error: err?.message || info?.message || errorCode,
           ipAddress: request.ip,
           userAgent: request.headers?.['user-agent'],
           path: request.url,
+          hasAuthHeader,
+          isValidFormat,
         });
 
-        // ✅ CORRIGÉ : Signature correcte (operationName, operationId, success, duration?, metadata?)
+        // ✅ CORRIGÉ : Paramètres endOperation corrects
         this.logger.endOperation('jwtRefreshGuard', operationId, false, undefined, { 
-          reason: 'authentication_failed',
-          error: err?.message || info?.message 
+          reason: errorCode,
+          error: errorMessage 
         });
         
-        throw new UnauthorizedException('Token de rafraîchissement invalide');
+        throw new UnauthorizedException(errorMessage);
       }
 
-      // Succès de l'authentification
+      // ✅ SUCCÈS DE L'AUTHENTIFICATION
+      this.logger.info('Refresh token validation successful', JSON.stringify({
+        userId: user.userId,
+        sessionId: user.sessionId,
+        tokenId: user.tokenId,
+      }));
+
       this.logger.logBusinessEvent('REFRESH_AUTH_SUCCESS', {
         userId: user.userId,
         sessionId: user.sessionId,
+        tokenId: user.tokenId,
         ipAddress: request.ip,
       }, user.userId);
 
-      // ✅ CORRIGÉ : Signature correcte
       this.logger.endOperation('jwtRefreshGuard', operationId, true);
       return user;
 
     } catch (error) {
-      // ✅ CORRIGÉ : Signature correcte et gestion d'erreur appropriée
+      // ✅ GESTION D'ERREUR AVEC DIAGNOSTIC
+      this.logger.error('Unexpected error in refresh guard', error.stack, 'JwtRefreshGuard.handleRequest', JSON.stringify({
+        errorMessage: error.message,
+        path: request.url,
+        hasAuthHeader: !!request.headers?.authorization,
+      }));
+
       this.logger.endOperation('jwtRefreshGuard', operationId, false, undefined, { 
         error: error.message 
       });

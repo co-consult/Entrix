@@ -1033,7 +1033,7 @@ export class InvitationsService {
         type: invitation.type
       };
 
-      await this.email.sendMail({
+      await this.email.sendEmail({
         to: invitation.invitedEmail,
         subject: `Invitation - ${invitation.contextName}`,
         template: 'group-invitation',
@@ -1101,7 +1101,7 @@ export class InvitationsService {
       });
 
       if (inviter?.email) {
-        await this.email.sendMail({
+        await this.email.sendEmail({
           to: inviter.email,
           subject: `Invitation acceptée - ${invitation.contextName}`,
           template: 'invitation-accepted',
@@ -1132,7 +1132,7 @@ export class InvitationsService {
       });
 
       if (inviter?.email) {
-        await this.email.sendMail({
+        await this.email.sendEmail({
           to: inviter.email,
           subject: `Invitation refusée - ${invitation.contextName}`,
           template: 'invitation-declined',

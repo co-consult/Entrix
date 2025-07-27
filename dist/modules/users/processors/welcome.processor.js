@@ -61,7 +61,7 @@ let WelcomeProcessor = class WelcomeProcessor {
                 isEmailVerified: !!user.email_verified,
                 isPhoneVerified: !!user.phone_verified,
             };
-            const emailResult = await this.emailService.sendMail({
+            const emailResult = await this.emailService.sendEmail({
                 to: email,
                 subject: `Bienvenue sur Entrix, ${user.first_name} ! 🎉`,
                 template: 'welcome',
@@ -148,7 +148,7 @@ let WelcomeProcessor = class WelcomeProcessor {
             else if (completionPercentage >= 50) {
                 emailSubject = `Bien joué ${user.first_name} ! Encore quelques étapes... 🚀`;
             }
-            const emailResult = await this.emailService.sendMail({
+            const emailResult = await this.emailService.sendEmail({
                 to: email,
                 subject: emailSubject,
                 template: 'onboarding-complete',
@@ -219,7 +219,7 @@ let WelcomeProcessor = class WelcomeProcessor {
                 2: `Dernière chance de vérifier votre email, ${user.first_name} ⏰`,
                 3: `${user.first_name}, votre compte Entrix vous attend toujours 💌`,
             };
-            const emailResult = await this.emailService.sendMail({
+            const emailResult = await this.emailService.sendEmail({
                 to: email,
                 subject: subjects[reminderNumber] || subjects[1],
                 template: 'email-verification-reminder',

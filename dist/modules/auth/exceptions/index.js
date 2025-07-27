@@ -19,4 +19,5 @@ __exportStar(require("./session.exceptions"), exports);
 __exportStar(require("./mfa.exceptions"), exports);
 __exportStar(require("./security.exceptions"), exports);
 __exportStar(require("./too-many-requests.exception"), exports);
+__exportStar(require("./rate-limit.exceptions"), exports);
 //# sourceMappingURL=index.js.map

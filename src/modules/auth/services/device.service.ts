@@ -169,7 +169,7 @@ export class DeviceService {
 
       // 3. Envoyer notification email sécurisée
       try {
-        await this.email.sendMail({
+        await this.email.sendEmail({
           to: user.email,
           subject: '🔒 Nouvel appareil de confiance ajouté',
           template: 'device-trusted',

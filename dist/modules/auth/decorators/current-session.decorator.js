@@ -4,17 +4,12 @@ exports.ClientInfo = exports.DeviceFingerprint = exports.SessionId = exports.Cur
 const common_1 = require("@nestjs/common");
 exports.CurrentSession = (0, common_1.createParamDecorator)((data, ctx) => {
     const request = ctx.switchToHttp().getRequest();
-    const user = request.user;
-    if (!user) {
-        return null;
-    }
     const sessionContext = {
-        sessionId: user.sessionId || 'unknown',
-        deviceFingerprint: user.deviceFingerprint,
-        ipAddress: request.ip || 'unknown',
-        userAgent: request.headers?.['user-agent'] || '',
-        issuedAt: user.iat || 0,
-        expiresAt: user.exp || 0,
+        sessionId: request.sessionId || request.user?.sessionId,
+        deviceFingerprint: request.deviceFingerprint || request.headers['x-device-fingerprint'],
+        ipAddress: request.ip || request.connection?.remoteAddress,
+        userAgent: request.headers['user-agent'],
+        geolocation: request.geolocation,
     };
     if (data) {
         return sessionContext[data];
@@ -23,27 +18,21 @@ exports.CurrentSession = (0, common_1.createParamDecorator)((data, ctx) => {
 });
 exports.SessionId = (0, common_1.createParamDecorator)((data, ctx) => {
     const request = ctx.switchToHttp().getRequest();
-    const user = request.user;
-    return user?.sessionId || null;
+    return request.sessionId || request.user?.sessionId || null;
 });
 exports.DeviceFingerprint = (0, common_1.createParamDecorator)((data, ctx) => {
     const request = ctx.switchToHttp().getRequest();
-    const headerFingerprint = request.headers?.['x-device-fingerprint'];
-    if (headerFingerprint) {
-        return headerFingerprint;
-    }
-    const user = request.user;
-    return user?.deviceFingerprint || null;
+    return request.deviceFingerprint ||
+        request.headers['x-device-fingerprint'] ||
+        request.user?.deviceFingerprint ||
+        null;
 });
 exports.ClientInfo = (0, common_1.createParamDecorator)((data, ctx) => {
     const request = ctx.switchToHttp().getRequest();
-    const clientInfo = {
-        ip: request.ip || 'unknown',
-        userAgent: request.headers?.['user-agent'] || '',
+    return {
+        ip: request.ip || request.connection?.remoteAddress || 'unknown',
+        userAgent: request.headers['user-agent'] || 'unknown',
+        deviceFingerprint: request.deviceFingerprint || request.headers['x-device-fingerprint'],
     };
-    if (data) {
-        return clientInfo[data];
-    }
-    return clientInfo;
 });
 //# sourceMappingURL=current-session.decorator.js.map

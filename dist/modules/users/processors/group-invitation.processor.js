@@ -98,7 +98,7 @@ let GroupInvitationProcessor = class GroupInvitationProcessor {
                 }));
                 return;
             }
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
                 to: recipientEmail,
                 subject: `${inviterName} vous invite à rejoindre le groupe "${group.name}"`,
                 template: 'group-invitation',
@@ -208,7 +208,7 @@ let GroupInvitationProcessor = class GroupInvitationProcessor {
                 }));
                 return;
             }
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
                 to: recipientEmail,
                 subject: `Rappel: Invitation à rejoindre "${originalData.groupName}"`,
                 template: 'group-invitation-reminder',
@@ -321,7 +321,7 @@ let GroupInvitationProcessor = class GroupInvitationProcessor {
             if (adminEmails && adminEmails.length > 0) {
                 for (const adminEmail of adminEmails) {
                     try {
-                        await this.emailService.sendMail({
+                        await this.emailService.sendEmail({
                             to: adminEmail,
                             subject,
                             template,

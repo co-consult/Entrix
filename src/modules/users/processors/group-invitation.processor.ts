@@ -178,7 +178,7 @@ export class GroupInvitationProcessor {
       }
 
       // Envoyer l'email d'invitation
-      await this.emailService.sendMail({
+      await this.emailService.sendEmail({
         to: recipientEmail,
         subject: `${inviterName} vous invite à rejoindre le groupe "${group.name}"`,
         template: 'group-invitation',
@@ -319,7 +319,7 @@ export class GroupInvitationProcessor {
       }
 
       // Envoyer le rappel
-      await this.emailService.sendMail({
+      await this.emailService.sendEmail({
         to: recipientEmail,
         subject: `Rappel: Invitation à rejoindre "${originalData.groupName}"`,
         template: 'group-invitation-reminder',
@@ -477,7 +477,7 @@ export class GroupInvitationProcessor {
       if (adminEmails && adminEmails.length > 0) {
         for (const adminEmail of adminEmails) {
           try {
-            await this.emailService.sendMail({
+            await this.emailService.sendEmail({
               to: adminEmail,
               subject,
               template,

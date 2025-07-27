@@ -683,7 +683,7 @@ let InvitationsService = class InvitationsService {
                 expiresAt: new Date(invitation.expiresAt).toLocaleDateString('fr-TN'),
                 type: invitation.type
             };
-            await this.email.sendMail({
+            await this.email.sendEmail({
                 to: invitation.invitedEmail,
                 subject: `Invitation - ${invitation.contextName}`,
                 template: 'group-invitation',
@@ -730,7 +730,7 @@ let InvitationsService = class InvitationsService {
                 select: { first_name: true, last_name: true }
             });
             if (inviter?.email) {
-                await this.email.sendMail({
+                await this.email.sendEmail({
                     to: inviter.email,
                     subject: `Invitation acceptée - ${invitation.contextName}`,
                     template: 'invitation-accepted',
@@ -757,7 +757,7 @@ let InvitationsService = class InvitationsService {
                 select: { email: true, first_name: true }
             });
             if (inviter?.email) {
-                await this.email.sendMail({
+                await this.email.sendEmail({
                     to: inviter.email,
                     subject: `Invitation refusée - ${invitation.contextName}`,
                     template: 'invitation-declined',

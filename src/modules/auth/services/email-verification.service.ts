@@ -369,7 +369,7 @@ export class EmailVerificationService {
 
       // 11. Envoyer un email de confirmation (optionnel)
       try {
-        await this.email.sendMail({
+        await this.email.sendEmail({
           to: user.email,
           subject: 'Email vérifié avec succès ! ✅',
           template: 'email-verified',

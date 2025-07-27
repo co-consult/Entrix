@@ -612,7 +612,7 @@ export class SecurityService implements ISecurityService {
       }
 
       // CORRECTION: Utiliser sendMail avec la signature correcte du EmailService
-      await this.email.sendMail({
+      await this.email.sendEmail({
         to: user.email,
         subject: 'Alerte de sécurité - Entrix',
         template: 'security-alert',

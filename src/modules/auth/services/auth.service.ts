@@ -31,8 +31,9 @@ import {
   EmailAlreadyExistsException,
   WeakPasswordException,
   AccountLockedException,
-  EmailNotVerifiedException
-} from '../exceptions/auth.exceptions';
+  EmailNotVerifiedException,
+  RegistrationRateLimitedException,
+} from '../exceptions';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { SECURITY_CONSTANTS } from '../constants/security.constants';
 
@@ -959,18 +960,25 @@ async verifyMfa(
    * ✅ CORRIGÉ : Rate limiting inscription par IP avec SECURITY_CONSTANTS
    */
   private async checkRegistrationRateLimit(ip?: string): Promise<void> {
-    if (!ip) return;
+  if (!ip) return;
 
-    const key = `registration_attempts:${ip}`;
-    const attempts = await this.redis.getCache(key) as number | null;
-    const currentAttempts = attempts ? parseInt(String(attempts), 10) : 0;
-    
-    if (currentAttempts >= SECURITY_CONSTANTS.RATE_LIMITS.REGISTRATION.MAX_ATTEMPTS) {
-      throw new Error('Trop de tentatives d\'inscription depuis cette IP');
-    }
-
-    await this.redis.setCache(key, currentAttempts + 1, 3600);
+  const key = `registration_attempts:${ip}`;
+  const attempts = await this.redis.getCache(key) as number | null;
+  const currentAttempts = attempts ? parseInt(String(attempts), 10) : 0;
+  
+  const maxAttempts = SECURITY_CONSTANTS.RATE_LIMITS.REGISTRATION.MAX_ATTEMPTS;
+  const windowMs = SECURITY_CONSTANTS.RATE_LIMITS.REGISTRATION.WINDOW_MS;
+  
+  if (currentAttempts >= maxAttempts) {
+    // ✅ CORRIGÉ : Exception spécifique 429 au lieu d'Error générique
+    const retryAfter = Math.ceil(windowMs / 1000); // Convertir en secondes
+    throw new RegistrationRateLimitedException(retryAfter);
   }
+
+  // Incrémenter le compteur
+  const ttl = Math.ceil(windowMs / 1000); // TTL en secondes
+  await this.redis.setCache(key, currentAttempts + 1, ttl);
+}
 
   /**
    * Gestion échec de connexion

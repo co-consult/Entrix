@@ -424,7 +424,7 @@ export class AnonymousConversionProcessor {
 
     try {
       // Envoyer l'email de confirmation de conversion
-      await this.emailService.sendMail({
+      await this.emailService.sendEmail({
         to: email,
         subject: '🎉 Bienvenue sur Entrix ! Votre conversion est réussie',
         template: 'anonymous-conversion',
@@ -746,7 +746,7 @@ export class AnonymousConversionProcessor {
    */
   private async sendConversionConfirmationEmail(data: ConversionEmailJobData): Promise<void> {
     try {
-      await this.emailService.sendMail({
+      await this.emailService.sendEmail({
         to: data.email,
         subject: '🎉 Bienvenue sur Entrix ! Votre conversion est réussie',
         template: 'anonymous-conversion',

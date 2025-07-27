@@ -82,9 +82,17 @@ let MfaService = class MfaService {
             if (!user.is_active) {
                 throw new common_1.BadRequestException('Compte utilisateur inactif');
             }
-            if (!user.email_verified) {
+            const emailVerificationRequired = this.config.get('EMAIL_VERIFICATION_REQUIRED', true);
+            if (emailVerificationRequired && !user.email_verified) {
                 throw new common_1.BadRequestException('Email non vérifié - vérification requise avant MFA');
             }
+            this.logger.info('MFA Setup validation', JSON.stringify({
+                userId,
+                provider,
+                emailVerificationRequired,
+                userEmailVerified: !!user.email_verified,
+                canProceed: !emailVerificationRequired || !!user.email_verified
+            }));
             const existingConfig = await this.prisma.user_mfa_settings.findUnique({
                 where: {
                     user_id_method: {

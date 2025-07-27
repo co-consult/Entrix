@@ -3,3 +3,4 @@ export * from './session.exceptions';
 export * from './mfa.exceptions';
 export * from './security.exceptions';
 export * from './too-many-requests.exception';
+export * from './rate-limit.exceptions';

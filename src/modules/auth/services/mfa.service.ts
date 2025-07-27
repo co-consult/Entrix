@@ -55,48 +55,60 @@ export class MfaService implements IMfaService {
    * Configure une méthode MFA pour un utilisateur
    */
   async setupMfa(userId: string, provider: MfaProvider): Promise<IMfaSetup> {
-    const operationId = this.logger.startOperation('setupMfa', { userId, provider });
+  const operationId = this.logger.startOperation('setupMfa', { userId, provider });
 
-    try {
-      // 1. Vérifier utilisateur selon schema.prisma
-      const user = await this.prisma.users.findUnique({
-        where: { id: userId },
-        select: { 
-          id: true, 
-          email: true, 
-          phone: true,
-          first_name: true,
-          last_name: true,
-          is_active: true,
-          email_verified: true
+  try {
+    // 1. Vérifier utilisateur selon schema.prisma
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: { 
+        id: true, 
+        email: true, 
+        phone: true,
+        first_name: true,
+        last_name: true,
+        is_active: true,
+        email_verified: true
+      }
+    });
+
+    if (!user) {
+      throw new BadRequestException('Utilisateur introuvable');
+    }
+
+    if (!user.is_active) {
+      throw new BadRequestException('Compte utilisateur inactif');
+    }
+
+    // ✅ CORRIGÉ : Vérifier la configuration EMAIL_VERIFICATION_REQUIRED
+    const emailVerificationRequired = this.config.get<boolean>('EMAIL_VERIFICATION_REQUIRED', true);
+    
+    if (emailVerificationRequired && !user.email_verified) {
+      throw new BadRequestException('Email non vérifié - vérification requise avant MFA');
+    }
+
+    // ✅ LOGGING POUR DEBUG
+    this.logger.info('MFA Setup validation', JSON.stringify({
+      userId,
+      provider,
+      emailVerificationRequired,
+      userEmailVerified: !!user.email_verified,
+      canProceed: !emailVerificationRequired || !!user.email_verified
+    }));
+
+    // 2. Vérifier si méthode déjà configurée
+    const existingConfig = await this.prisma.user_mfa_settings.findUnique({
+      where: {
+        user_id_method: {
+          user_id: userId,
+          method: this.mapProviderToMethod(provider)
         }
-      });
-
-      if (!user) {
-        throw new BadRequestException('Utilisateur introuvable');
       }
+    });
 
-      if (!user.is_active) {
-        throw new BadRequestException('Compte utilisateur inactif');
-      }
-
-      if (!user.email_verified) {
-        throw new BadRequestException('Email non vérifié - vérification requise avant MFA');
-      }
-
-      // 2. Vérifier si méthode déjà configurée
-      const existingConfig = await this.prisma.user_mfa_settings.findUnique({
-        where: {
-          user_id_method: {
-            user_id: userId,
-            method: this.mapProviderToMethod(provider)
-          }
-        }
-      });
-
-      if (existingConfig?.is_enabled) {
-        throw new MfaAlreadyConfiguredException(provider);
-      }
+    if (existingConfig?.is_enabled) {
+      throw new MfaAlreadyConfiguredException(provider);
+    }
 
       // 3. Générer setup selon le provider
       let mfaSetup: IMfaSetup;
@@ -134,7 +146,7 @@ export class MfaService implements IMfaService {
       this.logger.endOperation('setupMfa', operationId, true);
       return mfaSetup;
 
-    } catch (error) {
+      } catch (error) {
       this.logger.endOperation('setupMfa', operationId, false);
       this.logger.error('MFA setup failed', error.stack, 'MfaService.setupMfa', JSON.stringify({
         userId,

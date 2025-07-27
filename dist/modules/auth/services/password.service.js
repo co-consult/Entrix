@@ -160,7 +160,19 @@ let PasswordService = class PasswordService {
                 used: false,
             };
             await this.redis.setCache(`${this.RESET_TOKEN_PREFIX}${resetToken}`, resetData, auth_constants_1.AUTH_CONSTANTS.JWT.PASSWORD_RESET_TOKEN_EXPIRY);
-            await this.email.sendPasswordResetEmail(user.email, resetToken);
+            await this.email.sendEmail({
+                to: user.email,
+                subject: 'Réinitialisation de votre mot de passe - Entrix',
+                template: 'password-reset',
+                context: {
+                    firstName: user.first_name,
+                    lastName: user.last_name,
+                    resetToken,
+                    resetUrl: `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`,
+                    expiresIn: '1 heure',
+                    timestamp: new Date().toISOString(),
+                },
+            });
             await this.incrementResetAttempts(email);
             this.logger.logBusinessEvent('PASSWORD_RESET_REQUESTED', {
                 userId: user.id,

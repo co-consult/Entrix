@@ -32,3 +32,5 @@ export * from './security.exceptions';
 // EXCEPTION UTILITAIRE
 // ========================
 export * from './too-many-requests.exception';
+
+export * from './rate-limit.exceptions';

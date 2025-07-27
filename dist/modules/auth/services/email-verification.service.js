@@ -296,7 +296,7 @@ let EmailVerificationService = class EmailVerificationService {
                 lastName: user.last_name,
             }, user.id);
             try {
-                await this.email.sendMail({
+                await this.email.sendEmail({
                     to: user.email,
                     subject: 'Email vérifié avec succès ! ✅',
                     template: 'email-verified',

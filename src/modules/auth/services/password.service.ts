@@ -177,7 +177,7 @@ export class PasswordService implements IPasswordService {
 
   /**
    * Génère token de réinitialisation mot de passe
-   * Respecte api_specs_auth_session.md
+   * ✅ CORRIGÉ : Utilise sendMail avec template comme dans SecurityService
    */
   async generateResetToken(email: string): Promise<string> {
     const operationId = this.logger.startOperation('generateResetToken', { email });
@@ -228,8 +228,20 @@ export class PasswordService implements IPasswordService {
         AUTH_CONSTANTS.JWT.PASSWORD_RESET_TOKEN_EXPIRY
       );
 
-      // 5. Envoyer email de réinitialisation
-      await this.email.sendPasswordResetEmail(user.email, resetToken);
+      // ✅ CORRIGÉ : 5. Envoyer email avec sendMail et template (comme SecurityService)
+      await this.email.sendEmail({
+        to: user.email,
+        subject: 'Réinitialisation de votre mot de passe - Entrix',
+        template: 'password-reset',
+        context: {
+          firstName: user.first_name,
+          lastName: user.last_name,
+          resetToken,
+          resetUrl: `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`,
+          expiresIn: '1 heure',
+          timestamp: new Date().toISOString(),
+        },
+      });
 
       // 6. Incrémenter compteur tentatives
       await this.incrementResetAttempts(email);

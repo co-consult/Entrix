@@ -4,39 +4,32 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**
  * Decorators session Entrix V3.0
- * Extraction données de session depuis JWT/requête
+ * Extraction sécurisée des données de session depuis JWT/headers
  */
 
+// Type pour le contexte de session
 export interface SessionContext {
-  sessionId: string;
+  sessionId?: string;
   deviceFingerprint?: string;
-  ipAddress: string;
-  userAgent: string;
-  issuedAt: number;
-  expiresAt: number;
+  ipAddress?: string;
+  userAgent?: string;
+  geolocation?: any;
 }
 
 /**
- * Decorator @CurrentSession() - Récupère contexte session
+ * Decorator @CurrentSession() - Récupère informations session complètes
  * Usage: @CurrentSession() session: SessionContext
  */
 export const CurrentSession = createParamDecorator(
   (data: keyof SessionContext | undefined, ctx: ExecutionContext): SessionContext | any => {
     const request = ctx.switchToHttp().getRequest();
-    const user = request.user as any;
-
-    if (!user) {
-      return null;
-    }
-
-    // Construire contexte session depuis JWT et requête
+    
     const sessionContext: SessionContext = {
-      sessionId: user.sessionId || 'unknown',
-      deviceFingerprint: user.deviceFingerprint,
-      ipAddress: request.ip || 'unknown',
-      userAgent: request.headers?.['user-agent'] || '',
-      issuedAt: user.iat || 0,
-      expiresAt: user.exp || 0,
+      sessionId: request.sessionId || request.user?.sessionId,
+      deviceFingerprint: request.deviceFingerprint || request.headers['x-device-fingerprint'],
+      ipAddress: request.ip || request.connection?.remoteAddress,
+      userAgent: request.headers['user-agent'],
+      geolocation: request.geolocation,
     };
 
     // Si propriété spécifique demandée
@@ -49,53 +42,42 @@ export const CurrentSession = createParamDecorator(
 );
 
 /**
- * Decorator @SessionId() - Récupère uniquement session ID
+ * Decorator @SessionId() - Récupère uniquement l'ID de session
  * Usage: @SessionId() sessionId: string
  */
 export const SessionId = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): string | null => {
     const request = ctx.switchToHttp().getRequest();
-    const user = request.user as any;
-    return user?.sessionId || null;
+    return request.sessionId || request.user?.sessionId || null;
   },
 );
 
 /**
- * Decorator @DeviceFingerprint() - Récupère empreinte device
+ * Decorator @DeviceFingerprint() - Récupère empreinte appareil
  * Usage: @DeviceFingerprint() fingerprint: string
  */
 export const DeviceFingerprint = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): string | null => {
     const request = ctx.switchToHttp().getRequest();
-    
-    // Priorité : header custom > JWT payload
-    const headerFingerprint = request.headers?.['x-device-fingerprint'];
-    if (headerFingerprint) {
-      return headerFingerprint;
-    }
-
-    const user = request.user as any;
-    return user?.deviceFingerprint || null;
+    return request.deviceFingerprint || 
+           request.headers['x-device-fingerprint'] || 
+           request.user?.deviceFingerprint || 
+           null;
   },
 );
 
 /**
- * Decorator @ClientInfo() - Récupère infos client
- * Usage: @ClientInfo() client: { ip: string, userAgent: string }
+ * Decorator @ClientInfo() - Récupère informations client complètes
+ * Usage: @ClientInfo() client: { ip: string; userAgent: string; deviceFingerprint?: string }
  */
 export const ClientInfo = createParamDecorator(
-  (data: 'ip' | 'userAgent' | undefined, ctx: ExecutionContext) => {
+  (data: unknown, ctx: ExecutionContext): { ip: string; userAgent: string; deviceFingerprint?: string } => {
     const request = ctx.switchToHttp().getRequest();
     
-    const clientInfo = {
-      ip: request.ip || 'unknown',
-      userAgent: request.headers?.['user-agent'] || '',
+    return {
+      ip: request.ip || request.connection?.remoteAddress || 'unknown',
+      userAgent: request.headers['user-agent'] || 'unknown',
+      deviceFingerprint: request.deviceFingerprint || request.headers['x-device-fingerprint'],
     };
-
-    if (data) {
-      return clientInfo[data];
-    }
-
-    return clientInfo;
   },
 );

@@ -413,7 +413,7 @@ let SecurityService = class SecurityService {
                 this.logger.warn('User not found for security alert', JSON.stringify({ userId }));
                 return;
             }
-            await this.email.sendMail({
+            await this.email.sendEmail({
                 to: user.email,
                 subject: 'Alerte de sécurité - Entrix',
                 template: 'security-alert',

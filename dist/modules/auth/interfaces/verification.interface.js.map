@@ -1,0 +1,1 @@
+{"version":3,"file":"verification.interface.js","sourceRoot":"","sources":["../../../../src/modules/auth/interfaces/verification.interface.ts"],"names":[],"mappings":";;;AA0Da,QAAA,sBAAsB,GAAG;IACpC,kBAAkB,EAAE,EAAE,GAAG,EAAE,GAAG,EAAE,GAAG,IAAI;IACvC,kBAAkB,EAAE,CAAC,GAAG,EAAE,GAAG,IAAI;IACjC,mBAAmB,EAAE,CAAC;IACtB,eAAe,EAAE,EAAE,GAAG,IAAI;CAClB,CAAC"}

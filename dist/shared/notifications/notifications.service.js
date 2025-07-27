@@ -41,7 +41,7 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
                     this.appLogger.warn('Canal email désactivé');
                     return;
                 }
-                await this.emailService.sendMail({
+                await this.emailService.sendEmail({
                     to: options.payload.to,
                     subject: options.payload.subject || '[Entrix] Notification',
                     html: options.payload.html,
