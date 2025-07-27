@@ -25,6 +25,7 @@ const email_verification_service_1 = require("./email-verification.service");
 const password_service_1 = require("./password.service");
 const device_util_1 = require("../utils/device.util");
 const mfa_service_1 = require("./mfa.service");
+const ip_util_1 = require("../utils/ip.util");
 const exceptions_1 = require("../exceptions");
 const security_constants_1 = require("../constants/security.constants");
 let AuthService = class AuthService {
@@ -388,19 +389,15 @@ let AuthService = class AuthService {
     }
     async handleSuccessfulLogin(userId, email, deviceInfo, sessionResult) {
         try {
+            const normalizedIp = ip_util_1.IpUtils.validateAndNormalizeIp(deviceInfo.ipAddress);
             await Promise.all([
-                this.prisma.users.update({
-                    where: { id: userId },
-                    data: {
-                        last_login: new Date(),
-                    },
-                }),
+                this.updateLastLogin(userId, normalizedIp),
                 this.prisma.login_attempts.create({
                     data: {
                         email: email,
                         user_id: userId,
-                        ip_address: deviceInfo.ipAddress,
-                        user_agent: deviceInfo.userAgent,
+                        ip_address: normalizedIp,
+                        user_agent: deviceInfo.userAgent || 'unknown',
                         success: true,
                         failure_reason: null,
                         is_suspicious: false,
@@ -428,6 +425,13 @@ let AuthService = class AuthService {
     async validateUser(email, password, context) {
         const operationId = this.logger.startOperation('validateUser', { email });
         try {
+            const normalizedIp = context?.ipAddress ?
+                ip_util_1.IpUtils.validateAndNormalizeIp(context.ipAddress) :
+                '127.0.0.1';
+            console.log('🔍 DEBUG validateUser - IP normalisée:', {
+                original: context?.ipAddress,
+                normalized: normalizedIp
+            });
             const dbUser = await this.prisma.users.findUnique({
                 where: { email },
                 include: {
@@ -448,6 +452,10 @@ let AuthService = class AuthService {
                 }
             });
             if (!dbUser) {
+                await this.handleFailedLogin(email, {
+                    ...context,
+                    ipAddress: normalizedIp
+                });
                 this.logger.endOperation('validateUser', operationId, false, undefined, { reason: 'user_not_found' });
                 return null;
             }
@@ -463,6 +471,10 @@ let AuthService = class AuthService {
             const isPasswordValid = await this.passwordService.verifyUserPasswordByEmail(email, password);
             if (!isPasswordValid) {
                 console.log('🔍 DEBUG validateUser - Password invalide pour:', email);
+                await this.handleFailedLogin(email, {
+                    ...context,
+                    ipAddress: normalizedIp
+                });
                 this.logger.endOperation('validateUser', operationId, false, undefined, { reason: 'invalid_password' });
                 return null;
             }
@@ -804,18 +816,39 @@ let AuthService = class AuthService {
             userAgent: context?.userAgent,
             reason: 'invalid_credentials',
         });
+        const normalizedIp = ip_util_1.IpUtils.validateAndNormalizeIp(context?.ipAddress);
+        try {
+            await this.prisma.login_attempts.create({
+                data: {
+                    email,
+                    user_id: null,
+                    ip_address: normalizedIp,
+                    user_agent: context?.userAgent || 'unknown',
+                    success: false,
+                    failure_reason: 'INVALID_CREDENTIALS',
+                    is_suspicious: false,
+                }
+            });
+        }
+        catch (error) {
+            this.logger.warn('Failed to record failed login attempt', JSON.stringify({
+                email,
+                error: error.message,
+            }));
+        }
         const key = `login_attempts:${email}`;
         const attempts = await this.redis.getCache(key);
         const currentAttempts = attempts ? parseInt(String(attempts), 10) : 0;
         await this.redis.setCache(key, currentAttempts + 1, 3600);
     }
     async updateLastLogin(userId, ipAddress) {
+        const normalizedIp = ip_util_1.IpUtils.validateAndNormalizeIp(ipAddress);
         await this.prisma.users.update({
             where: { id: userId },
             data: {
                 last_login: new Date(),
                 metadata: {
-                    lastLoginIp: ipAddress,
+                    lastLoginIp: normalizedIp,
                 }
             },
         });

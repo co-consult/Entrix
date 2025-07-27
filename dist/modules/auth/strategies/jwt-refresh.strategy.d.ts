@@ -10,13 +10,13 @@ export declare class JwtRefreshStrategy extends JwtRefreshStrategy_base {
     private readonly redis;
     private readonly logger;
     constructor(configService: ConfigService, prisma: PrismaService, redis: RedisService, loggerService: LoggerService);
+    static createHybridExtractor(): (request: any) => string | null;
     validate(req: any, payload: JwtRefreshPayload): Promise<{
         userId: string;
         sessionId: string;
         tokenId: string;
     }>;
     private isValidRefreshPayload;
-    private extractTokenFromRequest;
     private isRefreshTokenUsed;
     private validateRefreshSession;
     private markRefreshTokenAsUsed;

@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var JwtRefreshStrategy_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.JwtRefreshStrategy = void 0;
 const common_1 = require("@nestjs/common");
@@ -18,14 +19,14 @@ const logger_service_1 = require("../../../shared/logger/logger.service");
 const prisma_service_1 = require("../../../shared/prisma/prisma.service");
 const redis_service_1 = require("../../../shared/redis/redis.service");
 const session_exceptions_1 = require("../exceptions/session.exceptions");
-let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy, 'jwt-refresh') {
+let JwtRefreshStrategy = JwtRefreshStrategy_1 = class JwtRefreshStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy, 'jwt-refresh') {
     configService;
     prisma;
     redis;
     logger;
     constructor(configService, prisma, redis, loggerService) {
         super({
-            jwtFromRequest: passport_jwt_1.ExtractJwt.fromAuthHeaderAsBearerToken(),
+            jwtFromRequest: JwtRefreshStrategy_1.createHybridExtractor(),
             ignoreExpiration: false,
             secretOrKey: configService.get('JWT_REFRESH_SECRET', configService.get('JWT_SECRET')),
             issuer: 'entrix-v3',
@@ -37,6 +38,18 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
         this.redis = redis;
         this.logger = loggerService.createChildLogger('JwtRefreshStrategy');
     }
+    static createHybridExtractor() {
+        return (request) => {
+            if (request.body && request.body.refreshToken) {
+                return request.body.refreshToken;
+            }
+            const authHeader = request.headers?.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                return authHeader.substring(7);
+            }
+            return null;
+        };
+    }
     async validate(req, payload) {
         const operationId = this.logger.startOperation('validateRefreshToken', {
             userId: payload.sub,
@@ -44,12 +57,23 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
             tokenId: payload.tokenId
         });
         try {
+            const tokenFromBody = req.body?.refreshToken;
+            const tokenFromHeader = req.headers?.authorization?.substring(7);
+            const tokenUsed = tokenFromBody || tokenFromHeader;
+            this.logger.info('Refresh token extraction info', JSON.stringify({
+                hasTokenInBody: !!tokenFromBody,
+                hasTokenInHeader: !!tokenFromHeader,
+                tokenUsedFrom: tokenFromBody ? 'body' : (tokenFromHeader ? 'header' : 'none'),
+                tokenLength: tokenUsed?.length || 0,
+                tokenPrefix: tokenUsed?.substring(0, 20) + '...' || 'none'
+            }));
             if (!this.isValidRefreshPayload(payload)) {
                 this.logger.warn('Invalid refresh token payload', JSON.stringify({ payload }));
                 throw new session_exceptions_1.InvalidRefreshTokenException();
             }
-            const token = this.extractTokenFromRequest(req);
+            const token = tokenUsed;
             if (!token) {
+                this.logger.warn('No refresh token found in body or header');
                 throw new session_exceptions_1.InvalidRefreshTokenException();
             }
             const isUsed = await this.isRefreshTokenUsed(payload.tokenId);
@@ -73,8 +97,9 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
                 userId: payload.sub,
                 sessionId: payload.sessionId,
                 tokenId: payload.tokenId,
+                extractedFrom: tokenFromBody ? 'body' : 'header'
             }, payload.sub);
-            this.logger.endOperation(operationId, 'success', true);
+            this.logger.endOperation('validateRefreshToken', operationId, true);
             return {
                 userId: payload.sub,
                 sessionId: payload.sessionId,
@@ -82,7 +107,7 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
             };
         }
         catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
+            this.logger.endOperation('validateRefreshToken', operationId, false, undefined, { error: error.message });
             this.logger.logBusinessEvent('REFRESH_TOKEN_VALIDATION_FAILED', {
                 userId: payload.sub,
                 sessionId: payload.sessionId,
@@ -102,18 +127,11 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
             payload.aud === 'entrix-refresh' &&
             payload.iss === 'entrix-v3';
     }
-    extractTokenFromRequest(req) {
-        const authHeader = req.headers?.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return null;
-        }
-        return authHeader.substring(7);
-    }
     async isRefreshTokenUsed(tokenId) {
         try {
             const usedKey = `refresh_used:${tokenId}`;
             const isUsed = await this.redis.exists(usedKey);
-            return isUsed;
+            return !!isUsed;
         }
         catch (error) {
             this.logger.error('Error checking refresh token usage', error.stack);
@@ -145,10 +163,10 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
     async markRefreshTokenAsUsed(tokenId, token) {
         try {
             const usedKey = `refresh_used:${tokenId}`;
-            const blacklistKey = `blacklist:refresh:${tokenId}`;
+            const tokenKey = `refresh_token:${tokenId}`;
             await Promise.all([
-                this.redis.setCache(usedKey, token, 7 * 24 * 60 * 60),
-                this.redis.setCache(blacklistKey, 'revoked', 7 * 24 * 60 * 60),
+                this.redis.set(usedKey, '1', 86400),
+                this.redis.set(tokenKey, token, 86400),
             ]);
         }
         catch (error) {
@@ -167,18 +185,15 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
                     updated_at: new Date(),
                 },
             });
-            this.logger.logBusinessEvent('ALL_SESSIONS_REVOKED', {
-                userId,
-                reason: 'refresh_token_replay_detected',
-            }, userId);
+            this.logger.warn('All user sessions revoked due to token compromise', JSON.stringify({ userId }));
         }
         catch (error) {
-            this.logger.error('Error revoking all user sessions', error.stack, JSON.stringify({ userId }));
+            this.logger.error('Error revoking user sessions', error.stack);
         }
     }
 };
 exports.JwtRefreshStrategy = JwtRefreshStrategy;
-exports.JwtRefreshStrategy = JwtRefreshStrategy = __decorate([
+exports.JwtRefreshStrategy = JwtRefreshStrategy = JwtRefreshStrategy_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [config_1.ConfigService,
         prisma_service_1.PrismaService,

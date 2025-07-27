@@ -11,7 +11,8 @@ import { JwtRefreshPayload } from '../interfaces/auth.interfaces';
 import { InvalidRefreshTokenException } from '../exceptions/session.exceptions';
 
 /**
- * JWT Refresh Strategy pour Refresh Tokens Entrix V3.0
+ * JWT Refresh Strategy CORRIGÉE pour Refresh Tokens Entrix V3.0
+ * ✅ ACCEPTE LE TOKEN DEPUIS LE BODY ET L'HEADER (stratégie hybride)
  * Gestion rotation tokens et sécurité renforcée
  */
 
@@ -26,15 +27,38 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     loggerService: LoggerService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // ✅ CORRIGÉ : Utilise extracteur personnalisé qui gère body ET header
+      jwtFromRequest: JwtRefreshStrategy.createHybridExtractor(),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_REFRESH_SECRET', configService.get<string>('JWT_SECRET')),
       issuer: 'entrix-v3',
       audience: 'entrix-refresh',
-      passReqToCallback: true, // Pour accéder au token complet
+      passReqToCallback: true, // Pour accéder à la requête complète
     });
 
     this.logger = loggerService.createChildLogger('JwtRefreshStrategy');
+  }
+
+  /**
+   * ✅ NOUVEAU : Extracteur hybride qui cherche le token dans le body ET l'header
+   * Priorité : body > header (plus sécurisé)
+   */
+  static createHybridExtractor() {
+    return (request: any): string | null => {
+      // ✅ 1. Essayer d'extraire depuis le body (priorité)
+      if (request.body && request.body.refreshToken) {
+        return request.body.refreshToken;
+      }
+
+      // ✅ 2. Fallback : extraire depuis l'header Authorization (compatibilité)
+      const authHeader = request.headers?.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.substring(7);
+      }
+
+      // ✅ 3. Aucun token trouvé
+      return null;
+    };
   }
 
   /**
@@ -48,6 +72,19 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     });
 
     try {
+      // ✅ LOG DEBUG : D'où vient le token ?
+      const tokenFromBody = req.body?.refreshToken;
+      const tokenFromHeader = req.headers?.authorization?.substring(7);
+      const tokenUsed = tokenFromBody || tokenFromHeader;
+
+      this.logger.info('Refresh token extraction info', JSON.stringify({
+        hasTokenInBody: !!tokenFromBody,
+        hasTokenInHeader: !!tokenFromHeader,
+        tokenUsedFrom: tokenFromBody ? 'body' : (tokenFromHeader ? 'header' : 'none'),
+        tokenLength: tokenUsed?.length || 0,
+        tokenPrefix: tokenUsed?.substring(0, 20) + '...' || 'none'
+      }));
+
       // 1. Vérifier structure payload
       if (!this.isValidRefreshPayload(payload)) {
         this.logger.warn('Invalid refresh token payload', JSON.stringify({ payload }));
@@ -55,8 +92,9 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
       }
 
       // 2. Extraire token complet pour blacklisting
-      const token = this.extractTokenFromRequest(req);
+      const token = tokenUsed;
       if (!token) {
+        this.logger.warn('No refresh token found in body or header');
         throw new InvalidRefreshTokenException();
       }
 
@@ -90,9 +128,10 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
         userId: payload.sub,
         sessionId: payload.sessionId,
         tokenId: payload.tokenId,
+        extractedFrom: tokenFromBody ? 'body' : 'header'
       }, payload.sub);
 
-      this.logger.endOperation(operationId, 'success', true);
+      this.logger.endOperation('validateRefreshToken', operationId, true);
 
       return {
         userId: payload.sub,
@@ -101,7 +140,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
       };
 
     } catch (error) {
-      this.logger.endOperation(operationId, 'error', error.message);
+      this.logger.endOperation('validateRefreshToken', operationId, false, undefined, { error: error.message });
       
       this.logger.logBusinessEvent('REFRESH_TOKEN_VALIDATION_FAILED', {
         userId: payload.sub,
@@ -129,24 +168,13 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
   }
 
   /**
-   * Extrait token de la requête
-   */
-  private extractTokenFromRequest(req: any): string | null {
-    const authHeader = req.headers?.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return null;
-    }
-    return authHeader.substring(7);
-  }
-
-  /**
    * Vérifie si refresh token déjà utilisé
    */
   private async isRefreshTokenUsed(tokenId: string): Promise<boolean> {
     try {
       const usedKey = `refresh_used:${tokenId}`;
       const isUsed = await this.redis.exists(usedKey);
-      return isUsed;
+      return !!isUsed;
     } catch (error) {
       this.logger.error('Error checking refresh token usage', error.stack);
       return false;
@@ -180,26 +208,26 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
   }
 
   /**
-   * Marque refresh token comme utilisé
+   * Marque refresh token comme utilisé (rotation sécurisée)
    */
   private async markRefreshTokenAsUsed(tokenId: string, token: string): Promise<void> {
     try {
       const usedKey = `refresh_used:${tokenId}`;
-      const blacklistKey = `blacklist:refresh:${tokenId}`;
+      const tokenKey = `refresh_token:${tokenId}`;
       
-      // Marquer comme utilisé avec TTL de 7 jours
+      // ✅ CORRIGÉ : Utiliser les méthodes du RedisService Entrix
       await Promise.all([
-        this.redis.setCache(usedKey, token, 7 * 24 * 60 * 60),
-        this.redis.setCache(blacklistKey, 'revoked', 7 * 24 * 60 * 60),
+        this.redis.set(usedKey, '1', 86400), // 24h TTL
+        this.redis.set(tokenKey, token, 86400), // Sauvegarder le token pour audit
       ]);
     } catch (error) {
       this.logger.error('Error marking refresh token as used', error.stack);
-      // Ne pas faire échouer l'auth, mais logger
+      // Non bloquant, continue l'exécution
     }
   }
 
   /**
-   * Révoque toutes les sessions utilisateur (compromission détectée)
+   * Révoque toutes les sessions utilisateur (en cas de compromission)
    */
   private async revokeAllUserSessions(userId: string): Promise<void> {
     try {
@@ -214,13 +242,9 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
         },
       });
 
-      this.logger.logBusinessEvent('ALL_SESSIONS_REVOKED', {
-        userId,
-        reason: 'refresh_token_replay_detected',
-      }, userId);
-
+      this.logger.warn('All user sessions revoked due to token compromise', JSON.stringify({ userId }));
     } catch (error) {
-      this.logger.error('Error revoking all user sessions', error.stack, JSON.stringify({ userId }));
+      this.logger.error('Error revoking user sessions', error.stack);
     }
   }
 }

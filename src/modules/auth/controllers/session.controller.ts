@@ -36,6 +36,11 @@ import {
 } from '../decorators';
 import { AuditLog, RateLimit } from '../decorators';
 import { IUserProfile } from '../interfaces';
+import { 
+  InvalidRefreshTokenException,
+  SessionExpiredException,
+  TooManySessionsException
+} from '../exceptions/session.exceptions';
 
 /**
  * Session Controller Entrix V3.0 - Grade A+

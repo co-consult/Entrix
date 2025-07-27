@@ -27,6 +27,7 @@ import { PasswordService } from './password.service';
 import { DeviceUtil } from '../utils/device.util';
 import { MfaService } from './mfa.service';
 import { IMfaChallenge } from '../interfaces/mfa.interface';
+import { IpUtils } from '../utils/ip.util';
 
 
 import { 
@@ -580,28 +581,26 @@ private async schedulePostRegistrationTasks(
  */
 private async handleSuccessfulLogin(
   userId: string,
-  email: string, // ✅ AJOUTÉ : email en paramètre
-  deviceInfo: IDeviceInfo, 
-  sessionResult: ISessionLoginResult
+  email: string,
+  deviceInfo: any,
+  sessionResult: any
 ): Promise<void> {
   try {
-    // Traitement en parallèle optimisé
+    // ✅ CORRIGÉ : Normaliser l'IP AVANT de la stocker
+    const normalizedIp = IpUtils.validateAndNormalizeIp(deviceInfo.ipAddress);
+
+    // Paralléliser les opérations
     await Promise.all([
-      // Mettre à jour last_login
-      this.prisma.users.update({
-        where: { id: userId },
-        data: {
-          last_login: new Date(),
-        },
-      }),
-      
-      // ✅ CORRIGÉ : Enregistrer tentative réussie avec email correct
+      // Mise à jour last_login
+      this.updateLastLogin(userId, normalizedIp),
+
+      // ✅ CORRIGÉ : Enregistrer tentative réussie avec IP normalisée
       this.prisma.login_attempts.create({
         data: {
           email: email, // ✅ CORRIGÉ : utiliser l'email fourni
           user_id: userId,
-          ip_address: deviceInfo.ipAddress,
-          user_agent: deviceInfo.userAgent,
+          ip_address: normalizedIp, // ✅ CORRIGÉ : IP normalisée
+          user_agent: deviceInfo.userAgent || 'unknown',
           success: true,
           failure_reason: null,
           is_suspicious: false,
@@ -639,6 +638,16 @@ private async handleSuccessfulLogin(
     const operationId = this.logger.startOperation('validateUser', { email });
 
     try {
+      // ✅ NOUVEAU : Normaliser IP dès le début
+      const normalizedIp = context?.ipAddress ? 
+        IpUtils.validateAndNormalizeIp(context.ipAddress) : 
+        '127.0.0.1';
+
+      console.log('🔍 DEBUG validateUser - IP normalisée:', {
+        original: context?.ipAddress,
+        normalized: normalizedIp
+      });
+
       // 1. Chercher utilisateur avec relations selon schema.prisma
       const dbUser = await this.prisma.users.findUnique({
         where: { email },
@@ -661,6 +670,12 @@ private async handleSuccessfulLogin(
       });
 
       if (!dbUser) {
+        // ✅ CORRIGÉ : Enregistrer échec avec IP normalisée
+        await this.handleFailedLogin(email, {
+          ...context,
+          ipAddress: normalizedIp
+        });
+        
         this.logger.endOperation('validateUser', operationId, false, undefined, { reason: 'user_not_found' });
         return null;
       }
@@ -677,12 +692,19 @@ private async handleSuccessfulLogin(
         throw new EmailNotVerifiedException();
       }
 
-      // ✅ 4. AMÉLIORÉ : Validation password avec service centralisé (résout double hashage)
+      // ✅ 4. AMÉLIORÉ : Validation password avec service centralisé
       console.log('🔍 DEBUG validateUser - Vérification password avec PasswordService pour:', email);
       const isPasswordValid = await this.passwordService.verifyUserPasswordByEmail(email, password);
       
       if (!isPasswordValid) {
         console.log('🔍 DEBUG validateUser - Password invalide pour:', email);
+        
+        // ✅ CORRIGÉ : Enregistrer échec avec IP normalisée
+        await this.handleFailedLogin(email, {
+          ...context,
+          ipAddress: normalizedIp
+        });
+        
         this.logger.endOperation('validateUser', operationId, false, undefined, { reason: 'invalid_password' });
         return null;
       }
@@ -1214,7 +1236,10 @@ async resendVerificationEmail(userId: string): Promise<{
   /**
    * Gestion échec de connexion
    */
-  private async handleFailedLogin(email: string, context?: any): Promise<void> {
+  private async handleFailedLogin(
+    email: string, 
+    context?: { ipAddress?: string; userAgent?: string }
+  ): Promise<void> {
     // Logger échec
     this.logger.logBusinessEvent('LOGIN_FAILED', {
       email,
@@ -1222,6 +1247,29 @@ async resendVerificationEmail(userId: string): Promise<{
       userAgent: context?.userAgent,
       reason: 'invalid_credentials',
     });
+
+    // ✅ CORRIGÉ : Normaliser IP avant stockage
+    const normalizedIp = IpUtils.validateAndNormalizeIp(context?.ipAddress);
+
+    try {
+      // Enregistrer tentative échec en base
+      await this.prisma.login_attempts.create({
+        data: {
+          email,
+          user_id: null, // Pas d'utilisateur trouvé
+          ip_address: normalizedIp, // ✅ IP normalisée
+          user_agent: context?.userAgent || 'unknown',
+          success: false,
+          failure_reason: 'INVALID_CREDENTIALS',
+          is_suspicious: false,
+        }
+      });
+    } catch (error) {
+      this.logger.warn('Failed to record failed login attempt', JSON.stringify({
+        email,
+        error: error.message,
+      }));
+    }
 
     // Rate limiting par email
     const key = `login_attempts:${email}`;
@@ -1234,16 +1282,18 @@ async resendVerificationEmail(userId: string): Promise<{
    * Mise à jour last_login
    */
   private async updateLastLogin(userId: string, ipAddress: string): Promise<void> {
-    await this.prisma.users.update({
-      where: { id: userId },
-      data: { 
-        last_login: new Date(),
-        metadata: {
-          lastLoginIp: ipAddress,
-        }
-      },
-    });
-  }
+  const normalizedIp = IpUtils.validateAndNormalizeIp(ipAddress);
+  
+  await this.prisma.users.update({
+    where: { id: userId },
+    data: { 
+      last_login: new Date(),
+      metadata: {
+        lastLoginIp: normalizedIp,
+      }
+    },
+  });
+}
 
   /**
    * Validation et normalisation IP
