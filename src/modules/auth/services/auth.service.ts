@@ -1,6 +1,6 @@
 // src/modules/auth/services/auth.service.ts
 
-import { Injectable, UnauthorizedException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
@@ -1428,6 +1428,113 @@ private async isMfaRequired(userId: string, riskScore: number): Promise<boolean>
     
     // En cas d'erreur, sécurité = MFA requis
     return true;
+  }
+}
+
+/**
+ * ✅ NOUVEAU : Force la validation d'email sans token (pour développement)
+ */
+async forceVerifyEmail(userId: string): Promise<{
+  success: boolean;
+  message: string;
+  data: {
+    userId: string;
+    email: string;
+    emailVerified: boolean;
+    verifiedAt: string;
+  };
+}> {
+  const operationId = this.logger.startOperation('forceVerifyEmail', { userId });
+
+  try {
+    // Vérifier que l'utilisateur existe
+    const dbUser = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: { 
+        id: true, 
+        email: true, 
+        email_verified: true,
+        is_active: true 
+      }
+    });
+
+    if (!dbUser) {
+      this.logger.warn('User not found for force email verification', JSON.stringify({ userId }));
+      throw new NotFoundException('Utilisateur introuvable');
+    }
+
+    if (!dbUser.is_active) {
+      this.logger.warn('Inactive user attempted force email verification', JSON.stringify({ userId }));
+      throw new BadRequestException('Compte inactif');
+    }
+
+    // Si déjà vérifié, retourner le statut actuel
+    if (dbUser.email_verified) {
+      this.logger.info('Email already verified', JSON.stringify({ userId, email: dbUser.email }));
+      
+      return {
+        success: true,
+        message: 'Email déjà validé',
+        data: {
+          userId: dbUser.id,
+          email: dbUser.email,
+          emailVerified: true,
+          verifiedAt: new Date().toISOString(),
+        }
+      };
+    }
+
+    // Forcer la validation de l'email
+    const verifiedAt = new Date();
+    
+    const updatedUser = await this.prisma.users.update({
+      where: { id: userId },
+      data: { 
+        email_verified: true,  // ✅ Boolean selon schema.prisma
+        updated_at: verifiedAt,
+      },
+      select: {
+        id: true,
+        email: true,
+        email_verified: true,
+        updated_at: true,
+      }
+    });
+
+    // Log l'événement business
+    this.logger.logBusinessEvent('EMAIL_FORCE_VERIFIED', {
+      userId,
+      email: updatedUser.email,
+      method: 'force_verification',
+      verifiedAt: verifiedAt.toISOString(),
+    }, userId);
+
+    this.logger.endOperation('forceVerifyEmail', operationId, true);
+
+    return {
+      success: true,
+      message: 'Email validé avec succès',
+      data: {
+        userId: updatedUser.id,
+        email: updatedUser.email,
+        emailVerified: updatedUser.email_verified,
+        verifiedAt: updatedUser.updated_at.toISOString(),
+      }
+    };
+
+  } catch (error) {
+    this.logger.endOperation('forceVerifyEmail', operationId, false, undefined, { 
+      error: error.message 
+    });
+    
+    this.logger.logErrorEvent(
+      error as Error,
+      'AuthService.forceVerifyEmail',
+      userId,
+      JSON.stringify({ userId })
+    );
+    
+    throw error;
   }
 }
 

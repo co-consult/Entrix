@@ -85,4 +85,14 @@ export declare class AuthService implements IAuthService {
     private mapDbUserToProfile;
     private generateMfaChallenge;
     private isMfaRequired;
+    forceVerifyEmail(userId: string): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+            userId: string;
+            email: string;
+            emailVerified: boolean;
+            verifiedAt: string;
+        };
+    }>;
 }

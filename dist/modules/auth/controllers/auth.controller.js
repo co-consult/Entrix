@@ -172,6 +172,9 @@ let AuthController = class AuthController {
             throw error;
         }
     }
+    async forceVerifyEmail(user) {
+        return await this.authService.forceVerifyEmail(user.id);
+    }
 };
 exports.AuthController = AuthController;
 __decorate([
@@ -344,6 +347,36 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getVerificationStatus", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Post)('force-verify-email'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Forcer la validation d\'email',
+        description: 'Valide directement l\'email de l\'utilisateur connecté (endpoint de développement)'
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: 'Email validé avec succès',
+        schema: {
+            example: {
+                success: true,
+                message: 'Email validé avec succès',
+                data: {
+                    userId: 'uuid',
+                    email: 'user@example.com',
+                    emailVerified: true,
+                    verifiedAt: '2025-07-28T10:30:00Z'
+                }
+            }
+        }
+    }),
+    __param(0, (0, decorators_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "forceVerifyEmail", null);
 exports.AuthController = AuthController = __decorate([
     (0, swagger_1.ApiTags)('Authentication'),
     (0, common_1.Controller)('auth'),

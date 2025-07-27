@@ -436,4 +436,48 @@ async getVerificationStatus(
   }
 }
 
+/**
+ * POST /auth/force-verify-email
+ * ✅ NOUVEAU : Force la validation d'email sans token (pour développement)
+ */
+@UseGuards(JwtAuthGuard)
+@Post('force-verify-email')
+@HttpCode(HttpStatus.OK)
+@ApiBearerAuth()
+@ApiOperation({ 
+  summary: 'Forcer la validation d\'email',
+  description: 'Valide directement l\'email de l\'utilisateur connecté (endpoint de développement)'
+})
+@ApiResponse({ 
+  status: 200, 
+  description: 'Email validé avec succès',
+  schema: {
+    example: {
+      success: true,
+      message: 'Email validé avec succès',
+      data: {
+        userId: 'uuid',
+        email: 'user@example.com',
+        emailVerified: true,
+        verifiedAt: '2025-07-28T10:30:00Z'
+      }
+    }
+  }
+})
+async forceVerifyEmail(
+  @CurrentUser() user: IUserProfile
+): Promise<{
+  success: boolean;
+  message: string;
+  data: {
+    userId: string;
+    email: string;
+    emailVerified: boolean;
+    verifiedAt: string;
+  };
+}> {
+  // ✅ Architecture propre : délégation au service
+  return await this.authService.forceVerifyEmail(user.id);
+}
+
 }

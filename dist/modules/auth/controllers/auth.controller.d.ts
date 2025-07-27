@@ -37,4 +37,14 @@ export declare class AuthController {
         tokenId?: string;
     }>;
     getVerificationStatus(user: IUserProfile): Promise<IVerificationStatus>;
+    forceVerifyEmail(user: IUserProfile): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+            userId: string;
+            email: string;
+            emailVerified: boolean;
+            verifiedAt: string;
+        };
+    }>;
 }
