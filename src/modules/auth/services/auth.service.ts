@@ -5,6 +5,9 @@ import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
 import { EmailService } from '../../../shared/email/email.service';
+import { BullmqService } from '../../../shared/bullmq/bullmq.service';
+import { PersistentTokenService} from './persistent-token.service';
+import { ValidationTokenService} from './validation-token.service'
 import { 
   IAuthService, 
   ILoginResult, 
@@ -56,11 +59,14 @@ export class AuthService implements IAuthService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly email: EmailService,
+    private readonly bullmq:BullmqService,
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly securityService: SecurityService,
     private readonly passwordService: PasswordService,
+    private readonly persistentTokenService:PersistentTokenService,
+    private readonly validationTokenService:ValidationTokenService,
     private readonly mfaService: MfaService,
     loggerService: LoggerService,
   ) {
@@ -257,170 +263,316 @@ async login(loginData: ILoginRequest, context?: {
    * Inscription utilisateur avec session et tokens automatiques
    */
   async register(
-    registerData: IRegisterRequest, 
-    clientInfo?: { ip: string; userAgent: string }
-  ): Promise<IRegisterResult> {
-    const operationId = this.logger.startOperation('register', {
+  registerData: IRegisterRequest, 
+  clientInfo?: { ip: string; userAgent: string }
+): Promise<IRegisterResult> {
+  const operationId = this.logger.startOperation('register', {
+    email: registerData.email,
+    firstName: registerData.firstName,
+    lastName: registerData.lastName,
+  });
+
+  try {
+    this.logger.info('Registration attempt started', JSON.stringify({
       email: registerData.email,
       firstName: registerData.firstName,
       lastName: registerData.lastName,
+      hasOnboardingSecret: !!registerData.onboardingSecret,
+    }));
+
+    // 1. Vérifications préalables existantes
+    await this.checkEmailExists(registerData.email);
+    await this.validatePasswordStrength(registerData.password);
+    await this.checkRegistrationRateLimit(clientInfo?.ip);
+
+    // 2. Hash du mot de passe avec service centralisé
+    const hashedPassword = await this.passwordService.hashPassword(registerData.password);
+
+    // 3. Créer utilisateur en base selon schema.prisma exact
+    const user = await this.prisma.users.create({
+      data: {
+        email: registerData.email,
+        password: hashedPassword,
+        first_name: registerData.firstName,
+        last_name: registerData.lastName,
+        phone: registerData.phone || null,
+        is_active: true,
+        email_verified: null, // Sera mis à jour lors de la vérification
+        phone_verified: null,
+        last_login: null,
+        metadata: {
+          termsAccepted: registerData.termsAccepted,
+          marketingConsent: registerData.marketingConsent || false,
+          dateOfBirth: registerData.dateOfBirth || null,
+          registrationIp: clientInfo?.ip,
+          registrationUserAgent: clientInfo?.userAgent,
+        },
+      },
     });
 
-    try {
-      this.logger.info('Registration attempt started', JSON.stringify({
-        email: registerData.email,
-        firstName: registerData.firstName,
-        lastName: registerData.lastName,
-        hasOnboardingSecret: !!registerData.onboardingSecret,
+    // 4. Transformer données DB vers format application
+    const userProfile: IUserProfile = this.mapDbUserToProfile(user);
+
+    // ✅ NOUVEAU : 5. Générer token de vérification email avec ValidationTokenService
+    const verificationTokenData = await this.validationTokenService.createEmailVerificationToken(
+      user.email,
+      user.id,
+      'registration'
+    );
+
+    this.logger.info('Email verification token created', JSON.stringify({
+      userId: user.id,
+      tokenId: verificationTokenData.id,
+      expiresAt: verificationTokenData.expires_at.toISOString(),
+    }));
+
+    // 6. L'email sera envoyé automatiquement via BullMQ par ValidationTokenService
+    // Pas besoin d'appel manuel this.email.sendWelcomeEmail()
+
+    // 7. Traitement onboarding si secret fourni
+    let onboardingResult;
+    if (registerData.onboardingSecret) {
+      onboardingResult = await this.processOnboardingSecret(
+        user.id, 
+        registerData.onboardingSecret
+      );
+    }
+
+    // ✅ AMÉLIORÉ : 8. Création automatique de session et tokens selon configuration
+    let tokens: ITokenPair | null = null;
+    let sessionInfo = null;
+    const autoLoginEnabled = process.env.AUTH_AUTO_LOGIN_AFTER_REGISTER === 'true';
+
+    if (clientInfo && autoLoginEnabled) {
+      this.logger.info('Creating automatic session post-registration', JSON.stringify({
+        userId: user.id,
+        email: user.email,
       }));
-
-      // 1. Vérifications préalables existantes
-      await this.checkEmailExists(registerData.email);
-      await this.validatePasswordStrength(registerData.password);
-      await this.checkRegistrationRateLimit(clientInfo?.ip);
-
-      // 2. Hash du mot de passe avec service centralisé
-      const hashedPassword = await this.passwordService.hashPassword(registerData.password);
-
-      // 3. Créer utilisateur en base selon schema.prisma exact
-      const user = await this.prisma.users.create({
-        data: {
-          email: registerData.email,
-          password: hashedPassword,
-          first_name: registerData.firstName,
-          last_name: registerData.lastName,
-          phone: registerData.phone || null,
-          is_active: true,
-          email_verified: false,
-          phone_verified: false,
-          last_login: null,
-          metadata: {
-            termsAccepted: registerData.termsAccepted,
-            marketingConsent: registerData.marketingConsent || false,
-            dateOfBirth: registerData.dateOfBirth || null,
-            registrationIp: clientInfo?.ip,
-            registrationUserAgent: clientInfo?.userAgent,
-          },
-        },
+      
+      const deviceInfo: IDeviceInfo = DeviceUtil.normalizeDeviceInfo({
+        userAgent: clientInfo.userAgent,
+        ipAddress: this.validateAndNormalizeIp(clientInfo.ip),
       });
 
-      // 4. Transformer données DB vers format application
-      const userProfile: IUserProfile = this.mapDbUserToProfile(user);
-
-      // 5. Générer token de vérification email
-      const verificationTokenData = await this.emailVerificationService.generateVerificationToken(
-        user.id,
-        user.email
-      );
-
-      // 6. Envoyer email de bienvenue avec lien de vérification
-      this.email.sendWelcomeEmail(
-        user.email,
-        user.first_name,
-        verificationTokenData.token
-      ).catch(error => {
-        this.logger.error('Failed to send welcome email', error.stack, 'AuthService.register', JSON.stringify({
-          userId: user.id,
-          email: user.email
-        }));
-        });
-
-      // 7. Traitement onboarding si secret fourni
-      let onboardingResult;
-      if (registerData.onboardingSecret) {
-        onboardingResult = await this.processOnboardingSecret(
-          user.id, 
-          registerData.onboardingSecret
-        );
-      }
-
-      // ✅ NOUVEAU : 8. Création automatique de session et tokens
-      let tokens: ITokenPair | null = null;
-      let sessionInfo = null;
-
-      if (clientInfo) {
-        console.log('🔍 DEBUG REGISTER - Création session automatique post-inscription');
-        
-        const deviceInfo: IDeviceInfo = DeviceUtil.normalizeDeviceInfo({
-          userAgent: clientInfo.userAgent,
-          ipAddress: this.validateAndNormalizeIp(clientInfo.ip),
-        });
-
+      try {
         // Créer session pour l'utilisateur nouvellement inscrit
-        const session = await this.sessionService.createSession(
+        const sessionResult = await this.sessionService.handleUserLogin(
           user.id,
           deviceInfo,
           false // Pas de "remember me" pour nouvelle inscription
         );
 
-        // Générer tokens JWT pour la session
-        tokens = await this.tokenService.generateTokenPair(
-          user.id,
-          user.email,
-          session.id,
-          false, // Pas de "remember me"
-          deviceInfo.deviceFingerprint,
-          userProfile.roles || [],
-          userProfile.permissions || []
-        );
-
+        tokens = sessionResult.tokens;
         sessionInfo = {
-          sessionId: session.id,
-          expiresAt: session.expires_at.toISOString(),
+          sessionId: sessionResult.session.id,
+          expiresAt: sessionResult.session.expires_at.toISOString(),
           deviceInfo,
-          isActive: session.is_active,
-          lastActivity: session.last_activity.toISOString(),
+          isActive: sessionResult.session.is_active,
+          lastActivity: sessionResult.session.last_activity.toISOString(),
+          isReused: sessionResult.isReused,
+          sessionType: sessionResult.type,
         };
 
-        console.log('🔍 DEBUG REGISTER - Session et tokens créés:', {
-          sessionId: session.id,
-          hasTokens: !!tokens,
-        });
+        this.logger.info('Automatic session created successfully', JSON.stringify({
+          userId: user.id,
+          sessionId: sessionResult.session.id,
+          sessionType: sessionResult.type,
+        }));
+
+      } catch (sessionError) {
+        // Ne pas faire échouer l'inscription si la session automatique échoue
+        this.logger.error(
+          'Failed to create automatic session, proceeding without session',
+          sessionError.stack,
+          'AuthService.register',
+          JSON.stringify({ userId: user.id })
+        );
       }
-
-      // 9. Logger inscription réussie
-      this.logger.logBusinessEvent('USER_REGISTERED', {
-        userId: user.id,
-        email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        hasOnboardingSecret: !!registerData.onboardingSecret,
-        onboardingApplied: !!onboardingResult?.incentiveApplied,
-        hasAutoSession: !!sessionInfo,
-      }, user.id);
-
-      this.logger.endOperation('register', operationId, true);
-
-      return {
-        success: true,
-        user: userProfile,
-        tokens,
-        session: sessionInfo,
-        verification: {
-          emailSent: true,
-          verificationRequired: true,
-          tokenId: verificationTokenData.id,
-        },
-        onboarding: onboardingResult,
-        message: tokens 
-          ? 'Compte créé avec succès. Vous êtes connecté automatiquement. Vérifiez votre email.'
-          : 'Compte créé avec succès. Vérifiez votre email pour activer votre compte.',
-      };
-
-    } catch (error) {
-      this.logger.endOperation('register', operationId, false, undefined, { error: error.message });
-      
-      if (error instanceof EmailAlreadyExistsException ||
-          error instanceof WeakPasswordException) {
-        throw error;
-      }
-
-      this.logger.error('Registration failed with unexpected error', error.stack, 'AuthService', JSON.stringify({
-        email: registerData.email,
-      }));
-      throw new InternalServerErrorException('Erreur lors de l\'inscription');
     }
+
+    // ✅ NOUVEAU : 9. Optionnel - Générer des tokens persistants pour l'onboarding
+    let persistentTokens;
+    if (onboardingResult?.incentiveApplied && (process.env.AUTH_GENERATE_ONBOARDING_TOKENS === 'false')) {
+      try {
+        // Générer un token d'accès longue durée pour l'onboarding
+        const onboardingToken = await this.persistentTokenService.createToken({
+          user_id: user.id,
+          token_type: 'ACCESS_LONG',
+          name: 'Onboarding Access Token',
+          description: 'Token d\'accès pour compléter l\'onboarding',
+          scopes: ['read:profile', 'write:profile'],
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 jours
+          metadata: {
+            purpose: 'onboarding',
+            incentive_applied: onboardingResult.incentiveApplied,
+          },
+        });
+
+        persistentTokens = {
+          onboarding_token: onboardingToken.token,
+          expires_at: onboardingToken.expires_at?.toISOString(),
+        };
+
+        this.logger.info('Onboarding persistent token created', JSON.stringify({
+          userId: user.id,
+          tokenId: onboardingToken.id,
+        }));
+
+      } catch (persistentTokenError) {
+        this.logger.error(
+          'Failed to create onboarding persistent token',
+          persistentTokenError.stack,
+          'AuthService.register',
+          JSON.stringify({ userId: user.id })
+        );
+      }
+    }
+
+    // 10. Logger inscription réussie avec événements business
+    this.logger.logBusinessEvent('USER_REGISTERED', {
+      userId: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      hasOnboardingSecret: !!registerData.onboardingSecret,
+      onboardingApplied: !!onboardingResult?.incentiveApplied,
+      hasAutoSession: !!sessionInfo,
+      hasPersistentTokens: !!persistentTokens,
+      autoLoginEnabled,
+      verificationTokenId: verificationTokenData.id,
+    }, user.id);
+
+    // ✅ NOUVEAU : 11. Programmer des tâches post-inscription
+    await this.schedulePostRegistrationTasks(user.id, {
+      hasOnboarding: !!onboardingResult,
+      hasAutoSession: !!sessionInfo,
+      verificationTokenId: verificationTokenData.id,
+    });
+
+    this.logger.endOperation('register', operationId, true);
+
+    // ✅ AMÉLIORÉ : 12. Retour avec nouvelles informations
+    const result: IRegisterResult = {
+      success: true,
+      user: userProfile,
+      tokens,
+      session: sessionInfo,
+      verification: {
+        emailSent: true,
+        verificationRequired: true,
+        tokenId: verificationTokenData.id,
+      },
+      onboarding: onboardingResult,
+      message: this.buildRegistrationSuccessMessage(!!tokens, !!onboardingResult),
+    };
+
+    // Ajouter les tokens persistants si présents
+    if (persistentTokens) {
+      (result as any).persistent_tokens = persistentTokens;
+    }
+
+    return result;
+
+  } catch (error) {
+    this.logger.endOperation('register', operationId, false, undefined, { error: error.message });
+    
+    if (error instanceof EmailAlreadyExistsException ||
+        error instanceof WeakPasswordException) {
+      throw error;
+    }
+
+    this.logger.error('Registration failed with unexpected error', error.stack, 'AuthService', JSON.stringify({
+      email: registerData.email,
+      errorType: error.constructor.name,
+    }));
+    throw new InternalServerErrorException('Erreur lors de l\'inscription');
   }
+}
+
+  /**
+ * ✅ NOUVELLE MÉTHODE : Construit le message de succès personnalisé
+ */
+private buildRegistrationSuccessMessage(hasTokens: boolean, hasOnboarding: boolean): string {
+  const baseMessage = 'Compte créé avec succès.';
+  
+  if (hasTokens && hasOnboarding) {
+    return `${baseMessage} Vous êtes connecté automatiquement et vos avantages d'onboarding ont été appliqués. Vérifiez votre email.`;
+  }
+  
+  if (hasTokens) {
+    return `${baseMessage} Vous êtes connecté automatiquement. Vérifiez votre email pour activer votre compte.`;
+  }
+  
+  if (hasOnboarding) {
+    return `${baseMessage} Vos avantages d'onboarding ont été appliqués. Vérifiez votre email pour activer votre compte.`;
+  }
+  
+  return `${baseMessage} Vérifiez votre email pour activer votre compte.`;
+}
+
+  /**
+ * ✅ NOUVELLE MÉTHODE : Programme les tâches post-inscription
+ */
+private async schedulePostRegistrationTasks(
+  userId: string, 
+  context: {
+    hasOnboarding: boolean;
+    hasAutoSession: boolean;
+    verificationTokenId: string;
+  }
+): Promise<void> {
+  try {
+    // Programmer rappel de vérification email si pas vérifié sous 24h
+    await this.bullmq.addJob(
+      'EMAIL_QUEUE',
+      'email_verification_reminder',
+      {
+        userId,
+        verificationTokenId: context.verificationTokenId,
+        registrationDate: new Date().toISOString(),
+      },
+      {
+        delay: 24 * 60 * 60 * 1000, // 24 heures
+      }
+    );
+
+    // Programmer tâche d'onboarding si applicable
+    if (context.hasOnboarding) {
+      await this.bullmq.addJob(
+        'ONBOARDING_QUEUE',
+        'onboarding_followup',
+        {
+          userId,
+          registrationDate: new Date().toISOString(),
+        },
+        {
+          delay: 3 * 24 * 60 * 60 * 1000, // 3 jours
+        }
+      );
+    }
+
+    // Programmer analytics post-inscription
+    await this.bullmq.addJob(
+      'ANALYTICS_QUEUE',
+      'registration_analytics',
+      {
+        userId,
+        hasAutoSession: context.hasAutoSession,
+        hasOnboarding: context.hasOnboarding,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+  } catch (schedulingError) {
+    this.logger.error(
+      'Failed to schedule post-registration tasks',
+      schedulingError.stack,
+      'AuthService.schedulePostRegistrationTasks',
+      JSON.stringify({ userId })
+    );
+    // Ne pas faire échouer l'inscription pour des problèmes de scheduling
+  }
+}
 
   /**
  * ✅ OPTIMISÉ : Gestion succès login avec métriques de session
@@ -713,153 +865,232 @@ async verifyMfa(
   /**
    * ✅ CORRIGÉ : Vérification email (conserve signature existante)
    */
-  async verifyEmail(token: string): Promise<{
-    success: boolean;
-    verified: boolean;
-    message: string;
-    userId?: string;
-  }> {
-    const operationId = this.logger.startOperation('verifyEmail', {
-      tokenLength: token?.length,
-    });
+  async verifyEmail(token: string, clientInfo?: any): Promise<{
+  success: boolean;
+  verified: boolean;
+  message: string;
+  userId?: string;
+}> {
+  const operationId = this.logger.startOperation('verifyEmail');
 
-    try {
-      // Déléguer à EmailVerificationService
-      const result = await this.emailVerificationService.verifyEmailToken(token);
+  try {
+    const result = await this.validationTokenService.verifyEmailWithToken(token);
 
-      this.logger.endOperation('verifyEmail', operationId, result.success, undefined, {
-        verified: result.verified,
-        userId: result.userId,
-      });
+    if (result.success) {
+      this.logger.logBusinessEvent('EMAIL_VERIFIED', {
+        userId: result.user_id,
+        email: result.email,
+        verificationMethod: 'email_token',
+      }, result.user_id);
 
-      return result;
-
-    } catch (error) {
-      this.logger.endOperation('verifyEmail', operationId, false, undefined, {
-        error: error.message,
-      });
-      
-      this.logger.error(
-        'Email verification failed with unexpected error',
-        error.stack,
-        'AuthService.verifyEmail',
-        JSON.stringify({
-          tokenPrefix: token?.substring(0, 8),
-          error: error.message,
-        })
-      );
-
-      return {
-        success: false,
-        verified: false,
-        message: 'Erreur lors de la vérification de l\'email',
-      };
-    }
-  }
-
-  /**
-   * ✅ CORRIGÉ : Renvoyer email de vérification (conserve signature existante)
-   */
-  async resendVerificationEmail(userId: string): Promise<{
-    success: boolean;
-    message: string;
-    tokenId?: string;
-  }> {
-    const operationId = this.logger.startOperation('resendVerificationEmail', { userId });
-
-    try {
-      // 1. Vérifier que l'utilisateur existe et n'est pas déjà vérifié
-      const user = await this.prisma.users.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          email: true,
-          email_verified: true,
-          first_name: true,
-          is_active: true,
-        },
-      });
-
-      if (!user) {
-        this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
-          reason: 'user_not_found',
-        });
-        
-        return {
-          success: false,
-          message: 'Utilisateur introuvable',
-        };
-      }
-
-      if (user.email_verified) {
-        this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
-          reason: 'already_verified',
-        });
-        
-        return {
-          success: false,
-          message: 'Email déjà vérifié',
-        };
-      }
-
-      if (!user.is_active) {
-        this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
-          reason: 'user_inactive',
-        });
-        
-        return {
-          success: false,
-          message: 'Compte utilisateur inactif',
-        };
-      }
-
-      // 2. Générer nouveau token
-      const verificationTokenData = await this.emailVerificationService.generateVerificationToken(
-        user.id,
-        user.email
-      );
-
-      // 3. Envoyer email de vérification
-      this.email.sendVerificationEmail(user.email, verificationTokenData.token).catch(error => {
-        this.logger.error('Failed to send verification email', error.stack, 'AuthService.resendVerificationEmail', JSON.stringify({
-          userId: user.id,
-          email: user.email
-        }));
-      });
-
-      // 4. Logger l'événement
-      this.logger.logBusinessEvent('EMAIL_VERIFICATION_RESENT', {
-        userId: user.id,
-        email: user.email,
-        tokenId: verificationTokenData.id,
-      }, user.id);
-
-      this.logger.endOperation('resendVerificationEmail', operationId, true);
+      this.logger.endOperation('verifyEmail', operationId, true);
 
       return {
         success: true,
-        message: 'Email de vérification renvoyé',
-        tokenId: verificationTokenData.id,
-      };
-
-    } catch (error) {
-      this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
-        error: error.message,
-      });
-      
-      this.logger.error(
-        'Failed to resend verification email',
-        error.stack,
-        'AuthService.resendVerificationEmail',
-        JSON.stringify({ userId })
-      );
-
-      return {
-        success: false,
-        message: 'Erreur lors de l\'envoi de l\'email de vérification',
+        verified: true,
+        message: 'Email vérifié avec succès !',
+        userId: result.user_id,
       };
     }
+
+    this.logger.endOperation('verifyEmail', operationId, false);
+    return {
+      success: false,
+      verified: false,
+      message: 'Token de vérification invalide ou expiré.',
+    };
+
+  } catch (error) {
+    this.logger.endOperation('verifyEmail', operationId, false);
+    this.logger.error(
+      'Email verification failed',
+      error.stack,
+      'AuthService.verifyEmail',
+      JSON.stringify({ errorMessage: error.message })
+    );
+    
+    return {
+      success: false,
+      verified: false,
+      message: 'Erreur lors de la vérification de l\'email.',
+    };
   }
+}
+
+  /**
+ * ✅ MÉTHODE ADAPTÉE : Demande reset password avec nouveau service
+ */
+async requestPasswordReset(email: string, clientInfo?: any): Promise<{
+  success: boolean;
+  message: string;
+  tokenId?: string;
+}> {
+  const operationId = this.logger.startOperation('requestPasswordReset', { email });
+
+  try {
+    const resetToken = await this.validationTokenService.createPasswordResetToken(email);
+
+    this.logger.logBusinessEvent('PASSWORD_RESET_REQUESTED', {
+      email,
+      tokenId: resetToken.id,
+      clientInfo,
+    });
+
+    this.logger.endOperation('requestPasswordReset', operationId, true);
+
+    return {
+      success: true,
+      message: 'Si cette adresse email existe, vous recevrez un lien de réinitialisation.',
+      tokenId: resetToken.id,
+    };
+
+  } catch (error) {
+    this.logger.endOperation('requestPasswordReset', operationId, false);
+    
+    // Pour la sécurité, retourner toujours le même message
+    return {
+      success: true,
+      message: 'Si cette adresse email existe, vous recevrez un lien de réinitialisation.',
+    };
+  }
+}
+
+/**
+ * ✅ MÉTHODE ADAPTÉE : Reset password avec nouveau service
+ */
+async resetPassword(token: string, newPassword: string, clientInfo?: any): Promise<{
+  success: boolean;
+  message: string;
+  userId?: string;
+}> {
+  const operationId = this.logger.startOperation('resetPassword');
+
+  try {
+    // Valider la force du nouveau mot de passe
+    await this.validatePasswordStrength(newPassword);
+
+    const result = await this.validationTokenService.resetPasswordWithToken(token, newPassword);
+
+    if (result.success) {
+      this.logger.logBusinessEvent('PASSWORD_RESET_COMPLETED', {
+        userId: result.user_id,
+        email: result.email,
+        clientInfo,
+      }, result.user_id);
+
+      this.logger.endOperation('resetPassword', operationId, true);
+
+      return {
+        success: true,
+        message: 'Mot de passe mis à jour avec succès. Reconnectez-vous avec votre nouveau mot de passe.',
+        userId: result.user_id,
+      };
+    }
+
+    this.logger.endOperation('resetPassword', operationId, false);
+    return {
+      success: false,
+      message: 'Token de réinitialisation invalide ou expiré.',
+    };
+
+  } catch (error) {
+    this.logger.endOperation('resetPassword', operationId, false);
+    
+    if (error instanceof WeakPasswordException) {
+      throw error;
+    }
+
+    this.logger.error(
+      'Password reset failed',
+      error.stack,
+      'AuthService.resetPassword',
+      JSON.stringify({ errorMessage: error.message })
+    );
+
+    return {
+      success: false,
+      message: 'Erreur lors de la réinitialisation du mot de passe.',
+    };
+  }
+}
+
+/**
+ * ✅ NOUVELLE MÉTHODE : Renvoyer email de vérification
+ */
+async resendVerificationEmail(userId: string): Promise<{
+  success: boolean;
+  message: string;
+  tokenId?: string;
+}> {
+  const operationId = this.logger.startOperation('resendVerificationEmail', { userId });
+
+  try {
+    // Récupérer l'utilisateur
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, email_verified: true },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (user.email_verified) {
+      return {
+        success: false,
+        message: 'Email déjà vérifié.',
+      };
+    }
+
+    // Vérifier si on peut renvoyer
+    const canResend = await this.validationTokenService.canResendToken(
+      user.email, 
+      'EMAIL_VERIFICATION'
+    );
+
+    if (!canResend) {
+      return {
+        success: false,
+        message: 'Trop de tentatives. Veuillez attendre avant de renvoyer.',
+      };
+    }
+
+    // Créer nouveau token de vérification
+    const verificationToken = await this.validationTokenService.createEmailVerificationToken(
+      user.email,
+      user.id,
+      'registration'
+    );
+
+    this.logger.logBusinessEvent('VERIFICATION_EMAIL_RESENT', {
+      userId,
+      email: user.email,
+      tokenId: verificationToken.id,
+    }, userId);
+
+    this.logger.endOperation('resendVerificationEmail', operationId, true);
+
+    return {
+      success: true,
+      message: 'Email de vérification renvoyé avec succès.',
+      tokenId: verificationToken.id,
+    };
+
+  } catch (error) {
+    this.logger.endOperation('resendVerificationEmail', operationId, false);
+    this.logger.error(
+      'Failed to resend verification email',
+      error.stack,
+      'AuthService.resendVerificationEmail',
+      JSON.stringify({ errorMessage: error.message, userId })
+    );
+
+    return {
+      success: false,
+      message: 'Erreur lors du renvoi de l\'email de vérification.',
+    };
+  }
+}
 
   /**
    * ✅ NOUVEAU : Récupère le statut de vérification email d'un utilisateur

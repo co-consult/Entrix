@@ -46,9 +46,11 @@ import {
 } from '../decorators';
 import { 
   RateLimitLogin,
-  AuditCritical,
   RateLimit,
-} from '../decorators';
+} from '../decorators/rate-limit.decorator';
+import { 
+  AuditCritical,
+} from '../decorators/audit-log.decorator';
 import { IUserProfile,IVerificationStatus } from '../interfaces';
 
 /**

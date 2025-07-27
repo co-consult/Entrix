@@ -8,6 +8,8 @@ export declare class SecurityService implements ISecurityService {
     private readonly redis;
     private readonly email;
     private readonly logger;
+    private readonly RISK_SCORING;
+    private readonly SUSPICIOUS_PATTERNS;
     private readonly CACHE_TTL;
     private readonly TIMEFRAMES;
     private readonly SUSPICION_WEIGHTS;
@@ -24,6 +26,7 @@ export declare class SecurityService implements ISecurityService {
     private checkSuspiciousIp;
     private getUserActiveSessions;
     private determineRecommendation;
+    private recordSecurityEvent;
     private hashIpForLocation;
     private getSecurityLevel;
     private sendSecurityAlert;

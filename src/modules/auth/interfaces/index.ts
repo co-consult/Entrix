@@ -28,3 +28,7 @@ export * from './password.interface';
 
 // Interfaces utilisateur
 export * from './user.interface';
+
+export * from './validation-token.interface';
+
+export * from './persistent-token.interface';

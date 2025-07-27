@@ -45,3 +45,6 @@ export * from './mfa/mfa-challenge.dto';
 export * from './security/security-event.dto';
 export * from './security/trusted-device.dto';
 export * from './security/risk-assessment.dto';
+
+export * from './persistent-tokens/create-persistent-token.dto';
+export * from './validation-tokens/validation-token.dto';

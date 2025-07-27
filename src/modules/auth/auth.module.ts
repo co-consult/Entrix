@@ -4,6 +4,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Services partagés Entrix V3.0
 import { SharedModule } from '../../shared/shared.module';
@@ -18,52 +19,71 @@ import { getMfaConfig } from './config/mfa.config';
 import { getSecurityConfig } from './config/security.config';
 import { getRateLimitConfig } from './config/rate-limit.config';
 
-// Controllers
+// Controllers existants
 import { AuthController } from './controllers/auth.controller';
 import { SessionController } from './controllers/session.controller';
 import { PasswordController } from './controllers/password.controller';
 import { MfaController } from './controllers/mfa.controller';
 import { SecurityController } from './controllers/security.controller';
 
-// Services
+// ✅ NOUVEAUX CONTROLLERS
+import { PersistentTokenController } from './controllers/persistent-token.controller';
+import { ValidationTokenController } from './controllers/validation-token.controller';
+
+// Services existants
 import { AuthService } from './services/auth.service';
-import { TokenService } from './services/token.service';
+import { TokenService } from './services/token.service'; // ✅ REFACTORISÉ
 import { SessionService } from './services/session.service';
-import { PasswordService } from './services/password.service'; // ✅ NOUVEAU : Service centralisé
+import { PasswordService } from './services/password.service';
 import { MfaService } from './services/mfa.service';
 import { SecurityService } from './services/security.service';
 import { DeviceService } from './services/device.service';
 import { EmailVerificationService } from './services/email-verification.service';
-
 import { TrustedDevicesService } from './services/trusted-devices.service';
 import { RiskAssessmentService } from './services/risk-assessment.service';
 
+// ✅ NOUVEAUX SERVICES
+import { PersistentTokenService } from './services/persistent-token.service';
+import { ValidationTokenService } from './services/validation-token.service';
+import { TokenMaintenanceService } from './services/token-maintenance.service';
 
 // Strategies
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 
-// Guards
+// Guards existants
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { MfaRequiredGuard } from './guards/mfa-required.guard';
 import { DeviceTrustedGuard } from './guards/device-trusted.guard';
 import { AccountStatusGuard } from './guards/account-status.guard';
 
+// ✅ NOUVEAUX GUARDS
+import { ApiKeyGuard } from './guards/api-key.guard';
+
 /**
- * Module Authentification Entrix V3.0 - Grade A+
- * ✅ AMÉLIORÉ : Ajout PasswordService centralisé
+ * Module Authentification Entrix V3.0 REFACTORISÉ - Grade A+
+ * 
+ * ✅ NOUVELLES FONCTIONNALITÉS :
+ * - Persistent Tokens (API keys, refresh longue durée, tokens d'intégration)
+ * - Validation Tokens (email verification, password reset, invitations, magic links)
+ * - Token Maintenance automatique avec cron jobs
+ * - API Key authentication avec scopes
+ * - Architecture modulaire avec services spécialisés
  * 
  * Architecture complète avec :
- * - JWT avec rotation des refresh tokens
- * - MFA adaptatif selon risk scoring
- * - Device fingerprinting et trusted devices
- * - Rate limiting intelligent
- * - Audit complet et monitoring
- * - Gestion intelligente des sessions
- * - Service centralisé pour mots de passe (résout double hashage)
- * - Intégration services partagés grade A+
+ * - JWT avec rotation des refresh tokens (existant)
+ * - MFA adaptatif selon risk scoring (existant)
+ * - Device fingerprinting et trusted devices (existant)
+ * - Rate limiting intelligent (existant)
+ * - Audit complet et monitoring (existant)
+ * - Gestion intelligente des sessions (existant)
+ * - Service centralisé pour mots de passe (existant)
+ * - ✅ NOUVEAU : Gestion centralisée des tokens persistants
+ * - ✅ NOUVEAU : Gestion centralisée des tokens de validation
+ * - ✅ NOUVEAU : Maintenance automatique des tokens
+ * - ✅ NOUVEAU : Authentication par API key
  */
 
 @Module({
@@ -76,6 +96,9 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     
     // Module Users avec forwardRef pour éviter dépendance circulaire
     forwardRef(() => UsersModule),
+    
+    // ✅ NOUVEAU : Module Schedule pour les tâches CRON de maintenance
+    ScheduleModule.forRoot(),
     
     // Configuration Passport
     PassportModule.register({
@@ -93,28 +116,41 @@ import { AccountStatusGuard } from './guards/account-status.guard';
   ],
 
   controllers: [
+    // Controllers existants
     AuthController,         // /auth/login, /auth/register, /auth/logout
     SessionController,      // /auth/sessions, /auth/refresh
     PasswordController,     // /auth/forgot-password, /auth/reset-password, /auth/change-password
     MfaController,          // /auth/mfa/setup, /auth/mfa/verify, /auth/mfa/disable
     SecurityController,     // /auth/security-events, /auth/trusted-devices, /auth/risk-assessment
+    
+    // ✅ NOUVEAUX CONTROLLERS
+    PersistentTokenController,    // /auth/tokens - Gestion API keys et tokens persistants
+    ValidationTokenController,    // /auth/validation - Gestion tokens de validation
   ],
 
   providers: [
     // ========================
-    // SERVICES CORE
+    // SERVICES CORE EXISTANTS
     // ========================
     
     AuthService,
-    TokenService,
+    TokenService,                 // ✅ REFACTORISÉ : Orchestre les nouveaux services
     SessionService,
-    PasswordService,        // ✅ NOUVEAU : Service centralisé pour mots de passe
+    PasswordService,
     MfaService,
     SecurityService,
     DeviceService,
     EmailVerificationService,
-    TrustedDevicesService,  // ← Requis par MfaRequiredGuard
-    RiskAssessmentService,  // ← Requis par MfaRequiredGuard
+    TrustedDevicesService,
+    RiskAssessmentService,
+
+    // ========================
+    // ✅ NOUVEAUX SERVICES TOKENS
+    // ========================
+    
+    PersistentTokenService,       // Service des tokens persistants (API keys, etc.)
+    ValidationTokenService,       // Service des tokens de validation (email, reset, etc.)
+    TokenMaintenanceService,      // Service de maintenance automatique des tokens
 
     // ========================
     // PASSPORT STRATEGIES
@@ -128,11 +164,15 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     // GUARDS DE SÉCURITÉ
     // ========================
     
+    // Guards existants
     JwtAuthGuard,
     JwtRefreshGuard,
     MfaRequiredGuard,
     DeviceTrustedGuard,
     AccountStatusGuard,
+
+    // ✅ NOUVEAUX GUARDS
+    ApiKeyGuard,                  // Guard pour authentication par API key
 
     // ========================
     // CONFIGURATIONS
@@ -200,14 +240,18 @@ import { AccountStatusGuard } from './guards/account-status.guard';
   exports: [
     // Services principaux pour utilisation externe
     AuthService,
-    TokenService,
+    TokenService,                 // ✅ REFACTORISÉ
     SessionService,
-    PasswordService,        // ✅ NOUVEAU : Export du service centralisé
+    PasswordService,
     SecurityService,
     EmailVerificationService,
-
-    TrustedDevicesService,  // Pour usage externe
-    RiskAssessmentService,  // Pour usage externe
+    TrustedDevicesService,
+    RiskAssessmentService,
+    
+    // ✅ NOUVEAUX SERVICES EXPORTÉS
+    PersistentTokenService,       // Pour usage dans autres modules
+    ValidationTokenService,       // Pour usage dans autres modules
+    TokenMaintenanceService,      // Pour administration/monitoring
     
     // Guards pour utilisation dans autres modules
     JwtAuthGuard,
@@ -215,6 +259,9 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     MfaRequiredGuard,
     DeviceTrustedGuard,
     AccountStatusGuard,
+    
+    // ✅ NOUVEAUX GUARDS EXPORTÉS
+    ApiKeyGuard,                  // Pour authentication API dans autres modules
     
     // Strategies pour configuration avancée
     JwtStrategy,
@@ -228,7 +275,7 @@ import { AccountStatusGuard } from './guards/account-status.guard';
 })
 export class AuthModule {
   /**
-   * ✅ NOUVEAU : Configuration dynamique du module avec features optionnelles
+   * ✅ AMÉLIORÉ : Configuration dynamique du module avec features optionnelles
    * Permet de configurer les fonctionnalités selon l'environnement
    */
   static withFeatures(features: {
@@ -236,13 +283,20 @@ export class AuthModule {
     enableDeviceTrust?: boolean;
     enableRiskScoring?: boolean;
     enableRateLimit?: boolean;
-    enablePasswordService?: boolean; // ✅ NOUVEAU
+    enablePasswordService?: boolean;
+    enablePersistentTokens?: boolean;        // ✅ NOUVEAU
+    enableValidationTokens?: boolean;        // ✅ NOUVEAU
+    enableTokenMaintenance?: boolean;        // ✅ NOUVEAU
+    enableApiKeyAuth?: boolean;              // ✅ NOUVEAU
   }) {
     const providers = [];
+    const controllers = [];
+    const exports = [];
 
     // Ajout conditionnel des providers selon features
     if (features.enableMfa !== false) {
       providers.push(MfaService, MfaRequiredGuard);
+      controllers.push(MfaController);
     }
 
     if (features.enableDeviceTrust !== false) {
@@ -251,16 +305,42 @@ export class AuthModule {
 
     if (features.enableRiskScoring !== false) {
       providers.push(SecurityService);
+      controllers.push(SecurityController);
     }
 
     if (features.enablePasswordService !== false) {
-      providers.push(PasswordService); // ✅ NOUVEAU
+      providers.push(PasswordService);
+      controllers.push(PasswordController);
+    }
+
+    // ✅ NOUVELLES FEATURES
+    if (features.enablePersistentTokens !== false) {
+      providers.push(PersistentTokenService);
+      controllers.push(PersistentTokenController);
+      exports.push(PersistentTokenService);
+    }
+
+    if (features.enableValidationTokens !== false) {
+      providers.push(ValidationTokenService);
+      controllers.push(ValidationTokenController);
+      exports.push(ValidationTokenService);
+    }
+
+    if (features.enableTokenMaintenance !== false) {
+      providers.push(TokenMaintenanceService);
+      exports.push(TokenMaintenanceService);
+    }
+
+    if (features.enableApiKeyAuth !== false) {
+      providers.push(ApiKeyGuard);
+      exports.push(ApiKeyGuard);
     }
 
     return {
       module: AuthModule,
       providers,
-      exports: providers,
+      controllers,
+      exports,
     };
   }
 }
@@ -269,20 +349,28 @@ export class AuthModule {
  * Export des types et interfaces pour utilisation externe
  */
 export {
-  // Interfaces principales
+  // Interfaces principales existantes
   IAuthService,
   IUserProfile,
   ILoginResult,
   IRegisterResult,
   ITokenPair,
   ISessionInfo,
-  ISessionLoginResult, // ✅ NOUVEAU
+  ISessionLoginResult,
   JwtPayload,
   JwtRefreshPayload,
+  
+  // ✅ NOUVELLES INTERFACES EXPORTÉES
+  IPersistentToken,
+  IPersistentTokenService,
+  IPersistentTokenValidation,
+  IValidationToken,
+  IValidationTokenService,
+  IValidationTokenValidation,
 } from './interfaces';
 
 export {
-  // DTOs pour validation
+  // DTOs pour validation existants
   LoginDto,
   RegisterDto,
   RefreshTokenDto,
@@ -291,10 +379,19 @@ export {
   ChangePasswordDto,
   MfaSetupDto,
   MfaVerifyDto,
+  
+  // ✅ NOUVEAUX DTOS EXPORTÉS
+  CreatePersistentTokenDto,
+  GenerateApiKeyDto,
+  PersistentTokenResponseDto,
+  CreateEmailVerificationDto,
+  CreatePasswordResetDto,
+  CreateInvitationDto,
+  ValidationTokenResponseDto,
 } from './dto';
 
 export {
-  // Decorators utiles
+  // Decorators utiles existants
   CurrentUser,
   CurrentUserId,
   CurrentSession,
@@ -306,10 +403,13 @@ export {
   RateLimit,
   Roles,
   Permissions,
+  
+  // ✅ NOUVEAUX DECORATORS EXPORTÉS
+  RequireScopes,              // Pour spécifier les scopes requis pour API keys
 } from './decorators';
 
 export {
-  // Exceptions pour gestion d'erreurs
+  // Exceptions pour gestion d'erreurs existantes
   InvalidCredentialsException,
   AccountLockedException,
   EmailNotVerifiedException,
@@ -322,7 +422,7 @@ export {
 } from './exceptions';
 
 export {
-  // Constants pour configuration
+  // Constants pour configuration existantes
   AUTH_CONSTANTS,
   SESSION_CONSTANTS,
   MFA_CONSTANTS,
@@ -331,7 +431,13 @@ export {
 } from './constants';
 
 export {
-  // Utils pour usage externe
+  // ✅ NOUVELLES CONSTANTES EXPORTÉES
+  VALIDATION_TOKEN_DURATIONS,
+  VALIDATION_TOKEN_ATTEMPT_LIMITS,
+} from './interfaces';
+
+export {
+  // Utils pour usage externe existants
   CryptoUtil,
   DeviceUtil,
   GeolocationUtil,
@@ -342,11 +448,16 @@ export {
 
 /**
  * Configuration par défaut du module Auth
+ * ✅ AMÉLIORÉE avec nouvelles features
  */
 export const DEFAULT_AUTH_CONFIG = {
   enableMfa: true,
   enableDeviceTrust: true,
   enableRiskScoring: true,
   enableRateLimit: true,
-  enablePasswordService: true, // ✅ NOUVEAU
+  enablePasswordService: true,
+  enablePersistentTokens: true,        // ✅ NOUVEAU
+  enableValidationTokens: true,        // ✅ NOUVEAU
+  enableTokenMaintenance: true,        // ✅ NOUVEAU
+  enableApiKeyAuth: true,              // ✅ NOUVEAU
 };

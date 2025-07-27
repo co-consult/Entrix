@@ -1,96 +1,69 @@
 // src/modules/auth/decorators/index.ts
 
 /**
- * Index des decorators Entrix V3.0
- * Export centralisé pour faciliter les imports
+ * Index des décorateurs Auth Entrix V3.0
+ * Export centralisé pour imports simplifiés
+ * 
+ * Usage:
+ * import { Public, CurrentUserId, RateLimit } from '../decorators';
  */
 
-// Current User & Session Decorators
+// Décorateur Public
+export { Public, IS_PUBLIC_KEY } from './public.decorator';
+
+// Décorateurs d'authentification complets
 export {
+  // Extraction de données de requête
   CurrentUser,
   CurrentUserId,
-  CurrentUserEmail,
-  UserRoles,
-  UserPermissions,
-  Public,
-  RequireTrustedDevice,
-  IS_PUBLIC_KEY,
-  TRUST_DEVICE_KEY,
-} from './current-user.decorator';
-
-export {
   CurrentSession,
   SessionId,
-  DeviceFingerprint,
   ClientInfo,
-} from './current-session.decorator';
-
-// MFA Decorators
-export {
+  DeviceFingerprint,
+  
+  // Configuration des endpoints
   RequireMfa,
-  MfaLevel,
-  RequireHighMfa,
-  RequireCriticalMfa,
-  REQUIRE_MFA_KEY,
-  MFA_LEVEL_KEY,
-} from './require-mfa.decorator';
-
-// Audit & Logging Decorators
-export {
-  AuditLog,
-  AuditCritical,
-  AuditSecurity,
-  AuditAccess,
-  AUDIT_LOG_KEY,
-  AUDIT_LEVEL_KEY,
-} from './audit-log.decorator';
-
-// Rate Limiting Decorators
-export {
-  RateLimit,
-  RateLimitStrict,
-  RateLimitLogin,
-  RateLimitPasswordReset,
-  RateLimitMfa,
-  RATE_LIMIT_KEY,
-} from './rate-limit.decorator';
-
-// Roles & Permissions Decorators
-export {
+  RequireTrustedDevice,
   Roles,
   Permissions,
-  RequireAllRoles,
-  RequireAllPermissions,
-  AdminOnly,
-  OrganizerOnly,
-  SuperAdminOnly,
-  ModeratorOrAdmin,
-  ROLES_KEY,
-  PERMISSIONS_KEY,
-  REQUIRE_ALL_ROLES_KEY,
-  REQUIRE_ALL_PERMISSIONS_KEY,
-} from './roles.decorator';
+  
+  // Limitation et audit
+  RateLimit,
+  AuditLog,
+  
+  // Sécurité avancée
+  SecurityLevel,
+  Sensitive,
+  RiskScore,
+  
+  // Cache et performance
+  Cache,
+  NoCache,
+  
+  // Validation et transformation
+  ValidateInput,
+  TransformOutput,
+  
+  // Monitoring et métriques
+  Monitor,
+  BusinessMetric,
+  
+  // Feature flags
+  FeatureFlag,
+  Experimental,
+  
+  // Types et interfaces
+  RateLimitOptions,
+  AuditLogOptions,
+  RiskScoreOptions,
+  CacheOptions,
+  ValidationOptions,
+  TransformOptions,
+  MonitoringOptions,
+} from './auth.decorators';
 
-// API Key Decorators
-export {
-  RequireApiKey,
-  ApiKeyScopes,
-  PublicApiKey,
-  PartnerApiKey,
-  InternalApiKey,
-  API_KEY_REQUIRED_KEY,
-  API_KEY_SCOPES_KEY,
-} from './api-key.decorator';
+export * from './rate-limit.decorator';
+export * from './audit-log.decorator';
 
-// Types pour les decorators
-export type {
-  SessionContext,
-} from './current-session.decorator';
-
-export type {
-  AuditConfig,
-} from './audit-log.decorator';
-
-export type {
-  RateLimitConfig,
-} from './rate-limit.decorator';
+// Export du décorateur RequireScopes (défini dans api-key.guard.ts)
+export { RequireScopes } from '../guards/api-key.guard';

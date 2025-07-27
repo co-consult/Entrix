@@ -32,4 +32,6 @@ __exportStar(require("./mfa/mfa-challenge.dto"), exports);
 __exportStar(require("./security/security-event.dto"), exports);
 __exportStar(require("./security/trusted-device.dto"), exports);
 __exportStar(require("./security/risk-assessment.dto"), exports);
+__exportStar(require("./persistent-tokens/create-persistent-token.dto"), exports);
+__exportStar(require("./validation-tokens/validation-token.dto"), exports);
 //# sourceMappingURL=index.js.map

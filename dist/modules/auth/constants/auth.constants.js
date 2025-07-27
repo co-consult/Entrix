@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AUTH_CONSTANTS = void 0;
+exports.SESSION = exports.SECURITY_EVENTS = exports.AUDIT_EVENTS = exports.ERRORS = exports.CACHE = exports.RISK_LEVELS = exports.MFA_PROVIDERS = exports.SECURITY = exports.VALIDATION = exports.PASSWORD = exports.JWT = exports.MFA_METHOD_TO_PROVIDER_MAPPING = exports.MFA_PROVIDER_TO_METHOD_MAPPING = exports.AUTH_CONSTANTS = void 0;
 exports.AUTH_CONSTANTS = {
     JWT: {
         ACCESS_TOKEN_EXPIRY: 15 * 60,
@@ -8,6 +8,50 @@ exports.AUTH_CONSTANTS = {
         REFRESH_TOKEN_EXPIRY_REMEMBER: 30 * 24 * 60 * 60,
         PASSWORD_RESET_TOKEN_EXPIRY: 60 * 60,
         MFA_CHALLENGE_TOKEN_EXPIRY: 5 * 60,
+    },
+    PASSWORD: {
+        MIN_STRENGTH_SCORE: 60,
+        WEAK_SCORE_THRESHOLD: 40,
+        MEDIUM_SCORE_THRESHOLD: 70,
+        SCORING: {
+            LENGTH_BONUS: 4,
+            UPPERCASE_BONUS: 10,
+            LOWERCASE_BONUS: 5,
+            NUMBERS_BONUS: 10,
+            SYMBOLS_BONUS: 15,
+            MIXED_CASE_BONUS: 5,
+            MIDDLE_NUMBERS_BONUS: 5,
+            MIDDLE_SYMBOLS_BONUS: 5,
+            LETTERS_ONLY_PENALTY: -15,
+            NUMBERS_ONLY_PENALTY: -20,
+            REPEAT_CHARS_PENALTY: -10,
+            CONSECUTIVE_LETTERS_PENALTY: -5,
+            CONSECUTIVE_NUMBERS_PENALTY: -5,
+            SEQUENTIAL_LETTERS_PENALTY: -10,
+            SEQUENTIAL_NUMBERS_PENALTY: -10,
+            COMMON_PATTERNS_PENALTY: -25,
+        },
+        WEAK_PATTERNS: [
+            'password', 'admin', 'user', 'login', 'root', 'guest',
+            '123456', '654321', 'qwerty', 'azerty', 'abc123',
+            'password123', 'admin123', 'user123', 'test123',
+            'motdepasse', 'administrateur', 'utilisateur',
+            'entrix', 'tunisia', 'tunis', 'tunisia123'
+        ],
+        LETTER_SEQUENCES: ['abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij', 'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr', 'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz'],
+        NUMBER_SEQUENCES: ['012', '123', '234', '345', '456', '567', '678', '789', '890'],
+        SUGGESTIONS: {
+            TOO_SHORT: 'Utilisez au moins {min} caractères',
+            ADD_UPPERCASE: 'Ajoutez des lettres majuscules',
+            ADD_LOWERCASE: 'Ajoutez des lettres minuscules',
+            ADD_NUMBERS: 'Ajoutez des chiffres',
+            ADD_SYMBOLS: 'Ajoutez des symboles (!@#$%^&*)',
+            AVOID_PATTERNS: 'Évitez les mots courants et séquences',
+            AVOID_REPETITION: 'Évitez la répétition de caractères',
+            AVOID_PERSONAL_INFO: 'N\'utilisez pas d\'informations personnelles',
+            USE_PASSPHRASE: 'Considérez une phrase de passe longue',
+            MIX_CHARACTER_TYPES: 'Mélangez différents types de caractères'
+        }
     },
     VALIDATION: {
         PASSWORD_MIN_LENGTH: 8,
@@ -25,6 +69,24 @@ exports.AUTH_CONSTANTS = {
         MFA_CODE_LENGTH: 6,
         BACKUP_CODES_COUNT: 10,
     },
+    MFA_PROVIDERS: {
+        SMS_OTP: 'SMS_OTP',
+        EMAIL_OTP: 'EMAIL_OTP',
+        TOTP_APP: 'TOTP_APP',
+        BACKUP_CODE: 'BACKUP_CODE',
+    },
+    RISK_LEVELS: {
+        LOW: 0,
+        MEDIUM: 30,
+        HIGH: 60,
+        CRITICAL: 80,
+    },
+    CACHE: {
+        USER_PROFILE_TTL: 300,
+        SESSION_INFO_TTL: 600,
+        MFA_SETTINGS_TTL: 1800,
+        RISK_SCORE_TTL: 900,
+    },
     ERRORS: {
         INVALID_CREDENTIALS: 'Email ou mot de passe incorrect',
         ACCOUNT_LOCKED: 'Compte verrouillé pour sécurité',
@@ -39,45 +101,72 @@ exports.AUTH_CONSTANTS = {
         DEVICE_NOT_TRUSTED: 'Appareil non reconnu',
         RATE_LIMITED: 'Trop de tentatives. Réessayez plus tard',
         SUSPICIOUS_ACTIVITY: 'Activité suspecte détectée',
+        ACCOUNT_SUSPENDED: 'Compte suspendu',
+        VERIFICATION_REQUIRED: 'Vérification requise',
     },
-    HEADERS: {
-        AUTHORIZATION: 'Authorization',
-        X_RATE_LIMIT_REMAINING: 'X-RateLimit-Remaining',
-        X_RATE_LIMIT_RESET: 'X-RateLimit-Reset',
-        X_DEVICE_FINGERPRINT: 'X-Device-Fingerprint',
-        X_GEOLOCATION: 'X-Geolocation',
-        X_RISK_SCORE: 'X-Risk-Score',
-    },
-    MFA_PROVIDERS: {
-        SMS_OTP: 'SMS_OTP',
-        EMAIL_OTP: 'EMAIL_OTP',
-        TOTP_APP: 'TOTP_APP',
-        BACKUP_CODE: 'BACKUP_CODE',
-    },
-    DEVICE_TYPES: {
-        DESKTOP: 'DESKTOP',
-        MOBILE: 'MOBILE',
-        TABLET: 'TABLET',
-        BROWSER: 'BROWSER',
-        API: 'API',
+    AUDIT_EVENTS: {
+        LOGIN_SUCCESS: 'LOGIN_SUCCESS',
+        LOGIN_FAILED: 'LOGIN_FAILED',
+        LOGOUT: 'LOGOUT',
+        REGISTRATION: 'REGISTRATION',
+        PASSWORD_CHANGE: 'PASSWORD_CHANGE',
+        PASSWORD_RESET: 'PASSWORD_RESET',
+        MFA_ENABLED: 'MFA_ENABLED',
+        MFA_DISABLED: 'MFA_DISABLED',
+        EMAIL_VERIFIED: 'EMAIL_VERIFIED',
+        ACCOUNT_LOCKED: 'ACCOUNT_LOCKED',
+        SUSPICIOUS_LOGIN: 'SUSPICIOUS_LOGIN',
     },
     SECURITY_EVENTS: {
         LOGIN_SUCCESS: 'LOGIN_SUCCESS',
         LOGIN_FAILED: 'LOGIN_FAILED',
+        FAILED_LOGIN: 'FAILED_LOGIN',
         LOGOUT: 'LOGOUT',
-        PASSWORD_CHANGE: 'PASSWORD_CHANGE',
-        MFA_SETUP: 'MFA_SETUP',
-        MFA_DISABLED: 'MFA_DISABLED',
+        SESSION_EXPIRED: 'SESSION_EXPIRED',
         SUSPICIOUS_ACTIVITY: 'SUSPICIOUS_ACTIVITY',
+        MULTIPLE_SESSIONS: 'MULTIPLE_SESSIONS',
+        UNKNOWN_DEVICE: 'UNKNOWN_DEVICE',
         DEVICE_TRUSTED: 'DEVICE_TRUSTED',
         DEVICE_REVOKED: 'DEVICE_REVOKED',
-        SESSION_EXPIRED: 'SESSION_EXPIRED',
+        MFA_SETUP: 'MFA_SETUP',
+        MFA_ENABLED: 'MFA_ENABLED',
+        MFA_DISABLED: 'MFA_DISABLED',
+        MFA_CODE_VERIFIED: 'MFA_CODE_VERIFIED',
+        MFA_CODE_FAILED: 'MFA_CODE_FAILED',
         ACCOUNT_LOCKED: 'ACCOUNT_LOCKED',
+        ACCOUNT_UNLOCKED: 'ACCOUNT_UNLOCKED',
+        ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
+        PASSWORD_CHANGED: 'PASSWORD_CHANGED',
+        PASSWORD_RESET: 'PASSWORD_RESET',
+        EMAIL_VERIFIED: 'EMAIL_VERIFIED',
+        IP_BLOCKED: 'IP_BLOCKED',
+        IP_UNBLOCKED: 'IP_UNBLOCKED',
+        GEOLOCATION_CHANGE: 'GEOLOCATION_CHANGE',
+        RISK_ASSESSMENT: 'RISK_ASSESSMENT',
+        SECURITY_ALERT: 'SECURITY_ALERT',
+        AUDIT_LOG_ACCESS: 'AUDIT_LOG_ACCESS',
     },
-    RISK_LEVELS: {
-        LOW: { min: 0, max: 30, label: 'Faible' },
-        MEDIUM: { min: 31, max: 70, label: 'Moyen' },
-        HIGH: { min: 71, max: 100, label: 'Élevé' },
+    SESSION: {
+        TYPES: {
+            REUSED: 'reused',
+            REFRESHED: 'refreshed',
+            NEW: 'new',
+        },
+        CLEANUP_INTERVAL: 24 * 60 * 60,
+        MAX_INACTIVE_TIME: 30 * 60,
     },
 };
+exports.MFA_PROVIDER_TO_METHOD_MAPPING = {
+    [exports.AUTH_CONSTANTS.MFA_PROVIDERS.SMS_OTP]: 'SMS',
+    [exports.AUTH_CONSTANTS.MFA_PROVIDERS.EMAIL_OTP]: 'EMAIL',
+    [exports.AUTH_CONSTANTS.MFA_PROVIDERS.TOTP_APP]: 'TOTP',
+    [exports.AUTH_CONSTANTS.MFA_PROVIDERS.BACKUP_CODE]: 'BACKUP_CODES',
+};
+exports.MFA_METHOD_TO_PROVIDER_MAPPING = {
+    'SMS': exports.AUTH_CONSTANTS.MFA_PROVIDERS.SMS_OTP,
+    'EMAIL': exports.AUTH_CONSTANTS.MFA_PROVIDERS.EMAIL_OTP,
+    'TOTP': exports.AUTH_CONSTANTS.MFA_PROVIDERS.TOTP_APP,
+    'BACKUP_CODES': exports.AUTH_CONSTANTS.MFA_PROVIDERS.BACKUP_CODE,
+};
+exports.JWT = exports.AUTH_CONSTANTS.JWT, exports.PASSWORD = exports.AUTH_CONSTANTS.PASSWORD, exports.VALIDATION = exports.AUTH_CONSTANTS.VALIDATION, exports.SECURITY = exports.AUTH_CONSTANTS.SECURITY, exports.MFA_PROVIDERS = exports.AUTH_CONSTANTS.MFA_PROVIDERS, exports.RISK_LEVELS = exports.AUTH_CONSTANTS.RISK_LEVELS, exports.CACHE = exports.AUTH_CONSTANTS.CACHE, exports.ERRORS = exports.AUTH_CONSTANTS.ERRORS, exports.AUDIT_EVENTS = exports.AUTH_CONSTANTS.AUDIT_EVENTS, exports.SECURITY_EVENTS = exports.AUTH_CONSTANTS.SECURITY_EVENTS, exports.SESSION = exports.AUTH_CONSTANTS.SESSION;
 //# sourceMappingURL=auth.constants.js.map

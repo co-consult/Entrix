@@ -21,4 +21,6 @@ __exportStar(require("./mfa.interface"), exports);
 __exportStar(require("./security.interface"), exports);
 __exportStar(require("./password.interface"), exports);
 __exportStar(require("./user.interface"), exports);
+__exportStar(require("./validation-token.interface"), exports);
+__exportStar(require("./persistent-token.interface"), exports);
 //# sourceMappingURL=index.js.map

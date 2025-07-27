@@ -16,12 +16,27 @@ const logger_service_1 = require("../../../shared/logger/logger.service");
 const prisma_service_1 = require("../../../shared/prisma/prisma.service");
 const redis_service_1 = require("../../../shared/redis/redis.service");
 const email_service_1 = require("../../../shared/email/email.service");
-const security_constants_1 = require("../constants/security.constants");
 let SecurityService = class SecurityService {
     prisma;
     redis;
     email;
     logger;
+    RISK_SCORING = {
+        UNKNOWN_DEVICE: 25,
+        NEW_LOCATION: 20,
+        UNUSUAL_TIME: 15,
+        FAILED_ATTEMPTS: 10,
+        TOR_IP: 30,
+        MULTIPLE_SESSIONS: 15,
+        REQUIRE_MFA_THRESHOLD: 40,
+        BLOCK_THRESHOLD: 70,
+        ALERT_THRESHOLD: 30,
+    };
+    SUSPICIOUS_PATTERNS = {
+        MULTIPLE_IP_SESSIONS: 3,
+        UNUSUAL_HOURS_START: 2,
+        UNUSUAL_HOURS_END: 6,
+    };
     CACHE_TTL = {
         SECURITY_EVENT: 3600,
         SECURITY_EVENTS_LIST: 1800,
@@ -36,6 +51,7 @@ let SecurityService = class SecurityService {
     };
     SUSPICION_WEIGHTS = {
         'FAILED_LOGIN': 10,
+        'LOGIN_FAILED': 10,
         'SUSPICIOUS_ACTIVITY': 20,
         'MULTIPLE_SESSIONS': 5,
         'UNKNOWN_DEVICE': 15,
@@ -66,53 +82,80 @@ let SecurityService = class SecurityService {
             const knownDevice = await this.checkKnownDevice(userId, deviceInfo);
             if (!knownDevice) {
                 factors.unknownDevice = true;
-                riskScore += security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.UNKNOWN_DEVICE;
-                this.logger.warn('Unknown device detected', JSON.stringify({ userId, deviceFingerprint: deviceInfo.deviceFingerprint }));
+                riskScore += this.RISK_SCORING.UNKNOWN_DEVICE;
+                this.logger.warn('Unknown device detected', JSON.stringify({
+                    userId,
+                    deviceFingerprint: deviceInfo.deviceFingerprint
+                }));
             }
             const locationRisk = await this.analyzeLocation(userId, deviceInfo.ipAddress);
             if (locationRisk.isNewLocation) {
                 factors.newLocation = true;
-                riskScore += security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.NEW_LOCATION;
+                riskScore += this.RISK_SCORING.NEW_LOCATION;
             }
             const timeRisk = this.analyzeConnectionTime();
             if (timeRisk.isUnusual) {
                 factors.unusualTime = true;
-                riskScore += security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.UNUSUAL_TIME;
+                riskScore += this.RISK_SCORING.UNUSUAL_TIME;
             }
             const failedAttempts = await this.getRecentFailedAttempts(userId);
             factors.failedAttempts = failedAttempts;
-            riskScore += failedAttempts * (security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.FAILED_ATTEMPTS / 10);
+            riskScore += failedAttempts * (this.RISK_SCORING.FAILED_ATTEMPTS / 10);
             const isSuspiciousIp = await this.checkSuspiciousIp(deviceInfo.ipAddress);
             if (isSuspiciousIp) {
                 factors.suspiciousIp = true;
-                riskScore += security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.TOR_IP;
+                riskScore += this.RISK_SCORING.TOR_IP;
             }
             const activeSessions = await this.getUserActiveSessions(userId);
-            if (activeSessions > security_constants_1.SECURITY_CONSTANTS.SUSPICIOUS_PATTERNS.MULTIPLE_IP_SESSIONS) {
+            if (activeSessions > this.SUSPICIOUS_PATTERNS.MULTIPLE_IP_SESSIONS) {
                 factors.multipleSessions = true;
-                riskScore += security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.MULTIPLE_SESSIONS;
+                riskScore += this.RISK_SCORING.MULTIPLE_SESSIONS;
             }
             const recommendation = this.determineRecommendation(riskScore);
-            const requiresMfa = riskScore >= security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.REQUIRE_MFA_THRESHOLD;
+            const requiresMfa = riskScore >= this.RISK_SCORING.REQUIRE_MFA_THRESHOLD;
             const assessment = {
                 score: Math.min(riskScore, 100),
                 factors,
                 recommendation,
                 requiresMfa,
             };
-            this.logger.logSecurityEvent('RISK_ASSESSMENT', userId, deviceInfo.ipAddress, deviceInfo.userAgent, JSON.stringify({
+            this.logger.info('Risk assessment completed', JSON.stringify({
+                userId,
                 riskScore: assessment.score,
                 factors: assessment.factors,
                 recommendation: assessment.recommendation,
                 requiresMfa: assessment.requiresMfa,
             }));
-            this.logger.endOperation('assessRisk', operationId, true, Date.now() - parseInt(operationId.split('_')[1]));
+            this.logger.endOperation('assessRisk', operationId, true);
+            if (assessment.score >= this.RISK_SCORING.ALERT_THRESHOLD) {
+                await this.recordSecurityEvent('RISK_ASSESSMENT', userId, deviceInfo.ipAddress, deviceInfo.userAgent, assessment.score, `Risk assessment completed with score ${assessment.score}`, {
+                    factors: assessment.factors,
+                    recommendation: assessment.recommendation,
+                    requiresMfa: assessment.requiresMfa,
+                });
+            }
             return assessment;
         }
         catch (error) {
-            this.logger.error('Risk assessment failed', error.stack, JSON.stringify({ userId }));
-            this.logger.endOperation('assessRisk', operationId, false, Date.now() - parseInt(operationId.split('_')[1]));
-            throw new common_1.BadRequestException('Erreur lors de l\'évaluation du risque');
+            this.logger.endOperation('assessRisk', operationId, false);
+            this.logger.error('Risk assessment failed', error.stack, 'SecurityService.assessRisk', JSON.stringify({
+                errorMessage: error.message,
+                userId,
+                ipAddress: deviceInfo.ipAddress
+            }));
+            return {
+                score: 0,
+                factors: {
+                    unknownDevice: false,
+                    newLocation: false,
+                    unusualTime: false,
+                    failedAttempts: 0,
+                    suspiciousIp: false,
+                    multipleSessions: false,
+                },
+                recommendation: 'ALLOW',
+                requiresMfa: false,
+            };
         }
     }
     async logSecurityEvent(event) {
@@ -125,14 +168,17 @@ let SecurityService = class SecurityService {
                     ip_address: event.ipAddress,
                     description: event.description,
                     event_data: event.metadata || null,
-                    metadata: { userAgent: event.userAgent, location: event.location },
+                    metadata: {
+                        userAgent: event.userAgent,
+                        location: event.location,
+                        riskScore: event.riskScore
+                    },
                     severity: this.getSecurityLevel(event.type),
                     status: 'OPEN',
                     created_at: new Date(),
                 },
             });
             await this.redis.setCache(`security_event:${securityEvent.id}`, securityEvent, this.CACHE_TTL.SECURITY_EVENT);
-            this.logger.logSecurityEvent(event.type, event.userId, event.ipAddress, event.userAgent, JSON.stringify({ eventId: securityEvent.id, description: event.description }));
             this.logger.endOperation('logSecurityEvent', operationId, true);
             return {
                 id: securityEvent.id,
@@ -149,12 +195,25 @@ let SecurityService = class SecurityService {
             };
         }
         catch (error) {
-            this.logger.error('Failed to log security event', error.stack, JSON.stringify({
+            this.logger.endOperation('logSecurityEvent', operationId, false);
+            this.logger.error('Failed to log security event', error.stack, 'SecurityService.logSecurityEvent', JSON.stringify({
+                errorMessage: error.message,
                 eventType: event.type,
                 userId: event.userId
             }));
-            this.logger.endOperation('logSecurityEvent', operationId, false);
-            throw new common_1.BadRequestException('Erreur lors de l\'enregistrement de l\'événement de sécurité');
+            return {
+                id: 'error-' + Date.now(),
+                type: event.type,
+                userId: event.userId,
+                ipAddress: event.ipAddress,
+                userAgent: event.userAgent,
+                location: event.location,
+                riskScore: event.riskScore,
+                description: event.description,
+                metadata: event.metadata,
+                resolved: false,
+                createdAt: new Date(),
+            };
         }
     }
     async getSecurityEvents(userId, limit = 20) {
@@ -163,7 +222,6 @@ let SecurityService = class SecurityService {
             const cacheKey = `security_events:${userId}:${limit}`;
             const cachedEvents = await this.redis.getCache(cacheKey);
             if (cachedEvents) {
-                this.logger.logCacheEvent('hit', cacheKey);
                 this.logger.endOperation('getSecurityEvents', operationId, true);
                 return cachedEvents;
             }
@@ -179,21 +237,20 @@ let SecurityService = class SecurityService {
                 ipAddress: event.ip_address,
                 userAgent: event.metadata?.userAgent || '',
                 location: event.metadata?.location,
-                riskScore: 0,
+                riskScore: event.metadata?.riskScore || 0,
                 description: event.description,
                 metadata: event.metadata,
                 resolved: event.status !== 'OPEN',
                 createdAt: event.created_at,
             }));
             await this.redis.setCache(cacheKey, securityEvents, this.CACHE_TTL.SECURITY_EVENTS_LIST);
-            this.logger.logCacheEvent('set', cacheKey, this.CACHE_TTL.SECURITY_EVENTS_LIST);
             this.logger.endOperation('getSecurityEvents', operationId, true);
             return securityEvents;
         }
         catch (error) {
-            this.logger.error('Failed to get security events', error.stack, JSON.stringify({ userId }));
             this.logger.endOperation('getSecurityEvents', operationId, false);
-            throw new common_1.BadRequestException('Erreur lors de la récupération des événements de sécurité');
+            this.logger.error('Failed to get security events', error.stack, 'SecurityService.getSecurityEvents', JSON.stringify({ errorMessage: error.message, userId }));
+            return [];
         }
     }
     async checkSuspiciousActivity(userId) {
@@ -212,14 +269,14 @@ let SecurityService = class SecurityService {
                         gte: new Date(Date.now() - this.TIMEFRAMES.SUSPICIOUS_ACTIVITY_WINDOW),
                     },
                     event_type: {
-                        in: ['FAILED_LOGIN', 'SUSPICIOUS_ACTIVITY', 'MULTIPLE_SESSIONS', 'UNKNOWN_DEVICE'],
+                        in: ['FAILED_LOGIN', 'LOGIN_FAILED', 'SUSPICIOUS_ACTIVITY', 'MULTIPLE_SESSIONS', 'UNKNOWN_DEVICE'],
                     },
                 },
             });
             const suspiciousScore = recentEvents.reduce((score, event) => {
                 return score + (this.SUSPICION_WEIGHTS[event.event_type] || 0);
             }, 0);
-            const isSuspicious = suspiciousScore >= security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.ALERT_THRESHOLD;
+            const isSuspicious = suspiciousScore >= this.RISK_SCORING.ALERT_THRESHOLD;
             await this.redis.setCache(cacheKey, isSuspicious, this.CACHE_TTL.SUSPICIOUS_CHECK);
             if (isSuspicious) {
                 this.logger.warn('Suspicious activity detected', JSON.stringify({
@@ -227,6 +284,15 @@ let SecurityService = class SecurityService {
                     suspiciousScore,
                     eventsCount: recentEvents.length,
                 }));
+                this.logger.logSecurityEvent('SUSPICIOUS_ACTIVITY_DETECTED', userId, undefined, undefined, {
+                    score: suspiciousScore,
+                    eventsCount: recentEvents.length,
+                });
+                await this.recordSecurityEvent('SUSPICIOUS_ACTIVITY', userId, '', '', suspiciousScore, `Suspicious activity detected with score ${suspiciousScore}`, {
+                    score: suspiciousScore,
+                    eventsCount: recentEvents.length,
+                    recentEventTypes: recentEvents.map(e => e.event_type),
+                });
                 await this.sendSecurityAlert(userId, 'SUSPICIOUS_ACTIVITY_DETECTED', {
                     score: suspiciousScore,
                     eventsCount: recentEvents.length,
@@ -236,8 +302,8 @@ let SecurityService = class SecurityService {
             return isSuspicious;
         }
         catch (error) {
-            this.logger.error('Failed to check suspicious activity', error.stack, JSON.stringify({ userId }));
             this.logger.endOperation('checkSuspiciousActivity', operationId, false);
+            this.logger.error('Failed to check suspicious activity', error.stack, 'SecurityService.checkSuspiciousActivity', JSON.stringify({ errorMessage: error.message, userId }));
             return false;
         }
     }
@@ -250,14 +316,14 @@ let SecurityService = class SecurityService {
                 duration,
                 reason: 'SUSPICIOUS_ACTIVITY',
             }, duration);
-            this.logger.logSecurityEvent('IP_BLOCKED', undefined, ip, undefined, JSON.stringify({ duration, reason: 'SUSPICIOUS_ACTIVITY' }));
+            this.logger.logSecurityEvent('IP_BLOCKED', undefined, ip, undefined, { duration, reason: 'SUSPICIOUS_ACTIVITY' });
+            await this.recordSecurityEvent('IP_BLOCKED', '', ip, '', 50, `IP blocked for ${duration} seconds due to suspicious activity`, { duration, reason: 'SUSPICIOUS_ACTIVITY' });
             this.logger.warn('IP blocked for suspicious activity', JSON.stringify({ ip, duration }));
             this.logger.endOperation('blockSuspiciousIp', operationId, true);
         }
         catch (error) {
-            this.logger.error('Failed to block IP', error.stack, JSON.stringify({ ip }));
             this.logger.endOperation('blockSuspiciousIp', operationId, false);
-            throw new common_1.BadRequestException('Erreur lors du blocage de l\'adresse IP');
+            this.logger.error('Failed to block IP', error.stack, 'SecurityService.blockSuspiciousIp', JSON.stringify({ errorMessage: error.message, ip }));
         }
     }
     async checkKnownDevice(userId, deviceInfo) {
@@ -283,7 +349,7 @@ let SecurityService = class SecurityService {
             return isKnown;
         }
         catch (error) {
-            this.logger.error('Failed to check known device', error.stack, JSON.stringify({ userId }));
+            this.logger.error('Failed to check known device', error.stack);
             return false;
         }
     }
@@ -297,6 +363,7 @@ let SecurityService = class SecurityService {
                     },
                 },
                 select: { geolocation: true, ip_address: true },
+                take: 50,
             });
             const currentLocationHash = this.hashIpForLocation(ipAddress);
             const knownLocations = recentSessions
@@ -306,15 +373,22 @@ let SecurityService = class SecurityService {
             return { isNewLocation };
         }
         catch (error) {
-            this.logger.error('Failed to analyze location', error.stack, JSON.stringify({ userId }));
+            this.logger.error('Failed to analyze location', error.stack);
             return { isNewLocation: false };
         }
     }
     analyzeConnectionTime() {
-        const now = new Date();
-        const hour = now.getHours();
-        const isUnusual = hour >= 2 && hour <= 6;
-        return { isUnusual };
+        try {
+            const now = new Date();
+            const hour = now.getHours();
+            const isUnusual = hour >= this.SUSPICIOUS_PATTERNS.UNUSUAL_HOURS_START &&
+                hour <= this.SUSPICIOUS_PATTERNS.UNUSUAL_HOURS_END;
+            return { isUnusual };
+        }
+        catch (error) {
+            this.logger.error('Failed to analyze connection time', error.stack);
+            return { isUnusual: false };
+        }
     }
     async getRecentFailedAttempts(userId) {
         try {
@@ -326,7 +400,7 @@ let SecurityService = class SecurityService {
             const count = await this.prisma.security_events.count({
                 where: {
                     target_user_id: userId,
-                    event_type: 'FAILED_LOGIN',
+                    event_type: { in: ['FAILED_LOGIN', 'LOGIN_FAILED'] },
                     created_at: {
                         gte: new Date(Date.now() - this.TIMEFRAMES.FAILED_ATTEMPTS_WINDOW),
                     },
@@ -336,7 +410,7 @@ let SecurityService = class SecurityService {
             return count;
         }
         catch (error) {
-            this.logger.error('Failed to get recent failed attempts', error.stack, JSON.stringify({ userId }));
+            this.logger.error('Failed to get recent failed attempts', error.stack);
             return 0;
         }
     }
@@ -347,7 +421,7 @@ let SecurityService = class SecurityService {
             return !!blockedInfo;
         }
         catch (error) {
-            this.logger.error('Failed to check suspicious IP', error.stack, JSON.stringify({ ipAddress }));
+            this.logger.error('Failed to check suspicious IP', error.stack);
             return false;
         }
     }
@@ -365,41 +439,71 @@ let SecurityService = class SecurityService {
             return count;
         }
         catch (error) {
-            this.logger.error('Failed to get active sessions count', error.stack, JSON.stringify({ userId }));
+            this.logger.error('Failed to get active sessions count', error.stack);
             return 0;
         }
     }
     determineRecommendation(riskScore) {
-        if (riskScore >= security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.BLOCK_THRESHOLD) {
-            return 'BLOCK';
+        try {
+            if (riskScore >= this.RISK_SCORING.BLOCK_THRESHOLD) {
+                return 'BLOCK';
+            }
+            else if (riskScore >= this.RISK_SCORING.REQUIRE_MFA_THRESHOLD) {
+                return 'REQUIRE_MFA';
+            }
+            else if (riskScore >= this.RISK_SCORING.ALERT_THRESHOLD) {
+                return 'ALERT';
+            }
+            else {
+                return 'ALLOW';
+            }
         }
-        else if (riskScore >= security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.REQUIRE_MFA_THRESHOLD) {
-            return 'REQUIRE_MFA';
-        }
-        else if (riskScore >= security_constants_1.SECURITY_CONSTANTS.RISK_SCORING.ALERT_THRESHOLD) {
-            return 'ALERT';
-        }
-        else {
+        catch (error) {
+            this.logger.error('Failed to determine recommendation', error.stack);
             return 'ALLOW';
         }
     }
+    async recordSecurityEvent(type, userId, ipAddress, userAgent, riskScore = 0, description = '', metadata) {
+        try {
+            await this.logSecurityEvent({
+                type: type,
+                userId,
+                ipAddress,
+                userAgent: userAgent || '',
+                location: undefined,
+                riskScore,
+                description,
+                metadata,
+                resolved: false,
+            });
+        }
+        catch (error) {
+            this.logger.error('Failed to record security event', error.stack);
+        }
+    }
     hashIpForLocation(ipAddress) {
-        return ipAddress.split('.').slice(0, 3).join('.');
+        try {
+            return ipAddress.split('.').slice(0, 3).join('.');
+        }
+        catch (error) {
+            return '';
+        }
     }
     getSecurityLevel(eventType) {
-        const criticalEvents = ['ACCOUNT_LOCKED', 'SUSPICIOUS_ACTIVITY', 'DEVICE_REVOKED'];
-        const highRiskEvents = ['LOGIN_FAILED', 'MFA_DISABLED', 'SESSION_EXPIRED'];
-        const standardEvents = ['LOGIN_SUCCESS', 'LOGOUT', 'PASSWORD_CHANGE', 'MFA_SETUP', 'DEVICE_TRUSTED'];
-        if (criticalEvents.includes(eventType)) {
-            return client_1.security_level.HIGH;
+        try {
+            const criticalEvents = ['ACCOUNT_LOCKED', 'SUSPICIOUS_ACTIVITY', 'DEVICE_REVOKED', 'IP_BLOCKED'];
+            const highRiskEvents = ['LOGIN_FAILED', 'FAILED_LOGIN', 'MFA_DISABLED', 'SESSION_EXPIRED', 'UNKNOWN_DEVICE'];
+            if (criticalEvents.includes(eventType)) {
+                return client_1.security_level.HIGH;
+            }
+            else if (highRiskEvents.includes(eventType)) {
+                return client_1.security_level.STANDARD;
+            }
+            else {
+                return client_1.security_level.LOW;
+            }
         }
-        else if (highRiskEvents.includes(eventType)) {
-            return client_1.security_level.STANDARD;
-        }
-        else if (standardEvents.includes(eventType)) {
-            return client_1.security_level.LOW;
-        }
-        else {
+        catch (error) {
             return client_1.security_level.STANDARD;
         }
     }
@@ -425,10 +529,9 @@ let SecurityService = class SecurityService {
                     timestamp: new Date().toISOString(),
                 },
             });
-            this.logger.logNotificationEvent('sent', 'email', user.email, undefined, JSON.stringify({ alertType, userId }));
         }
         catch (error) {
-            this.logger.error('Failed to send security alert', error.stack, JSON.stringify({ userId, alertType }));
+            this.logger.error('Failed to send security alert', error.stack);
         }
     }
 };

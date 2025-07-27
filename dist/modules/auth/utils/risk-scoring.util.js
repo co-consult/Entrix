@@ -91,8 +91,8 @@ class RiskScoringUtil {
     }
     static detectBrowserInconsistency(deviceInfo) {
         const userAgent = deviceInfo.userAgent;
-        return security_constants_1.SECURITY_CONSTANTS.SUSPICIOUS_PATTERNS.AUTOMATION_DETECTED.test(userAgent) ||
-            security_constants_1.SECURITY_CONSTANTS.SUSPICIOUS_PATTERNS.UNUSUAL_USER_AGENT.test(userAgent);
+        const lowerUserAgent = userAgent.toLowerCase();
+        return security_constants_1.SECURITY_CONSTANTS.SUSPICIOUS_PATTERNS.AUTOMATED_USER_AGENTS.some(pattern => lowerUserAgent.includes(pattern));
     }
     static updateUserBehaviorProfile(userProfile, deviceInfo, loginSuccess) {
         const updatedProfile = { ...userProfile };

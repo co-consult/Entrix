@@ -15,6 +15,9 @@ const logger_service_1 = require("../../../shared/logger/logger.service");
 const prisma_service_1 = require("../../../shared/prisma/prisma.service");
 const redis_service_1 = require("../../../shared/redis/redis.service");
 const email_service_1 = require("../../../shared/email/email.service");
+const bullmq_service_1 = require("../../../shared/bullmq/bullmq.service");
+const persistent_token_service_1 = require("./persistent-token.service");
+const validation_token_service_1 = require("./validation-token.service");
 const token_service_1 = require("./token.service");
 const session_service_1 = require("./session.service");
 const security_service_1 = require("./security.service");
@@ -28,22 +31,28 @@ let AuthService = class AuthService {
     prisma;
     redis;
     email;
+    bullmq;
     tokenService;
     sessionService;
     emailVerificationService;
     securityService;
     passwordService;
+    persistentTokenService;
+    validationTokenService;
     mfaService;
     logger;
-    constructor(prisma, redis, email, tokenService, sessionService, emailVerificationService, securityService, passwordService, mfaService, loggerService) {
+    constructor(prisma, redis, email, bullmq, tokenService, sessionService, emailVerificationService, securityService, passwordService, persistentTokenService, validationTokenService, mfaService, loggerService) {
         this.prisma = prisma;
         this.redis = redis;
         this.email = email;
+        this.bullmq = bullmq;
         this.tokenService = tokenService;
         this.sessionService = sessionService;
         this.emailVerificationService = emailVerificationService;
         this.securityService = securityService;
         this.passwordService = passwordService;
+        this.persistentTokenService = persistentTokenService;
+        this.validationTokenService = validationTokenService;
         this.mfaService = mfaService;
         this.logger = loggerService.createChildLogger('AuthService');
     }
@@ -202,8 +211,8 @@ let AuthService = class AuthService {
                     last_name: registerData.lastName,
                     phone: registerData.phone || null,
                     is_active: true,
-                    email_verified: false,
-                    phone_verified: false,
+                    email_verified: null,
+                    phone_verified: null,
                     last_login: null,
                     metadata: {
                         termsAccepted: registerData.termsAccepted,
@@ -215,38 +224,77 @@ let AuthService = class AuthService {
                 },
             });
             const userProfile = this.mapDbUserToProfile(user);
-            const verificationTokenData = await this.emailVerificationService.generateVerificationToken(user.id, user.email);
-            this.email.sendWelcomeEmail(user.email, user.first_name, verificationTokenData.token).catch(error => {
-                this.logger.error('Failed to send welcome email', error.stack, 'AuthService.register', JSON.stringify({
-                    userId: user.id,
-                    email: user.email
-                }));
-            });
+            const verificationTokenData = await this.validationTokenService.createEmailVerificationToken(user.email, user.id, 'registration');
+            this.logger.info('Email verification token created', JSON.stringify({
+                userId: user.id,
+                tokenId: verificationTokenData.id,
+                expiresAt: verificationTokenData.expires_at.toISOString(),
+            }));
             let onboardingResult;
             if (registerData.onboardingSecret) {
                 onboardingResult = await this.processOnboardingSecret(user.id, registerData.onboardingSecret);
             }
             let tokens = null;
             let sessionInfo = null;
-            if (clientInfo) {
-                console.log('🔍 DEBUG REGISTER - Création session automatique post-inscription');
+            const autoLoginEnabled = process.env.AUTH_AUTO_LOGIN_AFTER_REGISTER === 'true';
+            if (clientInfo && autoLoginEnabled) {
+                this.logger.info('Creating automatic session post-registration', JSON.stringify({
+                    userId: user.id,
+                    email: user.email,
+                }));
                 const deviceInfo = device_util_1.DeviceUtil.normalizeDeviceInfo({
                     userAgent: clientInfo.userAgent,
                     ipAddress: this.validateAndNormalizeIp(clientInfo.ip),
                 });
-                const session = await this.sessionService.createSession(user.id, deviceInfo, false);
-                tokens = await this.tokenService.generateTokenPair(user.id, user.email, session.id, false, deviceInfo.deviceFingerprint, userProfile.roles || [], userProfile.permissions || []);
-                sessionInfo = {
-                    sessionId: session.id,
-                    expiresAt: session.expires_at.toISOString(),
-                    deviceInfo,
-                    isActive: session.is_active,
-                    lastActivity: session.last_activity.toISOString(),
-                };
-                console.log('🔍 DEBUG REGISTER - Session et tokens créés:', {
-                    sessionId: session.id,
-                    hasTokens: !!tokens,
-                });
+                try {
+                    const sessionResult = await this.sessionService.handleUserLogin(user.id, deviceInfo, false);
+                    tokens = sessionResult.tokens;
+                    sessionInfo = {
+                        sessionId: sessionResult.session.id,
+                        expiresAt: sessionResult.session.expires_at.toISOString(),
+                        deviceInfo,
+                        isActive: sessionResult.session.is_active,
+                        lastActivity: sessionResult.session.last_activity.toISOString(),
+                        isReused: sessionResult.isReused,
+                        sessionType: sessionResult.type,
+                    };
+                    this.logger.info('Automatic session created successfully', JSON.stringify({
+                        userId: user.id,
+                        sessionId: sessionResult.session.id,
+                        sessionType: sessionResult.type,
+                    }));
+                }
+                catch (sessionError) {
+                    this.logger.error('Failed to create automatic session, proceeding without session', sessionError.stack, 'AuthService.register', JSON.stringify({ userId: user.id }));
+                }
+            }
+            let persistentTokens;
+            if (onboardingResult?.incentiveApplied && (process.env.AUTH_GENERATE_ONBOARDING_TOKENS === 'false')) {
+                try {
+                    const onboardingToken = await this.persistentTokenService.createToken({
+                        user_id: user.id,
+                        token_type: 'ACCESS_LONG',
+                        name: 'Onboarding Access Token',
+                        description: 'Token d\'accès pour compléter l\'onboarding',
+                        scopes: ['read:profile', 'write:profile'],
+                        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                        metadata: {
+                            purpose: 'onboarding',
+                            incentive_applied: onboardingResult.incentiveApplied,
+                        },
+                    });
+                    persistentTokens = {
+                        onboarding_token: onboardingToken.token,
+                        expires_at: onboardingToken.expires_at?.toISOString(),
+                    };
+                    this.logger.info('Onboarding persistent token created', JSON.stringify({
+                        userId: user.id,
+                        tokenId: onboardingToken.id,
+                    }));
+                }
+                catch (persistentTokenError) {
+                    this.logger.error('Failed to create onboarding persistent token', persistentTokenError.stack, 'AuthService.register', JSON.stringify({ userId: user.id }));
+                }
             }
             this.logger.logBusinessEvent('USER_REGISTERED', {
                 userId: user.id,
@@ -256,9 +304,17 @@ let AuthService = class AuthService {
                 hasOnboardingSecret: !!registerData.onboardingSecret,
                 onboardingApplied: !!onboardingResult?.incentiveApplied,
                 hasAutoSession: !!sessionInfo,
+                hasPersistentTokens: !!persistentTokens,
+                autoLoginEnabled,
+                verificationTokenId: verificationTokenData.id,
             }, user.id);
+            await this.schedulePostRegistrationTasks(user.id, {
+                hasOnboarding: !!onboardingResult,
+                hasAutoSession: !!sessionInfo,
+                verificationTokenId: verificationTokenData.id,
+            });
             this.logger.endOperation('register', operationId, true);
-            return {
+            const result = {
                 success: true,
                 user: userProfile,
                 tokens,
@@ -269,10 +325,12 @@ let AuthService = class AuthService {
                     tokenId: verificationTokenData.id,
                 },
                 onboarding: onboardingResult,
-                message: tokens
-                    ? 'Compte créé avec succès. Vous êtes connecté automatiquement. Vérifiez votre email.'
-                    : 'Compte créé avec succès. Vérifiez votre email pour activer votre compte.',
+                message: this.buildRegistrationSuccessMessage(!!tokens, !!onboardingResult),
             };
+            if (persistentTokens) {
+                result.persistent_tokens = persistentTokens;
+            }
+            return result;
         }
         catch (error) {
             this.logger.endOperation('register', operationId, false, undefined, { error: error.message });
@@ -282,8 +340,50 @@ let AuthService = class AuthService {
             }
             this.logger.error('Registration failed with unexpected error', error.stack, 'AuthService', JSON.stringify({
                 email: registerData.email,
+                errorType: error.constructor.name,
             }));
             throw new common_1.InternalServerErrorException('Erreur lors de l\'inscription');
+        }
+    }
+    buildRegistrationSuccessMessage(hasTokens, hasOnboarding) {
+        const baseMessage = 'Compte créé avec succès.';
+        if (hasTokens && hasOnboarding) {
+            return `${baseMessage} Vous êtes connecté automatiquement et vos avantages d'onboarding ont été appliqués. Vérifiez votre email.`;
+        }
+        if (hasTokens) {
+            return `${baseMessage} Vous êtes connecté automatiquement. Vérifiez votre email pour activer votre compte.`;
+        }
+        if (hasOnboarding) {
+            return `${baseMessage} Vos avantages d'onboarding ont été appliqués. Vérifiez votre email pour activer votre compte.`;
+        }
+        return `${baseMessage} Vérifiez votre email pour activer votre compte.`;
+    }
+    async schedulePostRegistrationTasks(userId, context) {
+        try {
+            await this.bullmq.addJob('EMAIL_QUEUE', 'email_verification_reminder', {
+                userId,
+                verificationTokenId: context.verificationTokenId,
+                registrationDate: new Date().toISOString(),
+            }, {
+                delay: 24 * 60 * 60 * 1000,
+            });
+            if (context.hasOnboarding) {
+                await this.bullmq.addJob('ONBOARDING_QUEUE', 'onboarding_followup', {
+                    userId,
+                    registrationDate: new Date().toISOString(),
+                }, {
+                    delay: 3 * 24 * 60 * 60 * 1000,
+                });
+            }
+            await this.bullmq.addJob('ANALYTICS_QUEUE', 'registration_analytics', {
+                userId,
+                hasAutoSession: context.hasAutoSession,
+                hasOnboarding: context.hasOnboarding,
+                timestamp: new Date().toISOString(),
+            });
+        }
+        catch (schedulingError) {
+            this.logger.error('Failed to schedule post-registration tasks', schedulingError.stack, 'AuthService.schedulePostRegistrationTasks', JSON.stringify({ userId }));
         }
     }
     async handleSuccessfulLogin(userId, email, deviceInfo, sessionResult) {
@@ -484,30 +584,98 @@ let AuthService = class AuthService {
             throw error;
         }
     }
-    async verifyEmail(token) {
-        const operationId = this.logger.startOperation('verifyEmail', {
-            tokenLength: token?.length,
-        });
+    async verifyEmail(token, clientInfo) {
+        const operationId = this.logger.startOperation('verifyEmail');
         try {
-            const result = await this.emailVerificationService.verifyEmailToken(token);
-            this.logger.endOperation('verifyEmail', operationId, result.success, undefined, {
-                verified: result.verified,
-                userId: result.userId,
-            });
-            return result;
-        }
-        catch (error) {
-            this.logger.endOperation('verifyEmail', operationId, false, undefined, {
-                error: error.message,
-            });
-            this.logger.error('Email verification failed with unexpected error', error.stack, 'AuthService.verifyEmail', JSON.stringify({
-                tokenPrefix: token?.substring(0, 8),
-                error: error.message,
-            }));
+            const result = await this.validationTokenService.verifyEmailWithToken(token);
+            if (result.success) {
+                this.logger.logBusinessEvent('EMAIL_VERIFIED', {
+                    userId: result.user_id,
+                    email: result.email,
+                    verificationMethod: 'email_token',
+                }, result.user_id);
+                this.logger.endOperation('verifyEmail', operationId, true);
+                return {
+                    success: true,
+                    verified: true,
+                    message: 'Email vérifié avec succès !',
+                    userId: result.user_id,
+                };
+            }
+            this.logger.endOperation('verifyEmail', operationId, false);
             return {
                 success: false,
                 verified: false,
-                message: 'Erreur lors de la vérification de l\'email',
+                message: 'Token de vérification invalide ou expiré.',
+            };
+        }
+        catch (error) {
+            this.logger.endOperation('verifyEmail', operationId, false);
+            this.logger.error('Email verification failed', error.stack, 'AuthService.verifyEmail', JSON.stringify({ errorMessage: error.message }));
+            return {
+                success: false,
+                verified: false,
+                message: 'Erreur lors de la vérification de l\'email.',
+            };
+        }
+    }
+    async requestPasswordReset(email, clientInfo) {
+        const operationId = this.logger.startOperation('requestPasswordReset', { email });
+        try {
+            const resetToken = await this.validationTokenService.createPasswordResetToken(email);
+            this.logger.logBusinessEvent('PASSWORD_RESET_REQUESTED', {
+                email,
+                tokenId: resetToken.id,
+                clientInfo,
+            });
+            this.logger.endOperation('requestPasswordReset', operationId, true);
+            return {
+                success: true,
+                message: 'Si cette adresse email existe, vous recevrez un lien de réinitialisation.',
+                tokenId: resetToken.id,
+            };
+        }
+        catch (error) {
+            this.logger.endOperation('requestPasswordReset', operationId, false);
+            return {
+                success: true,
+                message: 'Si cette adresse email existe, vous recevrez un lien de réinitialisation.',
+            };
+        }
+    }
+    async resetPassword(token, newPassword, clientInfo) {
+        const operationId = this.logger.startOperation('resetPassword');
+        try {
+            await this.validatePasswordStrength(newPassword);
+            const result = await this.validationTokenService.resetPasswordWithToken(token, newPassword);
+            if (result.success) {
+                this.logger.logBusinessEvent('PASSWORD_RESET_COMPLETED', {
+                    userId: result.user_id,
+                    email: result.email,
+                    clientInfo,
+                }, result.user_id);
+                this.logger.endOperation('resetPassword', operationId, true);
+                return {
+                    success: true,
+                    message: 'Mot de passe mis à jour avec succès. Reconnectez-vous avec votre nouveau mot de passe.',
+                    userId: result.user_id,
+                };
+            }
+            this.logger.endOperation('resetPassword', operationId, false);
+            return {
+                success: false,
+                message: 'Token de réinitialisation invalide ou expiré.',
+            };
+        }
+        catch (error) {
+            this.logger.endOperation('resetPassword', operationId, false);
+            if (error instanceof exceptions_1.WeakPasswordException) {
+                throw error;
+            }
+            this.logger.error('Password reset failed', error.stack, 'AuthService.resetPassword', JSON.stringify({ errorMessage: error.message }));
+            return {
+                success: false,
+                message: 'Erreur lors de la réinitialisation du mot de passe.',
             };
         }
     }
@@ -516,68 +684,43 @@ let AuthService = class AuthService {
         try {
             const user = await this.prisma.users.findUnique({
                 where: { id: userId },
-                select: {
-                    id: true,
-                    email: true,
-                    email_verified: true,
-                    first_name: true,
-                    is_active: true,
-                },
+                select: { id: true, email: true, email_verified: true },
             });
             if (!user) {
-                this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
-                    reason: 'user_not_found',
-                });
-                return {
-                    success: false,
-                    message: 'Utilisateur introuvable',
-                };
+                throw new Error('User not found');
             }
             if (user.email_verified) {
-                this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
-                    reason: 'already_verified',
-                });
                 return {
                     success: false,
-                    message: 'Email déjà vérifié',
+                    message: 'Email déjà vérifié.',
                 };
             }
-            if (!user.is_active) {
-                this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
-                    reason: 'user_inactive',
-                });
+            const canResend = await this.validationTokenService.canResendToken(user.email, 'EMAIL_VERIFICATION');
+            if (!canResend) {
                 return {
                     success: false,
-                    message: 'Compte utilisateur inactif',
+                    message: 'Trop de tentatives. Veuillez attendre avant de renvoyer.',
                 };
             }
-            const verificationTokenData = await this.emailVerificationService.generateVerificationToken(user.id, user.email);
-            this.email.sendVerificationEmail(user.email, verificationTokenData.token).catch(error => {
-                this.logger.error('Failed to send verification email', error.stack, 'AuthService.resendVerificationEmail', JSON.stringify({
-                    userId: user.id,
-                    email: user.email
-                }));
-            });
-            this.logger.logBusinessEvent('EMAIL_VERIFICATION_RESENT', {
-                userId: user.id,
+            const verificationToken = await this.validationTokenService.createEmailVerificationToken(user.email, user.id, 'registration');
+            this.logger.logBusinessEvent('VERIFICATION_EMAIL_RESENT', {
+                userId,
                 email: user.email,
-                tokenId: verificationTokenData.id,
-            }, user.id);
+                tokenId: verificationToken.id,
+            }, userId);
             this.logger.endOperation('resendVerificationEmail', operationId, true);
             return {
                 success: true,
-                message: 'Email de vérification renvoyé',
-                tokenId: verificationTokenData.id,
+                message: 'Email de vérification renvoyé avec succès.',
+                tokenId: verificationToken.id,
             };
         }
         catch (error) {
-            this.logger.endOperation('resendVerificationEmail', operationId, false, undefined, {
-                error: error.message,
-            });
-            this.logger.error('Failed to resend verification email', error.stack, 'AuthService.resendVerificationEmail', JSON.stringify({ userId }));
+            this.logger.endOperation('resendVerificationEmail', operationId, false);
+            this.logger.error('Failed to resend verification email', error.stack, 'AuthService.resendVerificationEmail', JSON.stringify({ errorMessage: error.message, userId }));
             return {
                 success: false,
-                message: 'Erreur lors de l\'envoi de l\'email de vérification',
+                message: 'Erreur lors du renvoi de l\'email de vérification.',
             };
         }
     }
@@ -774,11 +917,14 @@ exports.AuthService = AuthService = __decorate([
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         redis_service_1.RedisService,
         email_service_1.EmailService,
+        bullmq_service_1.BullmqService,
         token_service_1.TokenService,
         session_service_1.SessionService,
         email_verification_service_1.EmailVerificationService,
         security_service_1.SecurityService,
         password_service_1.PasswordService,
+        persistent_token_service_1.PersistentTokenService,
+        validation_token_service_1.ValidationTokenService,
         mfa_service_1.MfaService,
         logger_service_1.LoggerService])
 ], AuthService);

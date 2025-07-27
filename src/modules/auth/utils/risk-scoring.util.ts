@@ -175,8 +175,10 @@ export class RiskScoringUtil {
     const userAgent = deviceInfo.userAgent;
     
     // Détecte signatures d'automation
-    return SECURITY_CONSTANTS.SUSPICIOUS_PATTERNS.AUTOMATION_DETECTED.test(userAgent) ||
-           SECURITY_CONSTANTS.SUSPICIOUS_PATTERNS.UNUSUAL_USER_AGENT.test(userAgent);
+    const lowerUserAgent = userAgent.toLowerCase();
+    return SECURITY_CONSTANTS.SUSPICIOUS_PATTERNS.AUTOMATED_USER_AGENTS.some(pattern => 
+    lowerUserAgent.includes(pattern)
+);
   }
 
   /**

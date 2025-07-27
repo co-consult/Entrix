@@ -23,7 +23,8 @@ const dto_1 = require("../dto");
 const dto_2 = require("../dto");
 const jwt_auth_guard_1 = require("../guards/jwt-auth.guard");
 const decorators_1 = require("../decorators");
-const decorators_2 = require("../decorators");
+const rate_limit_decorator_1 = require("../decorators/rate-limit.decorator");
+const audit_log_decorator_1 = require("../decorators/audit-log.decorator");
 let AuthController = class AuthController {
     authService;
     logger;
@@ -177,8 +178,8 @@ __decorate([
     (0, decorators_1.Public)(),
     (0, common_1.Post)('login'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, decorators_2.RateLimitLogin)(),
-    (0, decorators_2.AuditCritical)('user_login'),
+    (0, rate_limit_decorator_1.RateLimitLogin)(),
+    (0, audit_log_decorator_1.AuditCritical)('user_login'),
     (0, swagger_1.ApiOperation)({
         summary: 'Connexion utilisateur',
         description: 'Authentification avec email/password et validation de sécurité adaptative'
@@ -211,8 +212,8 @@ __decorate([
     (0, decorators_1.Public)(),
     (0, common_1.Post)('register'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
-    (0, decorators_2.RateLimit)({ limit: 3, windowMs: 3600000 }),
-    (0, decorators_2.AuditCritical)('user_registration'),
+    (0, rate_limit_decorator_1.RateLimit)({ limit: 3, windowMs: 3600000 }),
+    (0, audit_log_decorator_1.AuditCritical)('user_registration'),
     (0, swagger_1.ApiOperation)({
         summary: 'Inscription utilisateur',
         description: 'Création compte avec validation complète et onboarding'
@@ -233,7 +234,7 @@ __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Post)('logout'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, decorators_2.AuditCritical)('user_logout'),
+    (0, audit_log_decorator_1.AuditCritical)('user_logout'),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({
         summary: 'Déconnexion utilisateur',
@@ -289,7 +290,7 @@ __decorate([
     (0, common_1.Post)('resend-verification'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, decorators_2.RateLimit)({ limit: 3, windowMs: 300000 }),
+    (0, rate_limit_decorator_1.RateLimit)({ limit: 3, windowMs: 300000 }),
     (0, swagger_1.ApiOperation)({
         summary: 'Renvoyer email de vérification',
         description: 'Génère et envoie un nouveau token de vérification d\'email'

@@ -17,7 +17,7 @@ export declare class MfaController {
         success: boolean;
         message: string;
         data: {
-            provider: "SMS_OTP" | "EMAIL_OTP" | "TOTP_APP" | "BACKUP_CODE";
+            provider: MfaProvider;
             isEnabled: boolean;
         };
     }>;
@@ -25,7 +25,7 @@ export declare class MfaController {
         success: boolean;
         message: string;
         data: {
-            provider: "SMS_OTP" | "EMAIL_OTP" | "TOTP_APP" | "BACKUP_CODE";
+            provider: MfaProvider;
             deletedAt: string;
         };
     }>;

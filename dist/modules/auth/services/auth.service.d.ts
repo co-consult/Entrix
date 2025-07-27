@@ -2,6 +2,9 @@ import { LoggerService } from '../../../shared/logger/logger.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { RedisService } from '../../../shared/redis/redis.service';
 import { EmailService } from '../../../shared/email/email.service';
+import { BullmqService } from '../../../shared/bullmq/bullmq.service';
+import { PersistentTokenService } from './persistent-token.service';
+import { ValidationTokenService } from './validation-token.service';
 import { IAuthService, ILoginResult, IRegisterResult, ILoginRequest, IRegisterRequest, IUserProfile } from '../interfaces';
 import { ITokenPair } from '../interfaces/session.interface';
 import { TokenService } from './token.service';
@@ -14,14 +17,17 @@ export declare class AuthService implements IAuthService {
     private readonly prisma;
     private readonly redis;
     private readonly email;
+    private readonly bullmq;
     private readonly tokenService;
     private readonly sessionService;
     private readonly emailVerificationService;
     private readonly securityService;
     private readonly passwordService;
+    private readonly persistentTokenService;
+    private readonly validationTokenService;
     private readonly mfaService;
     private readonly logger;
-    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, tokenService: TokenService, sessionService: SessionService, emailVerificationService: EmailVerificationService, securityService: SecurityService, passwordService: PasswordService, mfaService: MfaService, loggerService: LoggerService);
+    constructor(prisma: PrismaService, redis: RedisService, email: EmailService, bullmq: BullmqService, tokenService: TokenService, sessionService: SessionService, emailVerificationService: EmailVerificationService, securityService: SecurityService, passwordService: PasswordService, persistentTokenService: PersistentTokenService, validationTokenService: ValidationTokenService, mfaService: MfaService, loggerService: LoggerService);
     login(loginData: ILoginRequest, context?: {
         ipAddress: string;
         userAgent: string;
@@ -31,6 +37,8 @@ export declare class AuthService implements IAuthService {
         ip: string;
         userAgent: string;
     }): Promise<IRegisterResult>;
+    private buildRegistrationSuccessMessage;
+    private schedulePostRegistrationTasks;
     private handleSuccessfulLogin;
     validateUser(email: string, password: string, context?: {
         ipAddress?: string;
@@ -40,9 +48,19 @@ export declare class AuthService implements IAuthService {
     logout(sessionId: string, allDevices?: boolean): Promise<boolean>;
     refreshTokens(refreshToken: string): Promise<ITokenPair>;
     verifyMfa(challengeToken: string, code: string, method: any): Promise<ILoginResult>;
-    verifyEmail(token: string): Promise<{
+    verifyEmail(token: string, clientInfo?: any): Promise<{
         success: boolean;
         verified: boolean;
+        message: string;
+        userId?: string;
+    }>;
+    requestPasswordReset(email: string, clientInfo?: any): Promise<{
+        success: boolean;
+        message: string;
+        tokenId?: string;
+    }>;
+    resetPassword(token: string, newPassword: string, clientInfo?: any): Promise<{
+        success: boolean;
         message: string;
         userId?: string;
     }>;
