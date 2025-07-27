@@ -118,7 +118,7 @@ let AuthService = class AuthService {
                 isReused: sessionResult.isReused,
                 tokensReused: sessionResult.tokensReused,
             });
-            await this.handleSuccessfulLogin(user.id, deviceInfo, sessionResult);
+            await this.handleSuccessfulLogin(user.id, user.email, deviceInfo, sessionResult);
             const loginResult = {
                 success: true,
                 user: this.mapDbUserToProfile(user),
@@ -216,7 +216,12 @@ let AuthService = class AuthService {
             });
             const userProfile = this.mapDbUserToProfile(user);
             const verificationTokenData = await this.emailVerificationService.generateVerificationToken(user.id, user.email);
-            await this.email.sendWelcomeEmail(user.email, user.first_name, verificationTokenData.token);
+            this.email.sendWelcomeEmail(user.email, user.first_name, verificationTokenData.token).catch(error => {
+                this.logger.error('Failed to send welcome email', error.stack, 'AuthService.register', JSON.stringify({
+                    userId: user.id,
+                    email: user.email
+                }));
+            });
             let onboardingResult;
             if (registerData.onboardingSecret) {
                 onboardingResult = await this.processOnboardingSecret(user.id, registerData.onboardingSecret);
@@ -281,19 +286,18 @@ let AuthService = class AuthService {
             throw new common_1.InternalServerErrorException('Erreur lors de l\'inscription');
         }
     }
-    async handleSuccessfulLogin(userId, deviceInfo, sessionResult) {
+    async handleSuccessfulLogin(userId, email, deviceInfo, sessionResult) {
         try {
-            const [updatedUser] = await Promise.all([
+            await Promise.all([
                 this.prisma.users.update({
                     where: { id: userId },
                     data: {
                         last_login: new Date(),
                     },
-                    select: { email: true }
                 }),
                 this.prisma.login_attempts.create({
                     data: {
-                        email: '',
+                        email: email,
                         user_id: userId,
                         ip_address: deviceInfo.ipAddress,
                         user_agent: deviceInfo.userAgent,
@@ -311,17 +315,11 @@ let AuthService = class AuthService {
                     }
                 })
             ]);
-            await this.prisma.login_attempts.update({
-                where: { id: (await this.prisma.login_attempts.findFirst({
-                        where: { user_id: userId },
-                        orderBy: { created_at: 'desc' }
-                    }))?.id },
-                data: { email: updatedUser.email }
-            });
         }
         catch (error) {
             this.logger.warn('Failed to handle successful login', JSON.stringify({
                 userId,
+                email,
                 sessionId: sessionResult.session.id,
                 error: error.message,
             }));
@@ -554,7 +552,12 @@ let AuthService = class AuthService {
                 };
             }
             const verificationTokenData = await this.emailVerificationService.generateVerificationToken(user.id, user.email);
-            await this.email.sendVerificationEmail(user.email, verificationTokenData.token);
+            this.email.sendVerificationEmail(user.email, verificationTokenData.token).catch(error => {
+                this.logger.error('Failed to send verification email', error.stack, 'AuthService.resendVerificationEmail', JSON.stringify({
+                    userId: user.id,
+                    email: user.email
+                }));
+            });
             this.logger.logBusinessEvent('EMAIL_VERIFICATION_RESENT', {
                 userId: user.id,
                 email: user.email,
@@ -739,7 +742,8 @@ let AuthService = class AuthService {
     }
     async generateMfaChallenge(userId, email, deviceInfo) {
         try {
-            return await this.mfaService.generateChallengeForAuth(userId, email, deviceInfo);
+            const availableMethods = await this.mfaService.getAvailableProviders(userId);
+            return await this.mfaService.generateMfaChallenge(userId, availableMethods, deviceInfo.deviceFingerprint);
         }
         catch (error) {
             this.logger.logErrorEvent(error, 'AuthService.generateMfaChallenge', userId, JSON.stringify({ email, deviceInfo: { ipAddress: deviceInfo.ipAddress } }));
@@ -748,7 +752,7 @@ let AuthService = class AuthService {
     }
     async isMfaRequired(userId, riskScore) {
         try {
-            return await this.mfaService.isMfaRequiredForRisk(userId, riskScore);
+            return await this.mfaService.requiresMfa(userId, riskScore);
         }
         catch (error) {
             this.logger.warn('Erreur vérification MFA requis', JSON.stringify({

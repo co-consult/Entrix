@@ -12,90 +12,108 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MfaRequiredGuard = void 0;
 const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
+const mfa_service_1 = require("../services/mfa.service");
+const trusted_devices_service_1 = require("../services/trusted-devices.service");
+const risk_assessment_service_1 = require("../services/risk-assessment.service");
 const logger_service_1 = require("../../../shared/logger/logger.service");
-const redis_service_1 = require("../../../shared/redis/redis.service");
-const auth_exceptions_1 = require("../exceptions/auth.exceptions");
-const require_mfa_decorator_1 = require("../decorators/require-mfa.decorator");
+const mfa_required_decorator_1 = require("../decorators/mfa-required.decorator");
+const mfa_exceptions_1 = require("../exceptions/mfa.exceptions");
 let MfaRequiredGuard = class MfaRequiredGuard {
     reflector;
-    redis;
+    mfaService;
+    trustedDevicesService;
+    riskAssessment;
     logger;
-    constructor(reflector, redis, loggerService) {
+    constructor(reflector, mfaService, trustedDevicesService, riskAssessment, loggerService) {
         this.reflector = reflector;
-        this.redis = redis;
+        this.mfaService = mfaService;
+        this.trustedDevicesService = trustedDevicesService;
+        this.riskAssessment = riskAssessment;
         this.logger = loggerService.createChildLogger('MfaRequiredGuard');
     }
     async canActivate(context) {
         const request = context.switchToHttp().getRequest();
         const user = request.user;
-        const requireMfa = this.reflector.getAllAndOverride(require_mfa_decorator_1.REQUIRE_MFA_KEY, [
+        if (!user) {
+            throw new common_1.UnauthorizedException('Utilisateur non authentifié');
+        }
+        const isMfaRequired = this.reflector.getAllAndOverride(mfa_required_decorator_1.MFA_REQUIRED_KEY, [
             context.getHandler(),
             context.getClass(),
         ]);
-        if (!requireMfa || !user) {
+        if (!isMfaRequired) {
             return true;
         }
-        const operationId = this.logger.startOperation('mfaRequiredGuard', {
+        const operationId = this.logger.startOperation('MfaRequiredGuard.canActivate', {
             userId: user.id,
-            path: request.url,
+            endpoint: `${request.method} ${request.path}`
         });
         try {
-            const mfaValidated = await this.isMfaValidatedInSession(user.id, request.sessionId);
-            if (mfaValidated) {
-                this.logger.endOperation(operationId, 'success', true);
+            const hasMfaSession = await this.checkMfaSession(request);
+            if (hasMfaSession) {
+                this.logger.endOperation('canActivate', operationId, true, undefined, { reason: 'active_mfa_session' });
                 return true;
             }
-            this.logger.warn('MFA required but not validated', JSON.stringify({
-                userId: user.id,
-                path: request.url,
-            }));
-            const challengeToken = await this.generateMfaChallenge(user.id);
-            const availableMethods = await this.getAvailableMfaMethods(user.id);
-            this.logger.logBusinessEvent('MFA_CHALLENGE_REQUIRED', {
-                userId: user.id,
-                path: request.url,
-                methods: availableMethods,
-            }, user.id);
-            this.logger.endOperation(operationId, 'mfa_required', false);
-            throw new auth_exceptions_1.MfaRequiredException(challengeToken, availableMethods, 300);
+            const deviceFingerprint = this.extractDeviceFingerprint(request);
+            if (deviceFingerprint) {
+                const isTrusted = await this.trustedDevicesService.isDeviceTrusted(user.id, deviceFingerprint);
+                if (isTrusted) {
+                    await this.trustedDevicesService.updateLastSeen(user.id, deviceFingerprint);
+                    this.logger.endOperation('canActivate', operationId, true, undefined, { reason: 'trusted_device' });
+                    return true;
+                }
+            }
+            const riskScore = await this.riskAssessment.assessLoginRisk(user.id, {
+                ipAddress: request.ip,
+                userAgent: request.get('User-Agent'),
+                deviceFingerprint
+            });
+            const requiresMfa = await this.mfaService.requiresMfa(user.id, riskScore);
+            if (requiresMfa) {
+                this.logger.endOperation('canActivate', operationId, false, undefined, {
+                    reason: 'mfa_required',
+                    riskScore
+                });
+                throw new mfa_exceptions_1.MfaDeviceNotTrustedException();
+            }
+            this.logger.endOperation('canActivate', operationId, true, undefined, { reason: 'low_risk' });
+            return true;
         }
         catch (error) {
-            this.logger.endOperation(operationId, 'error', error.message);
-            throw error;
+            this.logger.endOperation('canActivate', operationId, false);
+            if (error instanceof mfa_exceptions_1.MfaDeviceNotTrustedException) {
+                throw error;
+            }
+            this.logger.error('MFA guard error', error.stack, 'MfaRequiredGuard.canActivate', JSON.stringify({
+                userId: user.id,
+                error: error.message
+            }));
+            throw new common_1.ForbiddenException('Erreur lors de la vérification MFA');
         }
     }
-    async isMfaValidatedInSession(userId, sessionId) {
+    async checkMfaSession(request) {
         try {
-            const mfaKey = `mfa_validated:${userId}:${sessionId}`;
-            const isValidated = await this.redis.exists(mfaKey);
-            return isValidated;
+            const mfaSessionToken = request.headers['x-mfa-session'];
+            if (!mfaSessionToken) {
+                return false;
+            }
+            return false;
         }
-        catch (error) {
-            this.logger.error('Error checking MFA validation status', error.stack);
+        catch {
             return false;
         }
     }
-    async generateMfaChallenge(userId) {
-        try {
-            const challengeToken = `mfa_challenge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const challengeKey = `mfa_challenge:${challengeToken}`;
-            await this.redis.setCache(challengeKey, userId, 300);
-            return challengeToken;
-        }
-        catch (error) {
-            this.logger.error('Error generating MFA challenge', error.stack);
-            throw new common_1.UnauthorizedException('Erreur génération challenge MFA');
-        }
-    }
-    async getAvailableMfaMethods(userId) {
-        return ['SMS_OTP', 'EMAIL_OTP', 'TOTP_APP'];
+    extractDeviceFingerprint(request) {
+        return request.headers['x-device-fingerprint'];
     }
 };
 exports.MfaRequiredGuard = MfaRequiredGuard;
 exports.MfaRequiredGuard = MfaRequiredGuard = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [core_1.Reflector,
-        redis_service_1.RedisService,
+        mfa_service_1.MfaService,
+        trusted_devices_service_1.TrustedDevicesService,
+        risk_assessment_service_1.RiskAssessmentService,
         logger_service_1.LoggerService])
 ], MfaRequiredGuard);
 //# sourceMappingURL=mfa-required.guard.js.map

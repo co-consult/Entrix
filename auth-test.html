@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Module Auth - Entrix V3.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .hidden { display: none !important; }
+        .log-section { max-height: 400px; overflow-y: auto; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="py-4">
+                <h1 class="text-2xl font-bold text-gray-900">Test Module Auth - Entrix V3.0</h1>
+                <p class="text-gray-600">Interface de test pour toutes les fonctionnalités d'authentification</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Sidebar -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow p-6 space-y-6">
+                    
+                    <!-- Configuration -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Configuration</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">URL de base</label>
+                                <input type="text" id="baseUrl" value="http://localhost:3000" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Version API</label>
+                                <input type="text" id="apiVersion" value="api/v1" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tokens -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Tokens</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600">Access Token:</span>
+                                <span id="accessTokenStatus" class="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600">Non défini</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600">Refresh Token:</span>
+                                <span id="refreshTokenStatus" class="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600">Non défini</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600">Session ID:</span>
+                                <span id="sessionIdStatus" class="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600">Non défini</span>
+                            </div>
+                        </div>
+                        
+                        <button onclick="clearTokens()" class="mt-3 w-full px-3 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors">
+                            🗑️ Effacer les tokens
+                        </button>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Sections</h3>
+                        <nav class="space-y-2">
+                            <button onclick="showSection('auth')" class="nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors bg-blue-100 text-blue-700">
+                                👤 Authentification
+                            </button>
+                            <button onclick="showSection('sessions')" class="nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors text-gray-600 hover:bg-gray-100">
+                                🛡️ Sessions
+                            </button>
+                            <button onclick="showSection('passwords')" class="nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors text-gray-600 hover:bg-gray-100">
+                                🔒 Mots de passe
+                            </button>
+                            <button onclick="showSection('mfa')" class="nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors text-gray-600 hover:bg-gray-100">
+                                📱 MFA
+                            </button>
+                            <button onclick="showSection('security')" class="nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors text-gray-600 hover:bg-gray-100">
+                                🛡️ Sécurité
+                            </button>
+                            <button onclick="showSection('email')" class="nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors text-gray-600 hover:bg-gray-100">
+                                📧 Email
+                            </button>
+                            <button onclick="showSection('logout')" class="nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors text-gray-600 hover:bg-gray-100">
+                                🚪 Déconnexion
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenu principal -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- Section Authentification -->
+                <div id="section-auth" class="section">
+                    <!-- Inscription -->
+                    <div class="bg-white rounded-lg shadow p-6 mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Inscription</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                                <input type="email" id="register-email" placeholder="nouveau@entrix.tn" value="souheilsbs@gmail.com"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Mot de passe *</label>
+                                <div class="relative">
+                                    <input type="password" id="register-password" placeholder="Mot de passe sécurisé" value="TestPassword123!"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <button type="button" onclick="togglePassword('register-password')" class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                                        👁️
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Prénom *</label>
+                                <input type="text" id="register-firstName" placeholder="Jean" value="Jean"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
+                                <input type="text" id="register-lastName" placeholder="Dupont" value="Dupont"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Téléphone</label>
+                                <input type="tel" id="register-phone" placeholder="+21650560560" value="+21650560560"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Date de naissance</label>
+                                <input type="date" id="register-dateOfBirth" value="1990-01-01"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center space-x-4 mb-6">
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" id="register-marketingConsent" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span class="text-sm text-gray-600">Accepter les communications marketing</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" id="register-termsAccepted" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span class="text-sm text-gray-600">Accepter les conditions d'utilisation (requis)</span>
+                            </label>
+                        </div>
+
+                        <button onclick="testRegister()" class="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors">
+                            <div class="text-left">
+                                <div class="font-semibold">Tester l'inscription</div>
+                                <div class="text-sm opacity-90">POST /auth/register</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Connexion -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Connexion</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                                <input type="email" id="login-email" placeholder="user@entrix.tn" value="souheilsbs@gmail.com"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Mot de passe *</label>
+                                <div class="relative">
+                                    <input type="password" id="login-password" placeholder="Votre mot de passe" value="TestPassword123!"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <button type="button" onclick="togglePassword('login-password')" class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                                        👁️
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Device Fingerprint</label>
+                                <input type="text" id="login-deviceFingerprint" placeholder="test-device-fingerprint-123" value="test-device-fingerprint-123"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="flex items-center">
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="login-rememberMe" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="text-sm text-gray-600">Se souvenir de moi (30 jours)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button onclick="testLogin()" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                            <div class="text-left">
+                                <div class="font-semibold">Tester la connexion</div>
+                                <div class="text-sm opacity-90">POST /auth/login</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section Sessions -->
+                <div id="section-sessions" class="section hidden">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Gestion des Sessions</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button onclick="testGetSession()" class="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Session Courante</div>
+                                    <div class="text-sm opacity-90">GET /auth/session</div>
+                                </div>
+                            </button>
+                            <button onclick="testRefreshToken()" class="px-4 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Rafraîchir Token</div>
+                                    <div class="text-sm opacity-90">POST /auth/refresh</div>
+                                </div>
+                            </button>
+                            <button onclick="testGetAllSessions()" class="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Toutes les Sessions</div>
+                                    <div class="text-sm opacity-90">GET /auth/sessions</div>
+                                </div>
+                            </button>
+                            <button onclick="testRevokeSession()" class="px-4 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Révoquer Session</div>
+                                    <div class="text-sm opacity-90">DELETE /auth/sessions/{id}</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section Mots de passe -->
+                <div id="section-passwords" class="section hidden">
+                    <!-- Mot de passe oublié -->
+                    <div class="bg-white rounded-lg shadow p-6 mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Mot de passe oublié</h3>
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                            <input type="email" id="forgot-email" placeholder="user@entrix.tn" value="souheilsbs@gmail.com"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button onclick="testForgotPassword()" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                            <div class="text-left">
+                                <div class="font-semibold">Demander Reset</div>
+                                <div class="text-sm opacity-90">POST /auth/forgot-password</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Reset mot de passe -->
+                    <div class="bg-white rounded-lg shadow p-6 mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Reset mot de passe</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Token Reset *</label>
+                                <input type="text" id="reset-token" placeholder="Token reçu par email"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Nouveau mot de passe *</label>
+                                <input type="password" id="reset-newPassword" placeholder="Nouveau mot de passe"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Confirmer mot de passe *</label>
+                                <input type="password" id="reset-confirmPassword" placeholder="Confirmer le mot de passe"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        <button onclick="testResetPassword()" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                            <div class="text-left">
+                                <div class="font-semibold">Reset Password</div>
+                                <div class="text-sm opacity-90">POST /auth/reset-password</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Changement de mot de passe -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Changer mot de passe</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Mot de passe actuel *</label>
+                                <input type="password" id="change-currentPassword" placeholder="Mot de passe actuel"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Nouveau mot de passe *</label>
+                                <input type="password" id="change-newPassword" placeholder="Nouveau mot de passe"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Confirmer nouveau mot de passe *</label>
+                                <input type="password" id="change-confirmPassword" placeholder="Confirmer le nouveau mot de passe"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        <button onclick="testChangePassword()" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                            <div class="text-left">
+                                <div class="font-semibold">Changer Password</div>
+                                <div class="text-sm opacity-90">PUT /auth/change-password</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section MFA -->
+                <div id="section-mfa" class="section hidden">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Multi-Factor Authentication</h3>
+                        
+                        <div class="mb-6">
+                            <button onclick="testMfaProviders()" class="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Providers MFA</div>
+                                    <div class="text-sm opacity-90">GET /auth/mfa/providers</div>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Provider</label>
+                                <select id="mfa-provider" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="SMS_OTP">SMS OTP</option>
+                                    <option value="EMAIL_OTP">Email OTP</option>
+                                    <option value="TOTP_APP">App Authenticator</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Numéro de téléphone</label>
+                                <input type="tel" id="mfa-phoneNumber" placeholder="+21650560560" value="+21650560560"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <button onclick="testMfaSetup()" class="px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Setup MFA</div>
+                                    <div class="text-sm opacity-90">POST /auth/mfa/setup</div>
+                                </div>
+                            </button>
+                            <button onclick="testMfaDisable()" class="px-4 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Désactiver MFA</div>
+                                    <div class="text-sm opacity-90">DELETE /auth/mfa/{provider}</div>
+                                </div>
+                            </button>
+                        </div>
+
+                        <!-- Vérification MFA -->
+                        <div class="border-t pt-6">
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Vérification MFA</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Challenge Token</label>
+                                    <input type="text" id="mfa-challengeToken" placeholder="Token du challenge MFA"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Code MFA</label>
+                                    <input type="text" id="mfa-code" placeholder="123456"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Méthode</label>
+                                    <select id="mfa-method" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="SMS_OTP">SMS OTP</option>
+                                        <option value="EMAIL_OTP">Email OTP</option>
+                                        <option value="TOTP_APP">App Authenticator</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center">
+                                    <label class="flex items-center space-x-2">
+                                        <input type="checkbox" id="mfa-trustDevice" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                        <span class="text-sm text-gray-600">Faire confiance à cet appareil</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <button onclick="testMfaVerify()" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Vérifier Code MFA</div>
+                                    <div class="text-sm opacity-90">POST /auth/mfa/verify</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section Sécurité -->
+                <div id="section-security" class="section hidden">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Sécurité et Audit</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <button onclick="testSecurityEvents()" class="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Événements Sécurité</div>
+                                    <div class="text-sm opacity-90">GET /auth/security-events</div>
+                                </div>
+                            </button>
+                            <button onclick="testRiskAssessment()" class="px-4 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Évaluation Risque</div>
+                                    <div class="text-sm opacity-90">GET /auth/risk-assessment</div>
+                                </div>
+                            </button>
+                            <button onclick="testTrustedDevices()" class="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Appareils de Confiance</div>
+                                    <div class="text-sm opacity-90">GET /auth/trusted-devices</div>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div class="border-t pt-6">
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Gestion des Appareils</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Nom de l'appareil</label>
+                                    <input type="text" id="device-name" placeholder="MacBook Pro - Chrome" value="MacBook Pro - Chrome"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Durée de confiance (secondes)</label>
+                                    <input type="number" id="device-duration" placeholder="2592000" value="2592000"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                            <button onclick="testAddTrustedDevice()" class="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Ajouter Appareil de Confiance</div>
+                                    <div class="text-sm opacity-90">POST /auth/trusted-devices</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section Email -->
+                <div id="section-email" class="section hidden">
+                    <!-- Vérification email -->
+                    <div class="bg-white rounded-lg shadow p-6 mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Vérification Email</h3>
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Token de vérification</label>
+                            <input type="text" id="verify-token" placeholder="Token reçu par email"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button onclick="testVerifyEmail()" class="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors">
+                            <div class="text-left">
+                                <div class="font-semibold">Vérifier Email</div>
+                                <div class="text-sm opacity-90">POST /auth/verify-email</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- Renvoyer verification -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Renvoyer Vérification</h3>
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                            <input type="email" id="resend-email" placeholder="user@entrix.tn" value="souheilsbs@gmail.com"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button onclick="testResendVerification()" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                            <div class="text-left">
+                                <div class="font-semibold">Renvoyer Vérification</div>
+                                <div class="text-sm opacity-90">POST /auth/resend-verification</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section Déconnexion -->
+                <div id="section-logout" class="section hidden">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Déconnexion</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button onclick="testLogout()" class="px-4 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Déconnexion Simple</div>
+                                    <div class="text-sm opacity-90">POST /auth/logout (session courante)</div>
+                                </div>
+                            </button>
+                            <button onclick="testLogoutAllDevices()" class="px-4 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors">
+                                <div class="text-left">
+                                    <div class="font-semibold">Déconnexion Globale</div>
+                                    <div class="text-sm opacity-90">POST /auth/logout (tous appareils)</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs des tests -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Logs des Tests</h3>
+                        <button onclick="clearLogs()" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors text-sm">
+                            Effacer les logs
+                        </button>
+                    </div>
+                    
+                    <div id="logs-container" class="log-section space-y-3">
+                        <p class="text-gray-500 text-sm">Aucun test effectué</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let tokens = {
+            accessToken: '',
+            refreshToken: '',
+            sessionId: '',
+            userId: '',
+            challengeToken: '',
+            resetToken: '',
+            verificationToken: ''
+        };
+        
+        let testLogs = [];
+        let isLoading = false;
+
+        // Fonctions utilitaires
+        function getBaseUrl() {
+            return document.getElementById('baseUrl').value;
+        }
+
+        function getApiVersion() {
+            return document.getElementById('apiVersion').value;
+        }
+
+        function updateTokenStatus() {
+            const accessTokenStatus = document.getElementById('accessTokenStatus');
+            const refreshTokenStatus = document.getElementById('refreshTokenStatus');
+            const sessionIdStatus = document.getElementById('sessionIdStatus');
+
+            accessTokenStatus.textContent = tokens.accessToken ? 'Défini' : 'Non défini';
+            accessTokenStatus.className = tokens.accessToken 
+                ? 'px-2 py-1 rounded text-xs bg-green-100 text-green-800' 
+                : 'px-2 py-1 rounded text-xs bg-gray-100 text-gray-600';
+
+            refreshTokenStatus.textContent = tokens.refreshToken ? 'Défini' : 'Non défini';
+            refreshTokenStatus.className = tokens.refreshToken 
+                ? 'px-2 py-1 rounded text-xs bg-green-100 text-green-800' 
+                : 'px-2 py-1 rounded text-xs bg-gray-100 text-gray-600';
+
+            sessionIdStatus.textContent = tokens.sessionId ? 'Défini' : 'Non défini';
+            sessionIdStatus.className = tokens.sessionId 
+                ? 'px-2 py-1 rounded text-xs bg-green-100 text-green-800' 
+                : 'px-2 py-1 rounded text-xs bg-gray-100 text-gray-600';
+        }
+
+        function clearTokens() {
+            tokens = {
+                accessToken: '',
+                refreshToken: '',
+                sessionId: '',
+                userId: '',
+                challengeToken: '',
+                resetToken: '',
+                verificationToken: ''
+            };
+            updateTokenStatus();
+        }
+
+        function showSection(sectionName) {
+            // Masquer toutes les sections
+            const sections = document.querySelectorAll('.section');
+            sections.forEach(section => section.classList.add('hidden'));
+
+            // Afficher la section sélectionnée
+            document.getElementById(`section-${sectionName}`).classList.remove('hidden');
+
+            // Mettre à jour la navigation
+            const navButtons = document.querySelectorAll('.nav-btn');
+            navButtons.forEach(btn => {
+                btn.className = 'nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors text-gray-600 hover:bg-gray-100';
+            });
+            event.target.className = 'nav-btn w-full flex items-center px-3 py-2 rounded-md text-left transition-colors bg-blue-100 text-blue-700';
+        }
+
+        function togglePassword(fieldId) {
+            const field = document.getElementById(fieldId);
+            if (field.type === 'password') {
+                field.type = 'text';
+            } else {
+                field.type = 'password';
+            }
+        }
+
+        // Fonction générique pour faire des requêtes API
+        async function makeApiRequest(endpoint, method = 'GET', body = null, useAuth = false) {
+            isLoading = true;
+            const url = `${getBaseUrl()}/${getApiVersion()}/${endpoint}`;
+            
+            const headers = {
+                'Content-Type': 'application/json',
+            };
+
+            if (useAuth && tokens.accessToken) {
+                headers['Authorization'] = `Bearer ${tokens.accessToken}`;
+            }
+
+            const config = {
+                method,
+                headers,
+            };
+
+            if (body && method !== 'GET') {
+                config.body = JSON.stringify(body);
+            }
+
+            try {
+                const response = await fetch(url, config);
+                const data = await response.json();
+                
+                const log = {
+                    id: Date.now(),
+                    timestamp: new Date().toLocaleTimeString(),
+                    method,
+                    endpoint,
+                    status: response.status,
+                    success: response.ok,
+                    request: body,
+                    response: data,
+                    url
+                };
+
+                testLogs.unshift(log);
+                updateLogs();
+
+                // Auto-extraction des tokens
+                if (response.ok && data.data) {
+                    if (data.data.tokens) {
+                        tokens.accessToken = data.data.tokens.accessToken || tokens.accessToken;
+                        tokens.refreshToken = data.data.tokens.refreshToken || tokens.refreshToken;
+                    }
+                    if (data.data.session) {
+                        tokens.sessionId = data.data.session.sessionId || tokens.sessionId;
+                    }
+                    if (data.data.user) {
+                        tokens.userId = data.data.user.id || tokens.userId;
+                    }
+                    if (data.data.challengeToken) {
+                        tokens.challengeToken = data.data.challengeToken || tokens.challengeToken;
+                        // Auto-remplir le champ challenge token
+                        const challengeField = document.getElementById('mfa-challengeToken');
+                        if (challengeField) {
+                            challengeField.value = tokens.challengeToken;
+                        }
+                    }
+                    updateTokenStatus();
+                }
+
+                isLoading = false;
+                return { response, data };
+            } catch (error) {
+                const log = {
+                    id: Date.now(),
+                    timestamp: new Date().toLocaleTimeString(),
+                    method,
+                    endpoint,
+                    status: 0,
+                    success: false,
+                    request: body,
+                    response: { error: error.message },
+                    url
+                };
+
+                testLogs.unshift(log);
+                updateLogs();
+                isLoading = false;
+                return { response: null, data: { error: error.message } };
+            }
+        }
+
+        function updateLogs() {
+            const container = document.getElementById('logs-container');
+            
+            if (testLogs.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm">Aucun test effectué</p>';
+                return;
+            }
+
+            container.innerHTML = testLogs.map(log => `
+                <div class="border rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2 py-1 rounded text-xs font-medium ${
+                                log.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }">
+                                ${log.method} ${log.status}
+                            </span>
+                            <span class="text-sm text-gray-500">${log.timestamp}</span>
+                            ${log.success ? '✅' : '❌'}
+                        </div>
+                        <button onclick="copyLog(${log.id})" class="p-1 text-gray-400 hover:text-gray-600" title="Copier">
+                            📋
+                        </button>
+                    </div>
+                    
+                    <div class="text-sm">
+                        <p class="font-medium text-gray-900">${log.method} ${log.endpoint}</p>
+                        <p class="text-gray-600 break-all">${log.url}</p>
+                    </div>
+                    
+                    ${log.request ? `
+                        <details class="mt-2">
+                            <summary class="text-sm text-gray-600 cursor-pointer">Requête</summary>
+                            <pre class="mt-1 text-xs bg-gray-50 p-2 rounded overflow-x-auto">${JSON.stringify(log.request, null, 2)}</pre>
+                        </details>
+                    ` : ''}
+                    
+                    <details class="mt-2">
+                        <summary class="text-sm text-gray-600 cursor-pointer">Réponse</summary>
+                        <pre class="mt-1 text-xs bg-gray-50 p-2 rounded overflow-x-auto">${JSON.stringify(log.response, null, 2)}</pre>
+                    </details>
+                </div>
+            `).join('');
+        }
+
+        function copyLog(logId) {
+            const log = testLogs.find(l => l.id === logId);
+            if (log) {
+                navigator.clipboard.writeText(JSON.stringify(log, null, 2));
+                alert('Log copié dans le presse-papiers !');
+            }
+        }
+
+        function clearLogs() {
+            testLogs = [];
+            updateLogs();
+        }
+
+        // Fonctions de test pour l'authentification
+        async function testRegister() {
+            const body = {
+                email: document.getElementById('register-email').value,
+                password: document.getElementById('register-password').value,
+                firstName: document.getElementById('register-firstName').value,
+                lastName: document.getElementById('register-lastName').value,
+                phone: document.getElementById('register-phone').value || undefined,
+                dateOfBirth: document.getElementById('register-dateOfBirth').value || undefined,
+                marketingConsent: document.getElementById('register-marketingConsent').checked,
+                termsAccepted: document.getElementById('register-termsAccepted').checked
+            };
+            await makeApiRequest('auth/register', 'POST', body);
+        }
+
+        async function testLogin() {
+            const body = {
+                email: document.getElementById('login-email').value,
+                password: document.getElementById('login-password').value,
+                rememberMe: document.getElementById('login-rememberMe').checked,
+                deviceFingerprint: document.getElementById('login-deviceFingerprint').value || undefined
+            };
+            await makeApiRequest('auth/login', 'POST', body);
+        }
+
+        // Fonctions de test pour les sessions
+        async function testGetSession() {
+            await makeApiRequest('auth/session', 'GET', null, true);
+        }
+
+        async function testRefreshToken() {
+            const body = { refreshToken: tokens.refreshToken };
+            await makeApiRequest('auth/refresh', 'POST', body);
+        }
+
+        async function testGetAllSessions() {
+            await makeApiRequest('auth/sessions', 'GET', null, true);
+        }
+
+        async function testRevokeSession() {
+            if (tokens.sessionId) {
+                await makeApiRequest(`auth/sessions/${tokens.sessionId}`, 'DELETE', null, true);
+            } else {
+                alert('Aucune session ID disponible. Connectez-vous d\'abord.');
+            }
+        }
+
+        // Fonctions de test pour les mots de passe
+        async function testForgotPassword() {
+            const body = {
+                email: document.getElementById('forgot-email').value
+            };
+            await makeApiRequest('auth/forgot-password', 'POST', body);
+        }
+
+        async function testResetPassword() {
+            const body = {
+                token: document.getElementById('reset-token').value,
+                newPassword: document.getElementById('reset-newPassword').value,
+                confirmPassword: document.getElementById('reset-confirmPassword').value
+            };
+            await makeApiRequest('auth/reset-password', 'POST', body);
+        }
+
+        async function testChangePassword() {
+            const body = {
+                currentPassword: document.getElementById('change-currentPassword').value,
+                newPassword: document.getElementById('change-newPassword').value,
+                confirmPassword: document.getElementById('change-confirmPassword').value
+            };
+            await makeApiRequest('auth/change-password', 'PUT', body, true);
+        }
+
+        // Fonctions de test pour MFA
+        async function testMfaProviders() {
+            await makeApiRequest('auth/mfa/providers', 'GET', null, true);
+        }
+
+        async function testMfaSetup() {
+            const body = {
+                provider: document.getElementById('mfa-provider').value,
+                phoneNumber: document.getElementById('mfa-phoneNumber').value || undefined
+            };
+            await makeApiRequest('auth/mfa/setup', 'POST', body, true);
+        }
+
+        async function testMfaVerify() {
+            const body = {
+                challengeToken: document.getElementById('mfa-challengeToken').value,
+                method: document.getElementById('mfa-method').value,
+                code: document.getElementById('mfa-code').value,
+                trustDevice: document.getElementById('mfa-trustDevice').checked
+            };
+            await makeApiRequest('auth/mfa/verify', 'POST', body, true);
+        }
+
+        async function testMfaDisable() {
+            const provider = document.getElementById('mfa-provider').value;
+            const body = { confirmationCode: '123456' };
+            await makeApiRequest(`auth/mfa/${provider}`, 'DELETE', body, true);
+        }
+
+        // Fonctions de test pour la sécurité
+        async function testSecurityEvents() {
+            await makeApiRequest('auth/security-events?limit=20&eventType=LOGIN', 'GET', null, true);
+        }
+
+        async function testRiskAssessment() {
+            await makeApiRequest('auth/risk-assessment', 'GET', null, true);
+        }
+
+        async function testTrustedDevices() {
+            await makeApiRequest('auth/trusted-devices', 'GET', null, true);
+        }
+
+        async function testAddTrustedDevice() {
+            const body = {
+                deviceName: document.getElementById('device-name').value,
+                trustDuration: parseInt(document.getElementById('device-duration').value)
+            };
+            await makeApiRequest('auth/trusted-devices', 'POST', body, true);
+        }
+
+        // Fonctions de test pour la vérification email
+        async function testVerifyEmail() {
+            const body = {
+                token: document.getElementById('verify-token').value
+            };
+            await makeApiRequest('auth/verify-email', 'POST', body);
+        }
+
+        async function testResendVerification() {
+            const body = {
+                email: document.getElementById('resend-email').value
+            };
+            await makeApiRequest('auth/resend-verification', 'POST', body);
+        }
+
+        // Fonctions de test pour la déconnexion
+        async function testLogout() {
+            const body = { allDevices: false };
+            await makeApiRequest('auth/logout', 'POST', body, true);
+        }
+
+        async function testLogoutAllDevices() {
+            const body = { allDevices: true };
+            await makeApiRequest('auth/logout', 'POST', body, true);
+        }
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTokenStatus();
+            console.log('🚀 Page de test Auth Entrix V3.0 chargée !');
+            console.log('📝 Prêt à tester votre module d\'authentification');
+        });
+    </script>
+</body>
+</html>

@@ -179,7 +179,7 @@ async login(loginData: ILoginRequest, context?: {
     });
 
     // 6. ✅ OPTIMISÉ : Enregistrer succès avec métriques
-    await this.handleSuccessfulLogin(user.id, deviceInfo, sessionResult);
+    await this.handleSuccessfulLogin(user.id, user.email, deviceInfo, sessionResult);
 
     // 7. Formater réponse selon ILoginResult
     const loginResult: ILoginResult = {
@@ -313,11 +313,16 @@ async login(loginData: ILoginRequest, context?: {
       );
 
       // 6. Envoyer email de bienvenue avec lien de vérification
-      await this.email.sendWelcomeEmail(
+      this.email.sendWelcomeEmail(
         user.email,
         user.first_name,
         verificationTokenData.token
-      );
+      ).catch(error => {
+        this.logger.error('Failed to send welcome email', error.stack, 'AuthService.register', JSON.stringify({
+          userId: user.id,
+          email: user.email
+        }));
+        });
 
       // 7. Traitement onboarding si secret fourni
       let onboardingResult;
@@ -421,29 +426,26 @@ async login(loginData: ILoginRequest, context?: {
  * Ajouter cette méthode à AuthService si elle n'existe pas
  */
 private async handleSuccessfulLogin(
-  userId: string, 
+  userId: string,
+  email: string, // ✅ AJOUTÉ : email en paramètre
   deviceInfo: IDeviceInfo, 
   sessionResult: ISessionLoginResult
 ): Promise<void> {
   try {
-    // ✅ OPTIMISÉ : Mise à jour compteurs et enregistrement en parallèle
-    const [updatedUser] = await Promise.all([
-      // Mettre à jour last_login et login_count
+    // Traitement en parallèle optimisé
+    await Promise.all([
+      // Mettre à jour last_login
       this.prisma.users.update({
         where: { id: userId },
         data: {
           last_login: new Date(),
-          //login_count: { increment: 1 },
-          //failed_login_attempts: 0,
-          //account_locked_until: null,
         },
-        select: { email: true }
       }),
       
-      // Enregistrer tentative réussie
+      // ✅ CORRIGÉ : Enregistrer tentative réussie avec email correct
       this.prisma.login_attempts.create({
         data: {
-          email: '', // sera mis à jour après
+          email: email, // ✅ CORRIGÉ : utiliser l'email fourni
           user_id: userId,
           ip_address: deviceInfo.ipAddress,
           user_agent: deviceInfo.userAgent,
@@ -462,18 +464,10 @@ private async handleSuccessfulLogin(
       })
     ]);
 
-    // Mettre à jour l'email dans login_attempts
-    await this.prisma.login_attempts.update({
-      where: { id: (await this.prisma.login_attempts.findFirst({
-        where: { user_id: userId },
-        orderBy: { created_at: 'desc' }
-      }))?.id },
-      data: { email: updatedUser.email }
-    });
-
   } catch (error) {
     this.logger.warn('Failed to handle successful login', JSON.stringify({
       userId,
+      email,
       sessionId: sessionResult.session.id,
       error: error.message,
     }));
@@ -825,7 +819,12 @@ async verifyMfa(
       );
 
       // 3. Envoyer email de vérification
-      await this.email.sendVerificationEmail(user.email, verificationTokenData.token);
+      this.email.sendVerificationEmail(user.email, verificationTokenData.token).catch(error => {
+        this.logger.error('Failed to send verification email', error.stack, 'AuthService.resendVerificationEmail', JSON.stringify({
+          userId: user.id,
+          email: user.email
+        }));
+      });
 
       // 4. Logger l'événement
       this.logger.logBusinessEvent('EMAIL_VERIFICATION_RESENT', {
@@ -1097,8 +1096,7 @@ async verifyMfa(
     };
   }
   /**
- * ✅ SIMPLIFIÉ : Génère challenge MFA via MfaService
- * Délègue la responsabilité au service spécialisé
+ * ✅ MODIFIÉ : Génère challenge MFA via méthodes existantes MfaService
  */
 private async generateMfaChallenge(
   userId: string, 
@@ -1106,8 +1104,15 @@ private async generateMfaChallenge(
   deviceInfo: IDeviceInfo
 ): Promise<IMfaChallenge> {
   try {
-    // Déléguer au MfaService spécialisé
-    return await this.mfaService.generateChallengeForAuth(userId, email, deviceInfo);
+    // 1. Obtenir les méthodes disponibles
+    const availableMethods = await this.mfaService.getAvailableProviders(userId);
+    
+    // 2. Générer le challenge avec la méthode existante
+    return await this.mfaService.generateMfaChallenge(
+      userId, 
+      availableMethods, 
+      deviceInfo.deviceFingerprint
+    );
   } catch (error) {
     this.logger.logErrorEvent(
       error as Error,
@@ -1119,14 +1124,12 @@ private async generateMfaChallenge(
   }
 }
 
-// 5. OPTIONNEL - Ajouter méthode utilitaire pour vérification MFA :
-
 /**
- * ✅ NOUVEAU : Vérifie si MFA requis via MfaService
+ * ✅ MODIFIÉ : Vérifie si MFA requis via méthode existante MfaService
  */
 private async isMfaRequired(userId: string, riskScore: number): Promise<boolean> {
   try {
-    return await this.mfaService.isMfaRequiredForRisk(userId, riskScore);
+    return await this.mfaService.requiresMfa(userId, riskScore);
   } catch (error) {
     this.logger.warn('Erreur vérification MFA requis', JSON.stringify({
       userId,

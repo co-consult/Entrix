@@ -31,399 +31,587 @@ var __importStar = (this && this.__importStar) || function (mod) {
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var EmailService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmailService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const nodemailer = __importStar(require("nodemailer"));
-const fs = __importStar(require("fs"));
-const path = __importStar(require("path"));
-const handlebars = __importStar(require("handlebars"));
 const logger_service_1 = require("../logger/logger.service");
-const email_constants_1 = require("./email.constants");
-const email_types_1 = require("./email.types");
-let EmailService = EmailService_1 = class EmailService {
-    configService;
-    loggerService;
-    logger = new common_1.Logger(EmailService_1.name);
-    transporter;
-    templates = new Map();
+const redis_service_1 = require("../redis/redis.service");
+let EmailService = class EmailService {
     config;
-    metrics = {
-        emailsSent: 0,
-        emailsFailed: 0,
-        totalSendTime: 0,
-        avgSendTime: 0,
-        templateUsage: new Map(),
-    };
-    constructor(configService, loggerService) {
-        this.configService = configService;
-        this.loggerService = loggerService;
-        this.config = this.configService.get(email_constants_1.EMAIL_CONFIG_NAMESPACE);
-        this.initializeTransporter();
-        this.loadTemplates();
-    }
-    initializeTransporter() {
-        try {
-            switch (this.config.provider) {
-                case 'smtp':
-                    this.transporter = nodemailer.createTransport({
-                        host: this.config.host,
-                        port: this.config.port,
-                        secure: this.config.secure,
-                        auth: {
-                            user: this.config.user,
-                            pass: this.config.pass,
-                        },
-                        pool: true,
-                        maxConnections: 10,
-                        maxMessages: 100,
-                        rateLimit: 10,
-                    });
-                    break;
-                case 'sendgrid':
-                    this.transporter = nodemailer.createTransport({
-                        service: 'SendGrid',
-                        auth: {
-                            user: 'apikey',
-                            pass: this.config.pass,
-                        },
-                    });
-                    break;
-                case 'mailgun':
-                    this.transporter = nodemailer.createTransport({
-                        service: 'Mailgun',
-                        auth: {
-                            user: this.config.user,
-                            pass: this.config.pass,
-                        },
-                    });
-                    break;
-                default:
-                    throw new Error(`Unsupported email provider: ${this.config.provider}`);
-            }
-            this.transporter.verify((error, success) => {
-                if (error) {
-                    this.logger.error('❌ Email transporter verification failed:', error);
-                }
-                else {
-                    this.logger.log(`✅ Email transporter verified (${this.config.provider})`);
-                }
-            });
-        }
-        catch (error) {
-            this.logger.error('❌ Failed to initialize email transporter:', error);
-            throw error;
-        }
-    }
-    loadTemplates() {
-        if (!this.config.templatesPath) {
-            this.logger.warn('⚠️ Templates path not configured');
-            return;
-        }
-        try {
-            const templatesDir = path.resolve(this.config.templatesPath);
-            if (!fs.existsSync(templatesDir)) {
-                this.logger.warn(`⚠️ Templates directory not found: ${templatesDir}`);
-                return;
-            }
-            const templateFiles = fs.readdirSync(templatesDir).filter(file => file.endsWith('.hbs') || file.endsWith('.handlebars'));
-            for (const file of templateFiles) {
-                const templateName = path.basename(file, path.extname(file));
-                const templatePath = path.join(templatesDir, file);
-                const templateContent = fs.readFileSync(templatePath, 'utf8');
-                const template = handlebars.compile(templateContent);
-                this.templates.set(templateName, template);
-                this.logger.log(`📄 Template loaded: ${templateName}`);
-            }
-            this.logger.log(`✅ ${this.templates.size} email templates loaded`);
-        }
-        catch (error) {
-            this.logger.error('❌ Failed to load email templates:', error);
-        }
-    }
-    async sendMail(options) {
-        const startTime = Date.now();
-        try {
-            const mailData = await this.prepareMailData(options);
-            const result = await this.transporter.sendMail(mailData);
-            const sendTime = Date.now() - startTime;
-            this.updateMetrics(true, sendTime, options.template);
-            this.loggerService.logNotificationEvent('sent', 'email', Array.isArray(options.to) ? options.to.join(',') : options.to, result.messageId, {
-                subject: options.subject,
-                template: options.template,
-                sendTime,
-                provider: this.config.provider,
-            });
-            return {
-                messageId: result.messageId,
-                accepted: result.accepted || [],
-                rejected: result.rejected || [],
-                pending: result.pending || [],
-                response: result.response,
-            };
-        }
-        catch (error) {
-            const sendTime = Date.now() - startTime;
-            this.updateMetrics(false, sendTime, options.template);
-            this.loggerService.logNotificationEvent('failed', 'email', Array.isArray(options.to) ? options.to.join(',') : options.to, undefined, {
-                subject: options.subject,
-                template: options.template,
-                error: error.message,
-                sendTime,
-                provider: this.config.provider,
-            });
-            throw error;
-        }
-    }
-    async prepareMailData(options) {
-        const mailData = {
-            from: this.config.from,
-            to: options.to,
-            subject: options.subject,
-            replyTo: options.replyTo || this.config.defaultReplyTo,
+    redis;
+    logger;
+    primaryTransporter;
+    fallbackTransporter;
+    isEnabled;
+    metrics;
+    constructor(config, redis, loggerService) {
+        this.config = config;
+        this.redis = redis;
+        this.logger = loggerService.createChildLogger('EmailService');
+        this.isEnabled = this.config.get('EMAIL_ENABLED', true);
+        this.metrics = {
+            sent: 0,
+            failed: 0,
+            queued: 0,
+            successRate: 0,
+            averageDeliveryTime: 0,
+            errors: {}
         };
-        if (options.cc) {
-            mailData.cc = options.cc;
-        }
-        if (options.bcc) {
-            mailData.bcc = options.bcc;
-        }
-        if (options.template) {
-            const { html, text } = await this.renderTemplate(options.template, options.context || {});
-            mailData.html = html;
-            mailData.text = text || this.stripHtml(html);
-        }
-        else {
-            mailData.html = options.html;
-            mailData.text = options.text;
-        }
-        if (options.attachments && options.attachments.length > 0) {
-            mailData.attachments = options.attachments;
-        }
-        return mailData;
-    }
-    async renderTemplate(templateName, context) {
-        const template = this.templates.get(templateName);
-        if (!template) {
-            throw new Error(`Template not found: ${templateName}`);
-        }
-        const globalContext = {
-            ...context,
-            currentYear: new Date().getFullYear(),
-            appName: 'Entrix',
-            supportEmail: this.config.defaultReplyTo || 'support@entrix.tn',
-            websiteUrl: process.env.FRONTEND_URL || 'https://entrix.tn',
-        };
-        const html = template(globalContext);
-        const textTemplate = this.templates.get(`${templateName}_text`);
-        const text = textTemplate ? textTemplate(globalContext) : undefined;
-        return { html, text };
-    }
-    stripHtml(html) {
-        return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-    }
-    updateMetrics(success, sendTime, template) {
-        if (success) {
-            this.metrics.emailsSent++;
-        }
-        else {
-            this.metrics.emailsFailed++;
-        }
-        this.metrics.totalSendTime += sendTime;
-        this.metrics.avgSendTime = this.metrics.totalSendTime / (this.metrics.emailsSent + this.metrics.emailsFailed);
-        if (template) {
-            const currentUsage = this.metrics.templateUsage.get(template) || 0;
-            this.metrics.templateUsage.set(template, currentUsage + 1);
+        if (this.isEnabled) {
+            this.setupTransporters();
         }
     }
-    async sendWelcomeEmail(email, firstName, verificationToken) {
-        const context = {
-            firstName,
-            emailVerificationToken: verificationToken,
-            verificationUrl: verificationToken
-                ? `${process.env.FRONTEND_URL}/${process.env.API_PREFIX}/auth/verify-email?token=${verificationToken}`
-                : undefined,
-            appName: 'Entrix',
-            supportEmail: process.env.EMAIL_SUPPORT || 'support@entrix.tn',
-            currentYear: new Date().getFullYear(),
-            facebookUrl: process.env.FACEBOOK_URL || 'https://facebook.com/entrix',
-            instagramUrl: process.env.INSTAGRAM_URL || 'https://instagram.com/entrix',
-            twitterUrl: process.env.TWITTER_URL || 'https://twitter.com/entrix',
-            linkedinUrl: process.env.LINKEDIN_URL || 'https://linkedin.com/company/entrix',
-            unsubscribeUrl: `${process.env.FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(email)}`,
-            websiteUrl: process.env.FRONTEND_URL || 'https://entrix.tn',
-        };
-        return this.sendMail({
-            to: email,
-            subject: 'Bienvenue sur Entrix ! 🎉',
-            template: 'welcome',
-            context,
-        });
-    }
-    async sendVerificationEmail(email, token) {
-        return this.sendMail({
-            to: email,
-            subject: 'Vérifiez votre adresse email',
-            template: email_types_1.EmailTemplates.VERIFICATION,
-            context: {
-                token,
-                verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${token}`,
-                expiresIn: '24 heures',
-            },
-        });
-    }
-    async sendPasswordResetEmail(email, token) {
-        return this.sendMail({
-            to: email,
-            subject: 'Réinitialisation de votre mot de passe',
-            template: email_types_1.EmailTemplates.PASSWORD_RESET,
-            context: {
-                token,
-                resetUrl: `${process.env.FRONTEND_URL}/reset-password?token=${token}`,
-                expiresIn: '1 heure',
-            },
-        });
-    }
-    async sendTicketPurchaseEmail(email, ticketData, eventData, orderData) {
-        return this.sendMail({
-            to: email,
-            subject: `Votre ticket pour ${eventData.name}`,
-            template: email_types_1.EmailTemplates.TICKET_PURCHASE,
-            context: {
-                ticket: ticketData,
-                event: eventData,
-                order: orderData,
-                qrCodeUrl: `${process.env.FRONTEND_URL}/ticket/${ticketData.id}/qr`,
-            },
-            attachments: [
-                {
-                    filename: `ticket-${orderData.orderNumber}.pdf`,
-                    path: `/tmp/tickets/${ticketData.id}.pdf`,
-                    contentType: 'application/pdf',
+    setupTransporters() {
+        try {
+            this.primaryTransporter = nodemailer.createTransporter({
+                host: this.config.get('SMTP_HOST'),
+                port: this.config.get('SMTP_PORT', 587),
+                secure: this.config.get('SMTP_SECURE', false),
+                auth: {
+                    user: this.config.get('SMTP_USER'),
+                    pass: this.config.get('SMTP_PASSWORD'),
                 },
-            ],
-        });
+                pool: true,
+                maxConnections: 5,
+                maxMessages: 100,
+                rateDelta: 1000,
+                rateLimit: 5,
+                connectionTimeout: 10000,
+                greetingTimeout: 5000,
+                socketTimeout: 10000,
+            });
+            const fallbackHost = this.config.get('SMTP_FALLBACK_HOST');
+            if (fallbackHost) {
+                this.fallbackTransporter = nodemailer.createTransporter({
+                    host: fallbackHost,
+                    port: this.config.get('SMTP_FALLBACK_PORT', 587),
+                    secure: this.config.get('SMTP_FALLBACK_SECURE', false),
+                    auth: {
+                        user: this.config.get('SMTP_FALLBACK_USER'),
+                        pass: this.config.get('SMTP_FALLBACK_PASSWORD'),
+                    },
+                    pool: true,
+                    maxConnections: 3,
+                    maxMessages: 50,
+                });
+            }
+            this.logger.info('Email transporters configured successfully');
+        }
+        catch (error) {
+            this.logger.error('Failed to setup email transporters', error.stack);
+            this.isEnabled = false;
+        }
     }
-    async sendEventReminderEmail(email, eventData, reminderType) {
-        const reminderMessages = {
-            '24h': 'Votre événement a lieu demain',
-            '1h': 'Votre événement commence dans 1 heure',
-            '30min': 'Votre événement commence dans 30 minutes',
+    async sendEmail(options, blocking = false) {
+        if (!blocking) {
+            setImmediate(() => this.processSendEmail(options));
+            return { success: true, provider: 'queued' };
+        }
+        return this.processSendEmail(options);
+    }
+    async processSendEmail(options) {
+        if (!this.isEnabled) {
+            this.logger.warn('Email service disabled, skipping email send');
+            this.metrics.failed++;
+            return { success: false, error: 'Email service disabled' };
+        }
+        const operationId = this.logger.startOperation('sendEmail', {
+            to: this.maskEmail(Array.isArray(options.to) ? options.to[0] : options.to),
+            subject: options.subject,
+            template: options.template
+        });
+        const startTime = Date.now();
+        const maxRetries = options.retryAttempts || 3;
+        let lastError = '';
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const canSend = await this.checkRateLimit(options.to);
+                if (!canSend) {
+                    throw new Error('Rate limit exceeded for recipient');
+                }
+                const result = await this.attemptSend(options, attempt);
+                if (result.success) {
+                    this.metrics.sent++;
+                    this.metrics.averageDeliveryTime = (this.metrics.averageDeliveryTime + (Date.now() - startTime)) / 2;
+                    this.metrics.lastSent = new Date();
+                    this.updateSuccessRate();
+                    this.logger.endOperation('sendEmail', operationId, true, undefined, {
+                        attempt,
+                        provider: result.provider,
+                        messageId: result.messageId,
+                        deliveryTime: Date.now() - startTime
+                    });
+                    return result;
+                }
+                lastError = result.error || 'Unknown error';
+                if (attempt < maxRetries) {
+                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+                    this.logger.warn(`Email send failed, retrying in ${delay}ms`, JSON.stringify({
+                        attempt,
+                        error: lastError,
+                        nextAttemptIn: delay
+                    }));
+                    await this.sleep(delay);
+                }
+            }
+            catch (error) {
+                lastError = error.message || 'Unknown error';
+                this.logger.warn(`Email send attempt ${attempt} failed`, JSON.stringify({
+                    attempt,
+                    error: lastError
+                }));
+            }
+        }
+        this.metrics.failed++;
+        this.metrics.errors[lastError] = (this.metrics.errors[lastError] || 0) + 1;
+        this.updateSuccessRate();
+        this.logger.endOperation('sendEmail', operationId, false, undefined, {
+            maxRetries,
+            lastError,
+            totalTime: Date.now() - startTime
+        });
+        if (this.isTemporaryError(lastError)) {
+            await this.queueForRetry(options);
+        }
+        return {
+            success: false,
+            error: lastError,
+            retryCount: maxRetries
         };
-        return this.sendMail({
-            to: email,
-            subject: `Rappel: ${eventData.name}`,
-            template: email_types_1.EmailTemplates.EVENT_REMINDER,
-            context: {
-                event: eventData,
-                reminderType,
-                reminderMessage: reminderMessages[reminderType],
-                eventUrl: `${process.env.FRONTEND_URL}/event/${eventData.id}`,
-            },
-        });
     }
-    async sendPaymentReceiptEmail(email, paymentData, orderData) {
-        return this.sendMail({
-            to: email,
-            subject: `Reçu de paiement - Commande ${orderData.orderNumber}`,
-            template: email_types_1.EmailTemplates.PAYMENT_RECEIPT,
+    async sendWelcomeEmail(userEmail, userFirstName, verificationUrl) {
+        return this.sendEmail({
+            to: userEmail,
+            subject: 'Bienvenue au Club Sportif Sfaxien ! 🏆',
+            template: 'welcome',
             context: {
-                payment: paymentData,
-                order: orderData,
-                invoiceUrl: `${process.env.FRONTEND_URL}/invoice/${orderData.id}`,
+                firstName: userFirstName,
+                verificationUrl
             },
-        });
+            priority: 'normal',
+            retryAttempts: 2
+        }, false);
     }
-    async sendOrganizerNotificationEmail(email, notificationType, data) {
-        return this.sendMail({
-            to: email,
-            subject: `Notification Organisateur - ${notificationType}`,
-            template: 'organizer_notification',
+    async sendVerificationEmail(userEmail, verificationToken) {
+        const verificationUrl = `${this.config.get('FRONTEND_URL')}/verify-email?token=${verificationToken}`;
+        return this.sendEmail({
+            to: userEmail,
+            subject: 'Entrix - Vérifiez votre adresse email',
+            template: 'email-verification',
             context: {
-                notificationType,
-                data,
-                dashboardUrl: `${process.env.FRONTEND_URL}/dashboard`,
+                verificationUrl,
+                verificationToken
             },
-        });
-    }
-    async sendSalesReportEmail(email, reportData, reportFile) {
-        const attachments = reportFile ? [
-            {
-                filename: 'rapport-ventes.pdf',
-                path: reportFile,
-                contentType: 'application/pdf',
-            },
-        ] : [];
-        return this.sendMail({
-            to: email,
-            subject: `Rapport de ventes - ${reportData.period}`,
-            template: email_types_1.EmailTemplates.SALES_REPORT,
-            context: {
-                report: reportData,
-                generatedAt: new Date().toLocaleString('fr-FR'),
-            },
-            attachments,
-        });
+            priority: 'high',
+            retryAttempts: 3
+        }, false);
     }
     async testConnection() {
+        if (!this.isEnabled) {
+            return false;
+        }
         try {
-            await this.transporter.verify();
+            await this.primaryTransporter.verify();
             return true;
         }
         catch (error) {
-            this.logger.error('❌ Email connection test failed:', error);
+            this.logger.error('Email connection test failed', error.stack);
             return false;
         }
     }
-    async previewTemplate(templateName, context) {
-        const { html } = await this.renderTemplate(templateName, context);
-        return html;
-    }
-    getAvailableTemplates() {
-        return Array.from(this.templates.keys());
-    }
     getMetrics() {
-        const totalEmails = this.metrics.emailsSent + this.metrics.emailsFailed;
+        return { ...this.metrics };
+    }
+    updateSuccessRate() {
+        const total = this.metrics.sent + this.metrics.failed;
+        this.metrics.successRate = total > 0 ? (this.metrics.sent / total) * 100 : 0;
+    }
+    async attemptSend(options, attempt) {
+        const transporters = [
+            { transporter: this.primaryTransporter, name: 'primary' },
+            ...(this.fallbackTransporter ? [{ transporter: this.fallbackTransporter, name: 'fallback' }] : [])
+        ];
+        for (const { transporter, name } of transporters) {
+            try {
+                const mailOptions = await this.buildMailOptions(options);
+                const result = await transporter.sendMail(mailOptions);
+                return {
+                    success: true,
+                    messageId: result.messageId,
+                    provider: name
+                };
+            }
+            catch (error) {
+                this.logger.warn(`${name} transporter failed`, JSON.stringify({
+                    error: error.message,
+                    attempt
+                }));
+                if (name === 'fallback' || !this.fallbackTransporter) {
+                    throw error;
+                }
+            }
+        }
+        throw new Error('All transporters failed');
+    }
+    async buildMailOptions(options) {
+        const fromEmail = this.config.get('EMAIL_FROM');
+        const fromName = this.config.get('EMAIL_FROM_NAME', 'Club Sportif Sfaxien');
+        let htmlContent = options.html;
+        let textContent = options.text;
+        if (options.template) {
+            const templateResult = await this.renderTemplate(options.template, options.context || {});
+            htmlContent = templateResult.html;
+            textContent = templateResult.text;
+        }
         return {
-            ...this.metrics,
-            avgSendTime: parseFloat(this.metrics.avgSendTime.toFixed(2)),
-            successRate: totalEmails > 0
-                ? parseFloat(((this.metrics.emailsSent / totalEmails) * 100).toFixed(2))
-                : 0,
-            failureRate: totalEmails > 0
-                ? parseFloat(((this.metrics.emailsFailed / totalEmails) * 100).toFixed(2))
-                : 0,
-            templateUsage: Object.fromEntries(this.metrics.templateUsage),
+            from: `"${fromName}" <${fromEmail}>`,
+            to: options.to,
+            subject: options.subject,
+            html: htmlContent,
+            text: textContent,
+            attachments: options.attachments,
+            priority: options.priority || 'normal',
+            headers: {
+                'X-Mailer': 'Entrix-V3',
+                'X-Priority': options.priority === 'high' ? '1' : '3'
+            }
         };
     }
-    resetMetrics() {
-        this.metrics = {
-            emailsSent: 0,
-            emailsFailed: 0,
-            totalSendTime: 0,
-            avgSendTime: 0,
-            templateUsage: new Map(),
+    async renderTemplate(templateName, context) {
+        if (templateName === 'email-verification') {
+            const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Vérifiez votre email - Club Sportif Sfaxien</title>
+          <style>
+            .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+            .header { background: #000000; color: white; padding: 20px; text-align: center; }
+            .content { padding: 30px; background: #f9f9f9; }
+            .footer { background: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
+            .button { background: #000000; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🏆 Club Sportif Sfaxien</h1>
+              <h2>Vérification de votre email</h2>
+            </div>
+            
+            <div class="content">
+              <p>Merci de vous être inscrit sur la plateforme du Club Sportif Sfaxien !</p>
+              
+              <p>Pour finaliser votre inscription et activer votre compte, veuillez cliquer sur le lien ci-dessous :</p>
+              
+              <p style="text-align: center; margin: 30px 0;">
+                <a href="${context.verificationUrl}" class="button">Vérifier mon email</a>
+              </p>
+              
+              <p>Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :</p>
+              <p style="word-break: break-all; background: #f0f0f0; padding: 10px; border-radius: 4px;">
+                ${context.verificationUrl}
+              </p>
+              
+              <p><strong>Ce lien expire dans 24 heures.</strong></p>
+              
+              <p>Si vous n'avez pas créé de compte, ignorez cet email.</p>
+              
+              <p><strong>Allez CSS ! 🖤🤍</strong></p>
+            </div>
+            
+            <div class="footer">
+              <p>© 2025 Club Sportif Sfaxien. Tous droits réservés.</p>
+              <p>Sfax, Tunisie | www.css.tn</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+            const text = `
+        Vérification de votre email - Club Sportif Sfaxien
+        
+        Merci de vous être inscrit !
+        
+        Pour activer votre compte, cliquez sur ce lien : ${context.verificationUrl}
+        
+        Ce lien expire dans 24 heures.
+        
+        Si vous n'avez pas créé de compte, ignorez cet email.
+        
+        Allez CSS !
+        
+        Club Sportif Sfaxien
+        www.css.tn
+      `;
+            return { html, text };
+        }
+        if (templateName === 'mfa-code') {
+            const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Code de vérification - Entrix</title>
+          <style>
+            .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+            .header { background: #1a365d; color: white; padding: 20px; text-align: center; }
+            .content { padding: 30px; background: #f7fafc; }
+            .code { 
+              font-size: 32px; 
+              font-weight: bold; 
+              color: #1a365d; 
+              text-align: center; 
+              background: white; 
+              padding: 20px; 
+              border-radius: 8px; 
+              letter-spacing: 8px;
+              margin: 20px 0;
+            }
+            .warning { 
+              background: #fed7d7; 
+              color: #9b2c2c; 
+              padding: 15px; 
+              border-radius: 4px; 
+              margin: 20px 0; 
+            }
+            .footer { color: #718096; font-size: 12px; text-align: center; padding: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Entrix</h1>
+              <p>Code de vérification</p>
+            </div>
+            
+            <div class="content">
+              ${context.firstName ? `<p>Bonjour ${context.firstName},</p>` : '<p>Bonjour,</p>'}
+              
+              <p>Votre code de vérification pour accéder à votre compte Entrix :</p>
+              
+              <div class="code">${context.code}</div>
+              
+              <p><strong>Ce code expire dans ${context.expirationMinutes} minutes.</strong></p>
+              
+              <div class="warning">
+                <strong>⚠️ Important :</strong><br>
+                • Ne partagez jamais ce code avec qui que ce soit<br>
+                • Entrix ne vous demandera jamais ce code par téléphone<br>
+                • Si vous n'avez pas demandé ce code, ignorez cet email
+              </div>
+              
+              <p>Si vous avez des questions, contactez notre support à <a href="mailto:support@entrix.tn">support@entrix.tn</a></p>
+            </div>
+            
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} Entrix. Tous droits réservés.</p>
+              <p>Cet email a été envoyé depuis une adresse non surveillée. Ne répondez pas à cet email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+            const text = `
+        Entrix - Code de vérification
+        
+        ${context.firstName ? `Bonjour ${context.firstName},` : 'Bonjour,'}
+        
+        Votre code de vérification : ${context.code}
+        
+        Ce code expire dans ${context.expirationMinutes} minutes.
+        
+        Ne partagez jamais ce code avec qui que ce soit.
+        
+        Support : support@entrix.tn
+      `;
+            return { html, text };
+        }
+        if (templateName === 'welcome') {
+            const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Bienvenue au Club Sportif Sfaxien</title>
+          <style>
+            .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+            .header { background: #000000; color: white; padding: 20px; text-align: center; }
+            .content { padding: 30px; background: #f9f9f9; }
+            .footer { background: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
+            .button { background: #000000; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🏆 Club Sportif Sfaxien</h1>
+              <h2>Bienvenue ${context.firstName || 'Supporter'} !</h2>
+            </div>
+            
+            <div class="content">
+              <p>Félicitations ! Votre compte a été créé avec succès.</p>
+              
+              <p>Vous faites maintenant partie de la grande famille du Club Sportif Sfaxien, le club le plus titré de Tunisie.</p>
+              
+              ${context.verificationUrl ? `
+                <p>Pour finaliser votre inscription, veuillez vérifier votre adresse email :</p>
+                <p style="text-align: center;">
+                  <a href="${context.verificationUrl}" class="button">Vérifier mon email</a>
+                </p>
+              ` : ''}
+              
+              <p>Vous pouvez maintenant :</p>
+              <ul>
+                <li>Suivre l'actualité du club</li>
+                <li>Acheter vos billets en ligne</li>
+                <li>Accéder aux contenus exclusifs</li>
+                <li>Participer à la communauté des supporters</li>
+              </ul>
+              
+              <p>Si vous avez des questions, n'hésitez pas à nous contacter à <a href="mailto:support@css.tn">support@css.tn</a></p>
+              
+              <p><strong>Allez CSS ! 🖤🤍</strong></p>
+            </div>
+            
+            <div class="footer">
+              <p>© 2025 Club Sportif Sfaxien. Tous droits réservés.</p>
+              <p>Sfax, Tunisie | www.css.tn</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+            const text = `
+        Bienvenue au Club Sportif Sfaxien !
+        
+        Félicitations ${context.firstName || 'Supporter'} !
+        
+        Votre compte a été créé avec succès. Vous faites maintenant partie de la grande famille du CSS.
+        
+        ${context.verificationUrl ? `Vérifiez votre email : ${context.verificationUrl}` : ''}
+        
+        Allez CSS !
+        
+        Club Sportif Sfaxien
+        support@css.tn
+      `;
+            return { html, text };
+        }
+        return {
+            html: `<h1>Email depuis Entrix</h1><p>${context.message || 'Aucun contenu'}</p>`,
+            text: context.message || 'Aucun contenu'
         };
     }
-    getServiceInfo() {
-        return {
-            provider: this.config.provider,
-            templatesLoaded: this.templates.size,
-            connectionStatus: this.transporter ? 'connected' : 'disconnected',
-            metrics: this.getMetrics(),
-        };
+    async checkRateLimit(recipient) {
+        try {
+            const email = Array.isArray(recipient) ? recipient[0] : recipient;
+            const key = `email_rate_limit:${email}`;
+            const count = await this.redis.getCache(key) || 0;
+            const maxEmails = this.config.get('EMAIL_RATE_LIMIT_MAX', 10);
+            const windowMinutes = this.config.get('EMAIL_RATE_LIMIT_WINDOW', 60);
+            if (count >= maxEmails) {
+                return false;
+            }
+            await this.redis.setCache(key, count + 1, windowMinutes * 60);
+            return true;
+        }
+        catch (error) {
+            this.logger.error('Rate limit check failed', error.stack);
+            return true;
+        }
+    }
+    isTemporaryError(error) {
+        const temporaryErrorCodes = [
+            '421', '450', '451', '452', '454',
+            'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND',
+            'rate limit', 'quota exceeded', 'temporarily'
+        ];
+        return temporaryErrorCodes.some(code => error.toLowerCase().includes(code.toLowerCase()));
+    }
+    async queueForRetry(options) {
+        try {
+            const retryJob = {
+                ...options,
+                retryAttempts: 1,
+                scheduledFor: Date.now() + (30 * 60 * 1000)
+            };
+            await this.redis.setCache(`email_retry:${Date.now()}`, retryJob, 24 * 60 * 60);
+            this.metrics.queued++;
+            this.logger.info('Email queued for retry', JSON.stringify({
+                to: this.maskEmail(Array.isArray(options.to) ? options.to[0] : options.to),
+                retryIn: '30 minutes'
+            }));
+        }
+        catch (error) {
+            this.logger.error('Failed to queue email for retry', error.stack);
+        }
+    }
+    async processRetryQueue() {
+        try {
+            const retryKeys = await this.redis.keys('email_retry:*');
+            const now = Date.now();
+            for (const key of retryKeys) {
+                const retryJob = await this.redis.getCache(key);
+                if (retryJob && retryJob.scheduledFor <= now) {
+                    this.logger.info('Processing retry email', JSON.stringify({ key }));
+                    await this.processSendEmail(retryJob);
+                    await this.redis.delCache(key);
+                    this.metrics.queued = Math.max(0, this.metrics.queued - 1);
+                }
+            }
+        }
+        catch (error) {
+            this.logger.error('Failed to process retry queue', error.stack);
+        }
+    }
+    async healthCheck() {
+        if (!this.isEnabled) {
+            return { status: 'disabled', details: { reason: 'Email service disabled' } };
+        }
+        try {
+            await this.primaryTransporter.verify();
+            return {
+                status: 'healthy',
+                details: {
+                    primary: 'connected',
+                    fallback: this.fallbackTransporter ? 'available' : 'not_configured',
+                    metrics: this.metrics
+                }
+            };
+        }
+        catch (error) {
+            return {
+                status: 'unhealthy',
+                details: {
+                    error: error.message,
+                    primary: 'failed',
+                    metrics: this.metrics
+                }
+            };
+        }
+    }
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    maskEmail(email) {
+        if (!email.includes('@'))
+            return email;
+        const [local, domain] = email.split('@');
+        const maskedLocal = local.length > 2
+            ? local[0] + '***' + local.slice(-1)
+            : local;
+        return `${maskedLocal}@${domain}`;
     }
 };
 exports.EmailService = EmailService;
-exports.EmailService = EmailService = EmailService_1 = __decorate([
+exports.EmailService = EmailService = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, common_1.Inject)(config_1.ConfigService)),
     __metadata("design:paramtypes", [config_1.ConfigService,
+        redis_service_1.RedisService,
         logger_service_1.LoggerService])
 ], EmailService);
 //# sourceMappingURL=email.service.js.map

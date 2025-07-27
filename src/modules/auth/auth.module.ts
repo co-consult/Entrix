@@ -35,6 +35,10 @@ import { SecurityService } from './services/security.service';
 import { DeviceService } from './services/device.service';
 import { EmailVerificationService } from './services/email-verification.service';
 
+import { TrustedDevicesService } from './services/trusted-devices.service';
+import { RiskAssessmentService } from './services/risk-assessment.service';
+
+
 // Strategies
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
@@ -109,6 +113,8 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     SecurityService,
     DeviceService,
     EmailVerificationService,
+    TrustedDevicesService,  // ← Requis par MfaRequiredGuard
+    RiskAssessmentService,  // ← Requis par MfaRequiredGuard
 
     // ========================
     // PASSPORT STRATEGIES
@@ -199,6 +205,9 @@ import { AccountStatusGuard } from './guards/account-status.guard';
     PasswordService,        // ✅ NOUVEAU : Export du service centralisé
     SecurityService,
     EmailVerificationService,
+
+    TrustedDevicesService,  // Pour usage externe
+    RiskAssessmentService,  // Pour usage externe
     
     // Guards pour utilisation dans autres modules
     JwtAuthGuard,

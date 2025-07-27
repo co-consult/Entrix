@@ -32,6 +32,8 @@ const mfa_service_1 = require("./services/mfa.service");
 const security_service_1 = require("./services/security.service");
 const device_service_1 = require("./services/device.service");
 const email_verification_service_1 = require("./services/email-verification.service");
+const trusted_devices_service_1 = require("./services/trusted-devices.service");
+const risk_assessment_service_1 = require("./services/risk-assessment.service");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const jwt_refresh_strategy_1 = require("./strategies/jwt-refresh.strategy");
 const local_strategy_1 = require("./strategies/local.strategy");
@@ -96,6 +98,8 @@ exports.AuthModule = AuthModule = AuthModule_1 = __decorate([
             security_service_1.SecurityService,
             device_service_1.DeviceService,
             email_verification_service_1.EmailVerificationService,
+            trusted_devices_service_1.TrustedDevicesService,
+            risk_assessment_service_1.RiskAssessmentService,
             jwt_strategy_1.JwtStrategy,
             jwt_refresh_strategy_1.JwtRefreshStrategy,
             local_strategy_1.LocalStrategy,
@@ -152,6 +156,8 @@ exports.AuthModule = AuthModule = AuthModule_1 = __decorate([
             password_service_1.PasswordService,
             security_service_1.SecurityService,
             email_verification_service_1.EmailVerificationService,
+            trusted_devices_service_1.TrustedDevicesService,
+            risk_assessment_service_1.RiskAssessmentService,
             jwt_auth_guard_1.JwtAuthGuard,
             jwt_refresh_guard_1.JwtRefreshGuard,
             mfa_required_guard_1.MfaRequiredGuard,

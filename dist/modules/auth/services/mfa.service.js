@@ -34,45 +34,42 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MfaService = void 0;
 const common_1 = require("@nestjs/common");
-const logger_service_1 = require("../../../shared/logger/logger.service");
-const prisma_service_1 = require("../../../shared/prisma/prisma.service");
-const redis_service_1 = require("../../../shared/redis/redis.service");
-const email_service_1 = require("../../../shared/email/email.service");
-const auth_constants_1 = require("../constants/auth.constants");
-const mfa_exceptions_1 = require("../exceptions/mfa.exceptions");
-const auth_exceptions_1 = require("../exceptions/auth.exceptions");
-const too_many_requests_exception_1 = require("../exceptions/too-many-requests.exception");
-const crypto = __importStar(require("crypto"));
+const config_1 = require("@nestjs/config");
 const speakeasy = __importStar(require("speakeasy"));
 const qrcode = __importStar(require("qrcode"));
+const crypto = __importStar(require("crypto"));
+const prisma_service_1 = require("../../../shared/prisma/prisma.service");
+const redis_service_1 = require("../../../shared/redis/redis.service");
+const logger_service_1 = require("../../../shared/logger/logger.service");
+const email_service_1 = require("../../../shared/email/email.service");
+const mfa_constants_1 = require("../constants/mfa.constants");
+const client_1 = require("@prisma/client");
+const mfa_exceptions_1 = require("../exceptions/mfa.exceptions");
+const auth_exceptions_1 = require("../exceptions/auth.exceptions");
 let MfaService = class MfaService {
     prisma;
     redis;
-    email;
+    config;
+    emailService;
     logger;
-    MFA_CODE_LENGTH = 6;
-    OTP_EXPIRY = 300;
-    CHALLENGE_EXPIRY = 300;
-    MAX_ATTEMPTS = 5;
-    RATE_LIMIT_WINDOW = 300;
-    constructor(prisma, redis, email, loggerService) {
+    MAX_ATTEMPTS = 3;
+    RATE_LIMIT_WINDOW = 5 * 60;
+    constructor(prisma, redis, config, emailService, loggerService) {
         this.prisma = prisma;
         this.redis = redis;
-        this.email = email;
+        this.config = config;
+        this.emailService = emailService;
         this.logger = loggerService.createChildLogger('MfaService');
     }
     async setupMfa(userId, provider) {
         const operationId = this.logger.startOperation('setupMfa', { userId, provider });
         try {
-            this.logger.info('Setting up MFA for user', JSON.stringify({
-                userId,
-                provider
-            }));
             const user = await this.prisma.users.findUnique({
                 where: { id: userId },
                 select: {
                     id: true,
                     email: true,
+                    phone: true,
                     first_name: true,
                     last_name: true,
                     is_active: true,
@@ -88,31 +85,43 @@ let MfaService = class MfaService {
             if (!user.email_verified) {
                 throw new common_1.BadRequestException('Email non vérifié - vérification requise avant MFA');
             }
+            const existingConfig = await this.prisma.user_mfa_settings.findUnique({
+                where: {
+                    user_id_method: {
+                        user_id: userId,
+                        method: this.mapProviderToMethod(provider)
+                    }
+                }
+            });
+            if (existingConfig?.is_enabled) {
+                throw new mfa_exceptions_1.MfaAlreadyConfiguredException(provider);
+            }
             let mfaSetup;
             switch (provider) {
                 case 'TOTP_APP':
                     mfaSetup = await this.setupTotpApp(userId, user.email);
                     break;
                 case 'SMS_OTP':
-                    mfaSetup = await this.setupSmsOtp(userId);
+                    if (!user.phone) {
+                        throw new common_1.BadRequestException('Numéro de téléphone requis pour SMS OTP');
+                    }
+                    mfaSetup = await this.setupSmsOtp(userId, user.phone);
                     break;
                 case 'EMAIL_OTP':
-                    mfaSetup = await this.setupEmailOtp(userId);
+                    mfaSetup = await this.setupEmailOtp(userId, user.email);
+                    break;
+                case 'BACKUP_CODE':
+                    mfaSetup = await this.setupBackupCodes(userId);
                     break;
                 default:
                     throw new common_1.BadRequestException(`Provider MFA non supporté: ${provider}`);
             }
-            const backupCodes = this.generateBackupCodes();
-            await this.storeBackupCodes(userId, backupCodes);
-            this.logger.logSecurityEvent('MFA_SETUP_INITIATED', userId, undefined, undefined, {
+            await this.logSecurityEvent('MFA_SETUP_INITIATED', userId, {
                 provider,
                 setupCompleted: false
             });
             this.logger.endOperation('setupMfa', operationId, true);
-            return {
-                ...mfaSetup,
-                backupCodes
-            };
+            return mfaSetup;
         }
         catch (error) {
             this.logger.endOperation('setupMfa', operationId, false);
@@ -136,18 +145,48 @@ let MfaService = class MfaService {
             }
             const { userId } = challengeData;
             await this.checkRateLimit(userId, verification.method);
-            const isCodeValid = await this.verifyMfaCode(userId, verification.method, verification.code);
-            if (!isCodeValid) {
-                await this.handleFailedMfaAttempt(userId, verification.method);
-                const currentAttempts = await this.redis.getCache(`mfa_attempts:${userId}:${verification.method}`) || 0;
-                const attemptsRemaining = Math.max(0, this.MAX_ATTEMPTS - currentAttempts);
-                throw new auth_exceptions_1.InvalidMfaCodeException(attemptsRemaining);
+            const mfaConfig = await this.prisma.user_mfa_settings.findUnique({
+                where: {
+                    user_id_method: {
+                        user_id: userId,
+                        method: this.mapProviderToMethod(verification.method)
+                    }
+                }
+            });
+            if (!mfaConfig?.is_enabled) {
+                throw new mfa_exceptions_1.MfaNotConfiguredException(verification.method);
             }
-            await this.markChallengeAsUsed(verification.challengeToken);
+            let isValid = false;
+            switch (verification.method) {
+                case 'TOTP_APP':
+                    isValid = await this.verifyTotpCode(userId, verification.code);
+                    break;
+                case 'SMS_OTP':
+                    isValid = await this.verifySmsCode(userId, verification.code);
+                    break;
+                case 'EMAIL_OTP':
+                    isValid = await this.verifyEmailCode(userId, verification.code);
+                    break;
+                case 'BACKUP_CODE':
+                    isValid = await this.verifyBackupCode(userId, verification.code);
+                    break;
+                default:
+                    throw new common_1.BadRequestException(`Méthode MFA non supportée: ${verification.method}`);
+            }
+            if (!isValid) {
+                await this.incrementFailedAttempts(userId, verification.method);
+                await this.logSecurityEvent('MFA_VERIFICATION_FAILED', userId, {
+                    method: verification.method,
+                    reason: 'invalid_code'
+                });
+                throw new auth_exceptions_1.InvalidMfaCodeException();
+            }
+            await this.updateLastUsed(userId, verification.method);
             if (verification.trustDevice && challengeData.deviceFingerprint) {
                 await this.trustDevice(userId, challengeData.deviceFingerprint);
             }
-            this.logger.logSecurityEvent('MFA_VERIFICATION_SUCCESS', userId, undefined, undefined, {
+            await this.redis.delCache(`mfa_challenge:${verification.challengeToken}`);
+            await this.logSecurityEvent('MFA_VERIFICATION_SUCCESS', userId, {
                 method: verification.method,
                 deviceTrusted: !!verification.trustDevice
             });
@@ -166,126 +205,120 @@ let MfaService = class MfaService {
     async disableMfa(userId, provider) {
         const operationId = this.logger.startOperation('disableMfa', { userId, provider });
         try {
+            const method = this.mapProviderToMethod(provider);
+            const updated = await this.prisma.user_mfa_settings.updateMany({
+                where: {
+                    user_id: userId,
+                    method: method,
+                    is_enabled: true
+                },
+                data: {
+                    is_enabled: false,
+                    disabled_at: new Date(),
+                    updated_at: new Date()
+                }
+            });
+            if (updated.count === 0) {
+                throw new mfa_exceptions_1.MfaNotConfiguredException(provider);
+            }
             switch (provider) {
                 case 'TOTP_APP':
                     await this.redis.delCache(`mfa_totp_secret:${userId}`);
                     break;
-                case 'SMS_OTP':
-                    await this.redis.delCache(`mfa_sms_enabled:${userId}`);
-                    break;
-                case 'EMAIL_OTP':
-                    await this.redis.delCache(`mfa_email_enabled:${userId}`);
+                case 'BACKUP_CODE':
+                    await this.redis.delCache(`mfa_backup_codes:${userId}`);
                     break;
             }
-            await this.redis.delCache(`mfa_backup_codes:${userId}`);
-            await this.cleanupUserChallenges(userId);
-            this.logger.logSecurityEvent('MFA_DISABLED', userId, undefined, undefined, {
-                provider,
-                disabledAt: new Date().toISOString()
+            await this.prisma.mfa_tokens.updateMany({
+                where: {
+                    user_id: userId,
+                    method: method,
+                    is_used: false
+                },
+                data: {
+                    is_used: true,
+                    used_at: new Date()
+                }
             });
+            await this.logSecurityEvent('MFA_DISABLED', userId, { provider });
             this.logger.endOperation('disableMfa', operationId, true);
             return true;
         }
         catch (error) {
             this.logger.endOperation('disableMfa', operationId, false);
-            this.logger.error('MFA disable failed', error.stack, 'MfaService.disableMfa', JSON.stringify({
-                userId,
-                provider,
-                error: error.message
-            }));
             throw error;
         }
     }
     async getAvailableProviders(userId) {
-        const operationId = this.logger.startOperation('getAvailableProviders', { userId });
         try {
             const user = await this.prisma.users.findUnique({
                 where: { id: userId },
-                select: {
-                    phone: true,
-                    email: true,
-                    email_verified: true,
-                    phone_verified: true
-                }
+                select: { phone: true, email_verified: true }
             });
             if (!user) {
-                throw new common_1.BadRequestException('Utilisateur introuvable');
+                return [];
             }
             const providers = [];
-            providers.push('TOTP_APP');
             if (user.email_verified) {
                 providers.push('EMAIL_OTP');
             }
-            if (user.phone && user.phone_verified) {
+            providers.push('TOTP_APP');
+            if (user.phone) {
                 providers.push('SMS_OTP');
             }
-            this.logger.endOperation('getAvailableProviders', operationId, true);
+            providers.push('BACKUP_CODE');
             return providers;
         }
         catch (error) {
-            this.logger.endOperation('getAvailableProviders', operationId, false);
-            this.logger.error('Get available providers failed', error.stack, 'MfaService.getAvailableProviders');
-            throw error;
+            this.logger.error('Failed to get available providers', error.stack);
+            return ['EMAIL_OTP'];
         }
     }
     async requiresMfa(userId, riskScore) {
-        const operationId = this.logger.startOperation('requiresMfa', { userId, riskScore });
         try {
-            const mfaEnabled = process.env.MFA_ENABLED !== 'false';
-            const forceDisabled = process.env.MFA_FORCE_DISABLED === 'true';
-            if (!mfaEnabled || forceDisabled) {
-                this.logger.endOperation('requiresMfa', operationId, true);
-                return false;
-            }
             const hasMfaConfigured = await this.userHasMfaConfigured(userId);
             if (!hasMfaConfigured) {
-                this.logger.endOperation('requiresMfa', operationId, true);
-                return false;
+                return riskScore > 50;
             }
-            const requiresMfa = riskScore >= auth_constants_1.AUTH_CONSTANTS.RISK_LEVELS.MEDIUM.min;
-            this.logger.endOperation('requiresMfa', operationId, true);
-            return requiresMfa;
+            return riskScore > 30;
         }
         catch (error) {
-            this.logger.endOperation('requiresMfa', operationId, false);
-            this.logger.error('Requires MFA check failed', error.stack, 'MfaService.requiresMfa');
+            this.logger.error('Failed to check MFA requirement', error.stack);
             return true;
         }
     }
     async generateMfaChallenge(userId, availableMethods, deviceFingerprint) {
-        const operationId = this.logger.startOperation('generateMfaChallenge', {
-            userId,
-            methodsCount: availableMethods.length
-        });
         try {
+            const configuredMethods = await this.getConfiguredMethodsPrivate(userId);
+            const methods = availableMethods.filter(method => configuredMethods.includes(method));
+            if (methods.length === 0) {
+                throw new mfa_exceptions_1.MfaNotConfiguredException('Aucune méthode MFA configurée');
+            }
             const challengeToken = crypto.randomBytes(32).toString('hex');
+            const expiresIn = mfa_constants_1.MFA_CONSTANTS.PROVIDERS.EMAIL_OTP.validity_duration;
             const challengeData = {
                 userId,
-                methods: availableMethods,
+                methods,
                 deviceFingerprint,
-                createdAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + this.CHALLENGE_EXPIRY * 1000).toISOString()
+                createdAt: Date.now()
             };
-            await this.redis.setCache(`mfa_challenge:${challengeToken}`, challengeData, this.CHALLENGE_EXPIRY);
-            await this.sendOtpCodes(userId, availableMethods);
-            this.logger.endOperation('generateMfaChallenge', operationId, true);
+            await this.redis.setCache(`mfa_challenge:${challengeToken}`, challengeData, expiresIn);
             return {
-                methods: availableMethods,
+                methods,
                 challengeToken,
-                expiresIn: this.CHALLENGE_EXPIRY
+                expiresIn
             };
         }
         catch (error) {
-            this.logger.endOperation('generateMfaChallenge', operationId, false);
-            this.logger.error('Generate MFA challenge failed', error.stack, 'MfaService.generateMfaChallenge');
+            this.logger.error('Failed to generate MFA challenge', error.stack);
             throw error;
         }
     }
     async setupTotpApp(userId, email) {
         const secret = speakeasy.generateSecret({
             name: `Entrix (${email})`,
-            issuer: 'Entrix V3.0',
-            length: 32
+            issuer: mfa_constants_1.MFA_CONSTANTS.TOTP.ISSUER,
+            length: mfa_constants_1.MFA_CONSTANTS.TOTP.SECRET_LENGTH
         });
         await this.redis.setCache(`mfa_totp_temp:${userId}`, secret.base32, 900);
         const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url || '');
@@ -295,35 +328,230 @@ let MfaService = class MfaService {
             qrCode: qrCodeUrl
         };
     }
-    async setupSmsOtp(userId) {
-        await this.redis.setCache(`mfa_sms_enabled:${userId}`, true, 0);
+    async setupSmsOtp(userId, phone) {
+        await this.prisma.user_mfa_settings.upsert({
+            where: {
+                user_id_method: {
+                    user_id: userId,
+                    method: 'SMS'
+                }
+            },
+            update: {
+                is_enabled: true,
+                backup_phone: phone,
+                enabled_at: new Date(),
+                updated_at: new Date()
+            },
+            create: {
+                user_id: userId,
+                method: 'SMS',
+                is_enabled: true,
+                backup_phone: phone,
+                enabled_at: new Date()
+            }
+        });
         return {
             provider: 'SMS_OTP'
         };
     }
-    async setupEmailOtp(userId) {
-        await this.redis.setCache(`mfa_email_enabled:${userId}`, true, 0);
+    async setupEmailOtp(userId, email) {
+        await this.prisma.user_mfa_settings.upsert({
+            where: {
+                user_id_method: {
+                    user_id: userId,
+                    method: 'EMAIL'
+                }
+            },
+            update: {
+                is_enabled: true,
+                enabled_at: new Date(),
+                updated_at: new Date()
+            },
+            create: {
+                user_id: userId,
+                method: 'EMAIL',
+                is_enabled: true,
+                enabled_at: new Date()
+            }
+        });
         return {
             provider: 'EMAIL_OTP'
         };
     }
+    async setupBackupCodes(userId) {
+        const codes = this.generateBackupCodes();
+        await this.redis.setCache(`mfa_backup_codes:${userId}`, codes, 0);
+        await this.prisma.user_mfa_settings.upsert({
+            where: {
+                user_id_method: {
+                    user_id: userId,
+                    method: 'BACKUP_CODES'
+                }
+            },
+            update: {
+                is_enabled: true,
+                backup_codes_count: codes.length,
+                enabled_at: new Date(),
+                updated_at: new Date()
+            },
+            create: {
+                user_id: userId,
+                method: 'BACKUP_CODES',
+                is_enabled: true,
+                backup_codes_count: codes.length,
+                enabled_at: new Date()
+            }
+        });
+        return {
+            provider: 'BACKUP_CODE',
+            backupCodes: codes
+        };
+    }
+    async verifyTotpCode(userId, code) {
+        let secret = await this.redis.getCache(`mfa_totp_secret:${userId}`);
+        if (!secret) {
+            secret = await this.redis.getCache(`mfa_totp_temp:${userId}`);
+            if (!secret) {
+                return false;
+            }
+        }
+        const verified = speakeasy.totp.verify({
+            secret,
+            encoding: 'base32',
+            token: code,
+            window: mfa_constants_1.MFA_CONSTANTS.TOTP.WINDOW,
+            step: mfa_constants_1.MFA_CONSTANTS.TOTP.STEP
+        });
+        if (verified) {
+            const tempSecret = await this.redis.getCache(`mfa_totp_temp:${userId}`);
+            if (tempSecret) {
+                await this.confirmTotpSetup(userId, tempSecret);
+                await this.redis.delCache(`mfa_totp_temp:${userId}`);
+            }
+        }
+        return verified;
+    }
+    async verifySmsCode(userId, code) {
+        const storedToken = await this.prisma.mfa_tokens.findFirst({
+            where: {
+                user_id: userId,
+                method: 'SMS',
+                is_used: false,
+                expires_at: {
+                    gt: new Date()
+                }
+            },
+            orderBy: {
+                created_at: 'desc'
+            }
+        });
+        if (!storedToken) {
+            return false;
+        }
+        const codeHash = this.hashCode(code);
+        const isValid = storedToken.token_hash === codeHash;
+        if (isValid) {
+            await this.prisma.mfa_tokens.update({
+                where: { id: storedToken.id },
+                data: {
+                    is_used: true,
+                    used_at: new Date()
+                }
+            });
+        }
+        return isValid;
+    }
+    async verifyEmailCode(userId, code) {
+        const storedToken = await this.prisma.mfa_tokens.findFirst({
+            where: {
+                user_id: userId,
+                method: 'EMAIL',
+                is_used: false,
+                expires_at: {
+                    gt: new Date()
+                }
+            },
+            orderBy: {
+                created_at: 'desc'
+            }
+        });
+        if (!storedToken) {
+            return false;
+        }
+        const codeHash = this.hashCode(code);
+        const isValid = storedToken.token_hash === codeHash;
+        if (isValid) {
+            await this.prisma.mfa_tokens.update({
+                where: { id: storedToken.id },
+                data: {
+                    is_used: true,
+                    used_at: new Date()
+                }
+            });
+        }
+        return isValid;
+    }
+    async verifyBackupCode(userId, code) {
+        const storedCodes = await this.redis.getCache(`mfa_backup_codes:${userId}`);
+        if (!storedCodes || !storedCodes.includes(code.toUpperCase())) {
+            return false;
+        }
+        const remainingCodes = storedCodes.filter(c => c !== code.toUpperCase());
+        await this.redis.setCache(`mfa_backup_codes:${userId}`, remainingCodes, 0);
+        await this.prisma.user_mfa_settings.updateMany({
+            where: {
+                user_id: userId,
+                method: 'BACKUP_CODES'
+            },
+            data: {
+                backup_codes_count: remainingCodes.length
+            }
+        });
+        return true;
+    }
+    async confirmTotpSetup(userId, secret) {
+        await this.redis.setCache(`mfa_totp_secret:${userId}`, secret, 0);
+        await this.prisma.user_mfa_settings.upsert({
+            where: {
+                user_id_method: {
+                    user_id: userId,
+                    method: 'TOTP'
+                }
+            },
+            update: {
+                is_enabled: true,
+                totp_secret: secret,
+                enabled_at: new Date(),
+                updated_at: new Date()
+            },
+            create: {
+                user_id: userId,
+                method: 'TOTP',
+                is_enabled: true,
+                totp_secret: secret,
+                enabled_at: new Date()
+            }
+        });
+    }
     generateBackupCodes() {
         const codes = [];
-        for (let i = 0; i < 10; i++) {
-            const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+        for (let i = 0; i < mfa_constants_1.MFA_CONSTANTS.BACKUP_CODES.COUNT; i++) {
+            const code = crypto.randomBytes(mfa_constants_1.MFA_CONSTANTS.BACKUP_CODES.LENGTH / 2)
+                .toString('hex')
+                .toUpperCase();
             codes.push(code);
         }
         return codes;
     }
-    async storeBackupCodes(userId, codes) {
-        await this.redis.setCache(`mfa_backup_codes:${userId}`, codes, 0);
+    hashCode(code) {
+        return crypto.createHash('sha256').update(code).digest('hex');
     }
     async validateChallengeToken(challengeToken) {
         if (!challengeToken) {
             return null;
         }
         const data = await this.redis.getCache(`mfa_challenge:${challengeToken}`);
-        if (data && data.userId && data.methods) {
+        if (data?.userId && data?.methods) {
             return data;
         }
         return null;
@@ -332,264 +560,462 @@ let MfaService = class MfaService {
         const rateLimitKey = `mfa_attempts:${userId}:${method}`;
         const attempts = await this.redis.getCache(rateLimitKey) || 0;
         if (attempts >= this.MAX_ATTEMPTS) {
-            throw new too_many_requests_exception_1.TooManyRequestsException('Trop de tentatives MFA. Réessayez dans 5 minutes.');
-        }
-        await this.redis.setCache(rateLimitKey, attempts + 1, this.RATE_LIMIT_WINDOW);
-    }
-    async verifyMfaCode(userId, method, code) {
-        switch (method) {
-            case 'SMS_OTP':
-            case 'EMAIL_OTP':
-                return this.verifyOtpCode(userId, method, code);
-            case 'TOTP_APP':
-                return this.verifyTotpCode(userId, code);
-            case 'BACKUP_CODE':
-                return this.verifyBackupCode(userId, code);
-            default:
-                return false;
+            throw new common_1.BadRequestException('Trop de tentatives MFA. Réessayez dans 5 minutes.');
         }
     }
-    async verifyOtpCode(userId, method, code) {
-        try {
-            const otpKey = `mfa_otp:${userId}:${method}`;
-            const storedCode = await this.redis.getCache(otpKey);
-            if (storedCode === code) {
-                await this.redis.delCache(otpKey);
-                return true;
+    async incrementFailedAttempts(userId, method) {
+        const rateLimitKey = `mfa_attempts:${userId}:${method}`;
+        const current = await this.redis.getCache(rateLimitKey) || 0;
+        await this.redis.setCache(rateLimitKey, current + 1, this.RATE_LIMIT_WINDOW);
+    }
+    async updateLastUsed(userId, provider) {
+        await this.prisma.user_mfa_settings.updateMany({
+            where: {
+                user_id: userId,
+                method: this.mapProviderToMethod(provider)
+            },
+            data: {
+                last_used_at: new Date()
             }
-            return false;
-        }
-        catch (error) {
-            this.logger.error('OTP verification failed', error.stack, 'MfaService.verifyOtpCode');
-            return false;
-        }
+        });
     }
-    async verifyTotpCode(userId, code) {
+    async enableMfa(userId, provider) {
+        const operationId = this.logger.startOperation('enableMfa', { userId, provider });
         try {
-            const secret = await this.redis.getCache(`mfa_totp_secret:${userId}`) ||
-                await this.redis.getCache(`mfa_totp_temp:${userId}`);
-            if (!secret) {
-                return false;
-            }
-            const isValid = speakeasy.totp.verify({
-                secret,
-                encoding: 'base32',
-                token: code,
-                window: 1
-            });
-            if (isValid) {
-                const tempSecret = await this.redis.getCache(`mfa_totp_temp:${userId}`);
-                if (tempSecret) {
-                    await this.redis.setCache(`mfa_totp_secret:${userId}`, tempSecret, 0);
-                    await this.redis.delCache(`mfa_totp_temp:${userId}`);
+            const result = await this.prisma.user_mfa_settings.updateMany({
+                where: {
+                    user_id: userId,
+                    method: this.mapProviderToMethod(provider)
+                },
+                data: {
+                    is_enabled: true,
+                    enabled_at: new Date(),
+                    updated_at: new Date()
                 }
-            }
-            return isValid;
-        }
-        catch (error) {
-            this.logger.error('TOTP verification failed', error.stack, 'MfaService.verifyTotpCode');
-            return false;
-        }
-    }
-    async verifyBackupCode(userId, code) {
-        try {
-            const backupCodesKey = `mfa_backup_codes:${userId}`;
-            const backupCodes = await this.redis.getCache(backupCodesKey) || [];
-            const codeIndex = backupCodes.indexOf(code.toUpperCase());
-            if (codeIndex !== -1) {
-                backupCodes.splice(codeIndex, 1);
-                await this.redis.setCache(backupCodesKey, backupCodes, 0);
-                return true;
-            }
-            return false;
-        }
-        catch (error) {
-            this.logger.error('Backup code verification failed', error.stack, 'MfaService.verifyBackupCode');
-            return false;
-        }
-    }
-    async handleFailedMfaAttempt(userId, method) {
-        try {
-            const failureKey = `mfa_failures:${userId}:${method}`;
-            const failures = await this.redis.getCache(failureKey) || 0;
-            await this.redis.setCache(failureKey, failures + 1, 300);
-            this.logger.logSecurityEvent('MFA_VERIFICATION_FAILED', userId, undefined, undefined, {
-                method,
-                failureCount: failures + 1
             });
+            this.logger.endOperation('enableMfa', operationId, true);
+            return result.count > 0;
         }
         catch (error) {
-            this.logger.error('Handle failed MFA attempt error', error.stack, 'MfaService.handleFailedMfaAttempt');
-        }
-    }
-    async markChallengeAsUsed(challengeToken) {
-        try {
-            const challengeKey = `mfa_challenge:${challengeToken}`;
-            await this.redis.delCache(challengeKey);
-        }
-        catch (error) {
-            this.logger.error('Mark challenge as used failed', error.stack, 'MfaService.markChallengeAsUsed');
-        }
-    }
-    async trustDevice(userId, deviceFingerprint) {
-        try {
-            const trustKey = `trusted_device:${userId}:${deviceFingerprint}`;
-            const trustData = {
-                userId,
-                deviceFingerprint,
-                trustedAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            };
-            await this.redis.setCache(trustKey, trustData, 30 * 24 * 60 * 60);
-        }
-        catch (error) {
-            this.logger.error('Trust device failed', error.stack, 'MfaService.trustDevice');
-        }
-    }
-    async userHasMfaConfigured(userId) {
-        try {
-            const totpSecret = await this.redis.getCache(`mfa_totp_secret:${userId}`);
-            const smsEnabled = await this.redis.getCache(`mfa_sms_enabled:${userId}`);
-            const emailEnabled = await this.redis.getCache(`mfa_email_enabled:${userId}`);
-            return !!(totpSecret || smsEnabled || emailEnabled);
-        }
-        catch (error) {
-            this.logger.error('Check MFA configured failed', error.stack, 'MfaService.userHasMfaConfigured');
-            return false;
-        }
-    }
-    async sendOtpCodes(userId, methods) {
-        try {
-            for (const method of methods) {
-                if (method === 'SMS_OTP') {
-                    await this.sendSmsOtp(userId);
-                }
-                else if (method === 'EMAIL_OTP') {
-                    await this.sendEmailOtp(userId);
-                }
-            }
-        }
-        catch (error) {
-            this.logger.error('Send OTP codes failed', error.stack, 'MfaService.sendOtpCodes');
-        }
-    }
-    async sendSmsOtp(userId) {
-        try {
-            const code = crypto.randomInt(100000, 999999).toString();
-            await this.redis.setCache(`mfa_otp:${userId}:SMS_OTP`, code, this.OTP_EXPIRY);
-            const user = await this.prisma.users.findUnique({
-                where: { id: userId },
-                select: { phone: true, first_name: true }
-            });
-            if (user?.phone) {
-                this.logger.info('SMS OTP sent', JSON.stringify({
-                    userId,
-                    phone: user.phone.substring(0, 3) + '***'
-                }));
-            }
-        }
-        catch (error) {
-            this.logger.error('Send SMS OTP failed', error.stack, 'MfaService.sendSmsOtp');
-        }
-    }
-    async sendEmailOtp(userId) {
-        try {
-            const code = crypto.randomInt(100000, 999999).toString();
-            await this.redis.setCache(`mfa_otp:${userId}:EMAIL_OTP`, code, this.OTP_EXPIRY);
-            const user = await this.prisma.users.findUnique({
-                where: { id: userId },
-                select: { email: true, first_name: true }
-            });
-            if (user?.email) {
-                await this.email.sendMail({
-                    to: user.email,
-                    subject: 'Code de vérification Entrix',
-                    template: 'mfa-code',
-                    context: {
-                        firstName: user.first_name,
-                        code,
-                        expiresIn: Math.floor(this.OTP_EXPIRY / 60)
-                    }
-                });
-                this.logger.info('Email OTP sent', JSON.stringify({
-                    userId,
-                    email: user.email.substring(0, 3) + '***@***'
-                }));
-            }
-        }
-        catch (error) {
-            this.logger.error('Send Email OTP failed', error.stack, 'MfaService.sendEmailOtp');
-        }
-    }
-    async cleanupUserChallenges(userId) {
-        try {
-            const pattern = `mfa_challenge:*`;
-            const keys = await this.redis.keys(pattern);
-            for (const key of keys) {
-                const challengeData = await this.redis.getCache(key);
-                if (challengeData && challengeData.userId === userId) {
-                    await this.redis.delCache(key);
-                }
-            }
-        }
-        catch (error) {
-            this.logger.error('Cleanup user challenges failed', error.stack, 'MfaService.cleanupUserChallenges');
-        }
-    }
-    async generateChallengeForAuth(userId, email, deviceInfo) {
-        const operationId = this.logger.startOperation('generateChallengeForAuth', { userId });
-        try {
-            const availableMethods = await this.getUserAvailableMethods(userId);
-            const challenge = await this.generateMfaChallenge(userId, availableMethods, deviceInfo.deviceFingerprint);
-            this.logger.logBusinessEvent('MFA_CHALLENGE_FOR_AUTH', {
-                userId,
-                email,
-                methods: availableMethods,
-                deviceFingerprint: deviceInfo.deviceFingerprint,
-            }, userId);
-            this.logger.endOperation('generateChallengeForAuth', operationId, true);
-            return challenge;
-        }
-        catch (error) {
-            this.logger.logErrorEvent(error, 'MfaService.generateChallengeForAuth', userId, JSON.stringify({ email, deviceInfo: { ipAddress: deviceInfo.ipAddress } }));
-            this.logger.endOperation('generateChallengeForAuth', operationId, false);
+            this.logger.endOperation('enableMfa', operationId, false);
             throw error;
         }
     }
-    async getUserAvailableMethods(userId) {
-        const methods = [];
+    async regenerateBackupCodes(userId) {
+        const operationId = this.logger.startOperation('regenerateBackupCodes', { userId });
         try {
-            const hasMfaConfigured = await this.userHasMfaConfigured(userId);
-            if (!hasMfaConfigured) {
-                methods.push('EMAIL_OTP');
-                return methods;
-            }
-            const [totpSecret, smsEnabled, emailEnabled] = await Promise.all([
-                this.redis.getCache(`mfa_totp_secret:${userId}`),
-                this.redis.getCache(`mfa_sms_enabled:${userId}`),
-                this.redis.getCache(`mfa_email_enabled:${userId}`)
-            ]);
-            if (totpSecret)
-                methods.push('TOTP_APP');
-            if (smsEnabled)
-                methods.push('SMS_OTP');
-            if (emailEnabled)
-                methods.push('EMAIL_OTP');
-            if (methods.length === 0) {
-                methods.push('EMAIL_OTP');
-            }
+            const newCodes = this.generateBackupCodes();
+            await this.redis.setCache(`mfa_backup_codes:${userId}`, newCodes, 0);
+            await this.prisma.user_mfa_settings.updateMany({
+                where: {
+                    user_id: userId,
+                    method: 'BACKUP_CODES'
+                },
+                data: {
+                    backup_codes_count: newCodes.length,
+                    updated_at: new Date()
+                }
+            });
+            this.logger.endOperation('regenerateBackupCodes', operationId, true);
+            return newCodes;
         }
         catch (error) {
-            this.logger.warn('Erreur getUserAvailableMethods', JSON.stringify({
-                userId,
-                error: error.message,
-            }));
-            methods.push('EMAIL_OTP');
+            this.logger.endOperation('regenerateBackupCodes', operationId, false);
+            throw error;
         }
-        return methods;
     }
-    async isMfaRequiredForRisk(userId, riskScore) {
-        return await this.requiresMfa(userId, riskScore);
+    async getTrustedDevicesCount(userId) {
+        try {
+            return await this.prisma.user_trusted_devices.count({
+                where: {
+                    user_id: userId,
+                    is_active: true,
+                    expires_at: {
+                        gt: new Date()
+                    }
+                }
+            });
+        }
+        catch (error) {
+            this.logger.error('Failed to count trusted devices', error.stack);
+            return 0;
+        }
+    }
+    async getPrimaryMethod(userId) {
+        try {
+            const primarySetting = await this.prisma.user_mfa_settings.findFirst({
+                where: {
+                    user_id: userId,
+                    is_enabled: true,
+                    is_primary: true
+                },
+                select: {
+                    method: true
+                }
+            });
+            return primarySetting ? this.mapMethodToProvider(primarySetting.method) : null;
+        }
+        catch (error) {
+            this.logger.error('Failed to get primary method', error.stack);
+            return null;
+        }
+    }
+    async getLastUsedDate(userId) {
+        try {
+            const lastUsed = await this.prisma.user_mfa_settings.findFirst({
+                where: {
+                    user_id: userId,
+                    is_enabled: true,
+                    last_used_at: {
+                        not: null
+                    }
+                },
+                select: {
+                    last_used_at: true
+                },
+                orderBy: {
+                    last_used_at: 'desc'
+                }
+            });
+            return lastUsed?.last_used_at || null;
+        }
+        catch (error) {
+            this.logger.error('Failed to get last used date', error.stack);
+            return null;
+        }
+    }
+    async getTrustedDevices(userId) {
+        try {
+            const devices = await this.prisma.user_trusted_devices.findMany({
+                where: {
+                    user_id: userId,
+                    is_active: true
+                },
+                orderBy: {
+                    last_seen_at: 'desc'
+                }
+            });
+            return devices;
+        }
+        catch (error) {
+            this.logger.error('Failed to get trusted devices', error.stack);
+            return [];
+        }
+    }
+    async removeTrustedDevice(userId, deviceId) {
+        const operationId = this.logger.startOperation('removeTrustedDevice', { userId, deviceId });
+        try {
+            const result = await this.prisma.user_trusted_devices.updateMany({
+                where: {
+                    id: deviceId,
+                    user_id: userId
+                },
+                data: {
+                    is_active: false
+                }
+            });
+            const success = result.count > 0;
+            this.logger.endOperation('removeTrustedDevice', operationId, success);
+            return success;
+        }
+        catch (error) {
+            this.logger.endOperation('removeTrustedDevice', operationId, false);
+            throw error;
+        }
+    }
+    async getBackupCodesCount(userId) {
+        try {
+            const codes = await this.redis.getCache(`mfa_backup_codes:${userId}`);
+            return codes ? codes.length : 0;
+        }
+        catch (error) {
+            this.logger.error('Failed to get backup codes count', error.stack);
+            return 0;
+        }
+    }
+    async getMfaStats(userId) {
+        const operationId = this.logger.startOperation('getMfaStats', { userId });
+        try {
+            const [totalVerifications, successfulVerifications] = await Promise.all([
+                this.prisma.mfa_tokens.count({
+                    where: {
+                        user_id: userId,
+                        created_at: {
+                            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                }),
+                this.prisma.mfa_tokens.count({
+                    where: {
+                        user_id: userId,
+                        is_used: true,
+                        created_at: {
+                            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                })
+            ]);
+            const failedVerifications = totalVerifications - successfulVerifications;
+            const lastSuccessful = await this.prisma.user_mfa_settings.findFirst({
+                where: {
+                    user_id: userId,
+                    last_used_at: { not: null }
+                },
+                select: { last_used_at: true },
+                orderBy: { last_used_at: 'desc' }
+            });
+            const methodUsage = await this.prisma.user_mfa_settings.findMany({
+                where: {
+                    user_id: userId,
+                    is_enabled: true
+                },
+                select: { method: true }
+            });
+            const methodUsageStats = {
+                'SMS_OTP': 0,
+                'EMAIL_OTP': 0,
+                'TOTP_APP': 0,
+                'BACKUP_CODE': 0
+            };
+            methodUsage.forEach(usage => {
+                const provider = this.mapMethodToProvider(usage.method);
+                methodUsageStats[provider] = 1;
+            });
+            const mostUsedMethod = Object.entries(methodUsageStats)
+                .reduce((a, b) => methodUsageStats[a[0]] > methodUsageStats[b[0]] ? a : b)[0];
+            const trustedDevicesHistory = {
+                added: await this.prisma.user_trusted_devices.count({
+                    where: {
+                        user_id: userId,
+                        created_at: {
+                            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                }),
+                removed: 0,
+                expired: await this.prisma.user_trusted_devices.count({
+                    where: {
+                        user_id: userId,
+                        expires_at: {
+                            lt: new Date()
+                        }
+                    }
+                })
+            };
+            this.logger.endOperation('getMfaStats', operationId, true);
+            return {
+                totalVerifications,
+                successfulVerifications,
+                failedVerifications,
+                lastSuccessfulVerification: lastSuccessful?.last_used_at || undefined,
+                mostUsedMethod,
+                methodUsageStats,
+                trustedDevicesHistory
+            };
+        }
+        catch (error) {
+            this.logger.endOperation('getMfaStats', operationId, false);
+            this.logger.error('Failed to get MFA stats', error.stack);
+            return {
+                totalVerifications: 0,
+                successfulVerifications: 0,
+                failedVerifications: 0,
+                mostUsedMethod: 'EMAIL_OTP',
+                methodUsageStats: {
+                    'SMS_OTP': 0,
+                    'EMAIL_OTP': 0,
+                    'TOTP_APP': 0,
+                    'BACKUP_CODE': 0
+                },
+                trustedDevicesHistory: {
+                    added: 0,
+                    removed: 0,
+                    expired: 0
+                }
+            };
+        }
+    }
+    async sendEmailCode(userId) {
+        const operationId = this.logger.startOperation('sendEmailCode', { userId });
+        try {
+            const user = await this.prisma.users.findUnique({
+                where: { id: userId },
+                select: {
+                    email: true,
+                    first_name: true,
+                    email_verified: true
+                }
+            });
+            if (!user || !user.email_verified) {
+                throw new common_1.BadRequestException('Email utilisateur non vérifié');
+            }
+            const code = crypto.randomInt(100000, 999999).toString();
+            const hashedCode = this.hashCode(code);
+            await this.prisma.mfa_tokens.create({
+                data: {
+                    user_id: userId,
+                    method: 'EMAIL',
+                    token_hash: hashedCode,
+                    expires_at: new Date(Date.now() + 10 * 60 * 1000),
+                    metadata: {
+                        email: user.email
+                    }
+                }
+            });
+            const result = await this.emailService.sendEmail({
+                to: user.email,
+                subject: 'Entrix - Code de vérification MFA',
+                template: 'mfa-code',
+                context: {
+                    firstName: user.first_name,
+                    code,
+                    expirationMinutes: 10
+                }
+            }, true);
+            const success = result.success;
+            this.logger.endOperation('sendEmailCode', operationId, success);
+            return true;
+        }
+        catch (error) {
+            this.logger.endOperation('sendEmailCode', operationId, false);
+            this.logger.error('Failed to send email code', error.stack);
+            throw error;
+        }
+    }
+    async cleanupExpiredTokens() {
+        const operationId = this.logger.startOperation('cleanupExpiredTokens');
+        try {
+            const result = await this.prisma.mfa_tokens.deleteMany({
+                where: {
+                    expires_at: {
+                        lt: new Date()
+                    }
+                }
+            });
+            this.logger.endOperation('cleanupExpiredTokens', operationId, true, undefined, {
+                deletedCount: result.count
+            });
+            return result.count;
+        }
+        catch (error) {
+            this.logger.endOperation('cleanupExpiredTokens', operationId, false);
+            this.logger.error('Failed to cleanup expired tokens', error.stack);
+            return 0;
+        }
+    }
+    async cleanupExpiredTrustedDevices() {
+        const operationId = this.logger.startOperation('cleanupExpiredTrustedDevices');
+        try {
+            const result = await this.prisma.user_trusted_devices.updateMany({
+                where: {
+                    expires_at: {
+                        lt: new Date()
+                    },
+                    is_active: true
+                },
+                data: {
+                    is_active: false
+                }
+            });
+            this.logger.endOperation('cleanupExpiredTrustedDevices', operationId, true, undefined, {
+                deactivatedCount: result.count
+            });
+            return result.count;
+        }
+        catch (error) {
+            this.logger.endOperation('cleanupExpiredTrustedDevices', operationId, false);
+            this.logger.error('Failed to cleanup expired trusted devices', error.stack);
+            return 0;
+        }
+    }
+    async trustDevice(userId, deviceFingerprint) {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+        await this.prisma.user_trusted_devices.upsert({
+            where: {
+                user_id_device_fingerprint: {
+                    user_id: userId,
+                    device_fingerprint: deviceFingerprint
+                }
+            },
+            update: {
+                trusted_at: new Date(),
+                expires_at: expiresAt,
+                last_seen_at: new Date(),
+                is_active: true
+            },
+            create: {
+                user_id: userId,
+                device_fingerprint: deviceFingerprint,
+                expires_at: expiresAt,
+                is_active: true
+            }
+        });
+    }
+    async userHasMfaConfigured(userId) {
+        const count = await this.prisma.user_mfa_settings.count({
+            where: {
+                user_id: userId,
+                is_enabled: true
+            }
+        });
+        return count > 0;
+    }
+    async getConfiguredMethods(userId) {
+        try {
+            const settings = await this.prisma.user_mfa_settings.findMany({
+                where: {
+                    user_id: userId,
+                    is_enabled: true
+                },
+                select: {
+                    method: true
+                }
+            });
+            return settings.map(s => this.mapMethodToProvider(s.method));
+        }
+        catch (error) {
+            this.logger.error('Failed to get configured methods', error.stack);
+            return [];
+        }
+    }
+    async getConfiguredMethodsPrivate(userId) {
+        return this.getConfiguredMethods(userId);
+    }
+    mapProviderToMethod(provider) {
+        const mapping = {
+            'SMS_OTP': 'SMS',
+            'EMAIL_OTP': 'EMAIL',
+            'TOTP_APP': 'TOTP',
+            'BACKUP_CODE': 'BACKUP_CODES'
+        };
+        return mapping[provider];
+    }
+    mapMethodToProvider(method) {
+        const mapping = {
+            'SMS': 'SMS_OTP',
+            'EMAIL': 'EMAIL_OTP',
+            'TOTP': 'TOTP_APP',
+            'BACKUP_CODES': 'BACKUP_CODE'
+        };
+        return mapping[method] || 'EMAIL_OTP';
+    }
+    async logSecurityEvent(eventType, userId, metadata) {
+        try {
+            await this.prisma.security_events.create({
+                data: {
+                    event_type: eventType,
+                    severity: client_1.security_level.STANDARD,
+                    target_user_id: userId,
+                    description: `MFA event: ${eventType}`,
+                    event_data: metadata,
+                    status: 'OPEN'
+                }
+            });
+        }
+        catch (error) {
+            this.logger.error('Failed to log security event', error.stack);
+        }
     }
 };
 exports.MfaService = MfaService;
@@ -597,6 +1023,7 @@ exports.MfaService = MfaService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         redis_service_1.RedisService,
+        config_1.ConfigService,
         email_service_1.EmailService,
         logger_service_1.LoggerService])
 ], MfaService);
