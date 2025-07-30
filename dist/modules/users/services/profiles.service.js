@@ -70,6 +70,7 @@ let ProfilesService = class ProfilesService {
                 users: { connect: { id: profileData.userId } },
                 date_of_birth: profileData.dateOfBirth ? new Date(profileData.dateOfBirth) : null,
                 gender: profileData.gender,
+                fan_id: profileData.fanId,
                 city: profileData.city || null,
                 country: profileData.country,
                 language: profileData.language,

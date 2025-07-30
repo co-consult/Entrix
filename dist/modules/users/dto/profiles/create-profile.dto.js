@@ -9,86 +9,49 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CreateProfileDto = void 0;
+exports.CreateProfileDto = exports.ProfilePreferencesDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const swagger_1 = require("@nestjs/swagger");
 class ProfilePreferencesDto {
-    eventTypes;
-    language;
-    timezone;
-    currency;
-    notifications;
+    emailNotifications;
+    pushNotifications;
+    publicProfile;
     privacy;
 }
+exports.ProfilePreferencesDto = ProfilePreferencesDto;
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Types d\'événements préférés',
-        example: ['SPORT', 'MUSIC'],
+        description: 'Autoriser les notifications par email',
+        example: true,
     }),
     (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Array)
-], ProfilePreferencesDto.prototype, "eventTypes", void 0);
+    (0, class_validator_1.IsBoolean)({ message: 'La valeur doit être un booléen' }),
+    __metadata("design:type", Boolean)
+], ProfilePreferencesDto.prototype, "emailNotifications", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Langue préférée',
-        example: 'fr',
-        enum: ['fr', 'ar', 'en'],
+        description: 'Autoriser les notifications push',
+        example: true,
     }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)({ message: 'La langue doit être une chaîne de caractères' }),
-    (0, class_validator_1.IsIn)(['fr', 'ar', 'en'], {
-        message: 'La langue doit être fr, ar ou en',
-    }),
-    __metadata("design:type", String)
-], ProfilePreferencesDto.prototype, "language", void 0);
+    (0, class_validator_1.IsBoolean)({ message: 'La valeur doit être un booléen' }),
+    __metadata("design:type", Boolean)
+], ProfilePreferencesDto.prototype, "pushNotifications", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Fuseau horaire',
-        example: 'Africa/Tunis',
+        description: 'Profil visible publiquement',
+        example: false,
     }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)({ message: 'Le fuseau horaire doit être une chaîne de caractères' }),
-    __metadata("design:type", String)
-], ProfilePreferencesDto.prototype, "timezone", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: 'Devise préférée',
-        example: 'TND',
-        enum: ['TND', 'EUR', 'USD'],
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)({ message: 'La devise doit être une chaîne de caractères' }),
-    (0, class_validator_1.IsIn)(['TND', 'EUR', 'USD'], {
-        message: 'La devise doit être TND, EUR ou USD',
-    }),
-    __metadata("design:type", String)
-], ProfilePreferencesDto.prototype, "currency", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: 'Préférences de notifications',
-        example: {
-            email: true,
-            sms: false,
-            push: true,
-            marketing: false,
-        },
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsObject)({ message: 'Les préférences de notifications doivent être un objet' }),
-    __metadata("design:type", Object)
-], ProfilePreferencesDto.prototype, "notifications", void 0);
+    (0, class_validator_1.IsBoolean)({ message: 'La valeur doit être un booléen' }),
+    __metadata("design:type", Boolean)
+], ProfilePreferencesDto.prototype, "publicProfile", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
         description: 'Paramètres de confidentialité',
-        example: {
-            profileVisible: true,
-            showActivity: false,
-            allowFriendRequests: true,
-        },
     }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsObject)({ message: 'Les paramètres de confidentialité doivent être un objet' }),
     __metadata("design:type", Object)
 ], ProfilePreferencesDto.prototype, "privacy", void 0);
 class CreateProfileDto {
@@ -104,6 +67,7 @@ class CreateProfileDto {
     website;
     favoriteTeamId;
     supporterSince;
+    fanId;
     preferences;
 }
 exports.CreateProfileDto = CreateProfileDto;
@@ -235,6 +199,18 @@ __decorate([
     (0, class_validator_1.IsDateString)({}, { message: 'Format de date invalide (YYYY-MM-DD)' }),
     __metadata("design:type", String)
 ], CreateProfileDto.prototype, "supporterSince", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: 'ID Fan - Identifiant unique du supporter',
+        example: 'FAN_2025_001',
+        maxLength: 50,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)({ message: 'Le fan ID doit être une chaîne de caractères' }),
+    (0, class_validator_1.MaxLength)(50, { message: 'Le fan ID ne peut pas dépasser 50 caractères' }),
+    (0, class_transformer_1.Transform)(({ value }) => value?.trim().toUpperCase()),
+    __metadata("design:type", String)
+], CreateProfileDto.prototype, "fanId", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
         description: 'Préférences utilisateur',

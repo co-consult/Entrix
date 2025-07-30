@@ -2,13 +2,13 @@ import { Module } from '@nestjs/common';
 import { SharedModule } from './shared/shared.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { SubscriptionSalesModule } from './modules/subscription-sales/subscription-sales.module';
 import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AppController } from './app.controller';
 
 // Import des modules métier (à créer)
-// import { AuthModule } from './modules/auth/auth.module';
 // import { OrganizersModule } from './modules/organizers/organizers.module';
 // import { EventsModule } from './modules/events/events.module';
 // import { TicketsModule } from './modules/tickets/tickets.module';
@@ -18,9 +18,13 @@ import { AppController } from './app.controller';
   imports: [
     // Module partagé avec tous les services communs
     SharedModule,
-    UsersModule,
+    
     // Modules métier
+    UsersModule,
     AuthModule,
+    SubscriptionSalesModule, // Module de vente d'abonnements physiques
+    
+    // Modules futurs (à décommenter quand créés)
     // OrganizersModule,
     // EventsModule,
     // TicketsModule,

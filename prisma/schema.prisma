@@ -182,40 +182,33 @@ model audit_logs {
   @@index([user_id, created_at], map: "idx_audit_logs_user_recent")
 }
 
-// ============================================================================
-// TABLE PERSISTENT TOKENS - API, Access & Refresh Tokens Persistants
-// ============================================================================
-
 /// Table pour les tokens persistants (API, refresh, access tokens avec durée longue)
 /// Gestion centralisée des tokens avec révocation et rotation
 model persistent_tokens {
-  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id            String                @db.Uuid
-  token_type         persistent_token_type
-  token_hash         String                @unique(map: "uk_persistent_tokens_hash") @db.VarChar(255)
-  token_prefix       String                @db.VarChar(8)      // Préfixe visible pour identification (ex: "ent_api_")
-  name               String?               @db.VarChar(100)     // Nom donné par l'utilisateur
-  description        String?               @db.VarChar(255)     // Description du token
-  scopes             String[]              @default([])         // Portées/permissions ["read:events", "write:bookings"]
-  expires_at         DateTime?             @db.Timestamptz(6)   // NULL = pas d'expiration
-  last_used_at       DateTime?             @db.Timestamptz(6)   // Dernière utilisation
-  last_used_ip       String?               @db.Inet             // Dernière IP d'utilisation
-  usage_count        Int                   @default(0)          // Compteur d'utilisation
-  is_active          Boolean               @default(true)
-  is_revoked         Boolean               @default(false)
-  revoked_at         DateTime?             @db.Timestamptz(6)
-  revoked_by         String?               @db.Uuid             // User qui a révoqué
-  revoked_reason     String?               @db.VarChar(255)     // Raison de révocation
-  device_info        Json?                                      // Info device pour tokens mobiles
-  metadata           Json?                                      // Métadonnées additionnelles
-  created_at         DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime              @default(now()) @db.Timestamptz(6)
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String                @db.Uuid
+  token_type      persistent_token_type
+  token_hash      String                @unique(map: "uk_persistent_tokens_hash") @db.VarChar(255)
+  token_prefix    String                @db.VarChar(8)
+  name            String?               @db.VarChar(100)
+  description     String?               @db.VarChar(255)
+  scopes          String[]              @default([])
+  expires_at      DateTime?             @db.Timestamptz(6)
+  last_used_at    DateTime?             @db.Timestamptz(6)
+  last_used_ip    String?               @db.Inet
+  usage_count     Int?                  @default(0)
+  is_active       Boolean?              @default(true)
+  is_revoked      Boolean?              @default(false)
+  revoked_at      DateTime?             @db.Timestamptz(6)
+  revoked_by      String?               @db.Uuid
+  revoked_reason  String?               @db.VarChar(255)
+  device_info     Json?
+  metadata        Json?
+  created_at      DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?             @default(now()) @db.Timestamptz(6)
+  revoked_by_user users?                @relation("persistent_tokens_revoked_by", fields: [revoked_by], references: [id], onUpdate: NoAction, map: "fk_persistent_tokens_revoked_by")
+  users           users                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_persistent_tokens_user")
 
-  // Relations
-  users                                    users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_persistent_tokens_user")
-  revoked_by_user                         users?            @relation("persistent_tokens_revoked_by", fields: [revoked_by], references: [id], onUpdate: NoAction, map: "fk_persistent_tokens_revoked_by")
-
-  // Index pour performance
   @@index([user_id], map: "idx_persistent_tokens_user")
   @@index([token_type], map: "idx_persistent_tokens_type")
   @@index([user_id, token_type, is_active], map: "idx_persistent_tokens_user_active")
@@ -226,44 +219,33 @@ model persistent_tokens {
   @@index([token_prefix], map: "idx_persistent_tokens_prefix")
 }
 
-// ============================================================================
-// TABLE VALIDATION TOKENS - Email, Reset, Invitations, Magic Links
-// ============================================================================
-
 /// Table pour les tokens de validation (email, reset password, invitations, magic links)
 /// Remplace la logique dispersée dans mfa_tokens pour les validations
 model validation_tokens {
-  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id            String?               @db.Uuid             // NULL pour invitations avant création user
-  email              String                @db.VarChar(255)     // Email cible (pour invitations)
-  token_type         validation_token_type
-  token_hash         String                @unique(map: "uk_validation_tokens_hash") @db.VarChar(255)
-  token_plain        String?               @db.VarChar(64)      // Token en clair pour magic links courts
-  expires_at         DateTime              @db.Timestamptz(6)
-  is_used            Boolean               @default(false)
-  used_at            DateTime?             @db.Timestamptz(6)
-  used_ip            String?               @db.Inet             // IP d'utilisation
-  attempt_count      Int                   @default(0)          // Compteur tentatives
-  max_attempts       Int                   @default(3)          // Limite tentatives
-  is_blocked         Boolean               @default(false)      // Bloqué après trop de tentatives
-  blocked_at         DateTime?             @db.Timestamptz(6)
-  
-  // Champs spécifiques selon le type
-  reset_password_data Json?                                     // Pour reset password: old_password_hash, etc.
-  invitation_data     Json?                                     // Pour invitations: inviter_id, role, group_id, etc.
-  verification_data   Json?                                     // Pour email verification: previous_email, etc.
-  magic_link_data     Json?                                     // Pour magic links: redirect_url, action, etc.
-  
-  // Métadonnées
-  client_info        Json?                                      // IP, user-agent, geolocation
-  metadata           Json?                                      // Données additionnelles
-  created_at         DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime              @default(now()) @db.Timestamptz(6)
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String?               @db.Uuid
+  email               String                @db.VarChar(255)
+  token_type          validation_token_type
+  token_hash          String                @unique(map: "uk_validation_tokens_hash") @db.VarChar(255)
+  token_plain         String?               @db.VarChar(64)
+  expires_at          DateTime              @db.Timestamptz(6)
+  is_used             Boolean?              @default(false)
+  used_at             DateTime?             @db.Timestamptz(6)
+  used_ip             String?               @db.Inet
+  attempt_count       Int?                  @default(0)
+  max_attempts        Int?                  @default(3)
+  is_blocked          Boolean?              @default(false)
+  blocked_at          DateTime?             @db.Timestamptz(6)
+  reset_password_data Json?
+  invitation_data     Json?
+  verification_data   Json?
+  magic_link_data     Json?
+  client_info         Json?
+  metadata            Json?
+  created_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  users               users?                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_validation_tokens_user")
 
-  // Relations
-  users              users?                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_validation_tokens_user")
-
-  // Index pour performance et sécurité
   @@index([user_id], map: "idx_validation_tokens_user")
   @@index([email], map: "idx_validation_tokens_email")
   @@index([token_type], map: "idx_validation_tokens_type")
@@ -1456,6 +1438,7 @@ model subscription_plans {
   created_at                     DateTime                         @default(now()) @db.Timestamptz(6)
   updated_at                     DateTime                         @default(now()) @db.Timestamptz(6)
   order_items                    order_items[]
+  physical_qr_codes              physical_qr_codes[]
   subscription_plan_event_groups subscription_plan_event_groups[]
   subscription_plan_events       subscription_plan_events[]
   subscription_plan_zones        subscription_plan_zones[]
@@ -1664,6 +1647,7 @@ model user_profiles {
   identity_document_number String?                 @db.VarChar(50)
   identity_verified_at     DateTime?               @db.Timestamptz(6)
   identity_verified        Boolean                 @default(false)
+  fan_id                   String?                 @db.VarChar(100)
   participants             participants?           @relation(fields: [favorite_team_id], references: [id], onUpdate: NoAction, map: "fk_user_profiles_favorite_team")
   users                    users                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_profiles_user_id")
 
@@ -1769,6 +1753,9 @@ model users {
   organizers_organizers_created_byTousers                             organizers[]                @relation("organizers_created_byTousers")
   organizers_organizers_updated_byTousers                             organizers[]                @relation("organizers_updated_byTousers")
   organizers_organizers_validated_byTousers                           organizers[]                @relation("organizers_validated_byTousers")
+  revoked_persistent_tokens                                           persistent_tokens[]         @relation("persistent_tokens_revoked_by")
+  persistent_tokens                                                   persistent_tokens[]
+  physical_qr_codes                                                   physical_qr_codes[]
   refunds_refunds_approved_byTousers                                  refunds[]                   @relation("refunds_approved_byTousers")
   refunds_refunds_requested_byTousers                                 refunds[]                   @relation("refunds_requested_byTousers")
   security_events                                                     security_events[]
@@ -1776,16 +1763,14 @@ model users {
   tickets                                                             tickets[]
   user_groups_user_groups_added_byTousers                             user_groups[]               @relation("user_groups_added_byTousers")
   user_groups_user_groups_user_idTousers                              user_groups[]               @relation("user_groups_user_idTousers")
+  user_mfa_settings                                                   user_mfa_settings[]
   user_profiles                                                       user_profiles?
   user_roles_user_roles_assigned_byTousers                            user_roles[]                @relation("user_roles_assigned_byTousers")
   user_roles_user_roles_user_idTousers                                user_roles[]                @relation("user_roles_user_idTousers")
   user_sessions                                                       user_sessions[]
+  user_trusted_devices                                                user_trusted_devices[]
+  validation_tokens                                                   validation_tokens[]
   venue_organizer_relations                                           venue_organizer_relations[]
-  user_mfa_settings     user_mfa_settings[]
-  user_trusted_devices  user_trusted_devices[]
-  persistent_tokens                   persistent_tokens[]
-  validation_tokens                   validation_tokens[]
-  revoked_persistent_tokens           persistent_tokens[] @relation("persistent_tokens_revoked_by")
 
   @@index([is_active], map: "idx_users_active")
   @@index([created_at], map: "idx_users_created_at")
@@ -1800,17 +1785,17 @@ model user_mfa_settings {
   id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id            String     @db.Uuid
   method             mfa_method
-  is_enabled         Boolean    @default(false)
-  is_primary         Boolean    @default(false)
+  is_enabled         Boolean?   @default(false)
+  is_primary         Boolean?   @default(false)
   backup_phone       String?    @db.VarChar(20)
   totp_secret        String?    @db.VarChar(255)
-  backup_codes_count Int        @default(0)
+  backup_codes_count Int?       @default(0)
   last_used_at       DateTime?  @db.Timestamptz(6)
   enabled_at         DateTime?  @db.Timestamptz(6)
   disabled_at        DateTime?  @db.Timestamptz(6)
   metadata           Json?
-  created_at         DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime   @default(now()) @db.Timestamptz(6)
+  created_at         DateTime?  @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?  @default(now()) @db.Timestamptz(6)
   users              users      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_mfa_settings_user")
 
   @@unique([user_id, method], map: "uk_user_mfa_settings_user_method")
@@ -1823,19 +1808,19 @@ model user_mfa_settings {
 }
 
 model user_trusted_devices {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id            String   @db.Uuid
-  device_fingerprint String   @db.VarChar(255)
-  device_name        String?  @db.VarChar(200)
-  trusted_at         DateTime @default(now()) @db.Timestamptz(6)
-  expires_at         DateTime @db.Timestamptz(6)
-  last_seen_at       DateTime @default(now()) @db.Timestamptz(6)
-  ip_address         String?  @db.Inet
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String    @db.Uuid
+  device_fingerprint String    @db.VarChar(255)
+  device_name        String?   @db.VarChar(200)
+  trusted_at         DateTime? @default(now()) @db.Timestamptz(6)
+  expires_at         DateTime  @db.Timestamptz(6)
+  last_seen_at       DateTime? @default(now()) @db.Timestamptz(6)
+  ip_address         String?   @db.Inet
   user_agent         String?
   metadata           Json?
-  is_active          Boolean  @default(true)
-  created_at         DateTime @default(now()) @db.Timestamptz(6)
-  users              users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_trusted_devices_user")
+  is_active          Boolean?  @default(true)
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+  users              users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_trusted_devices_user")
 
   @@unique([user_id, device_fingerprint], map: "uk_user_trusted_devices_user_fingerprint")
   @@index([user_id], map: "idx_user_trusted_devices_user")
@@ -2134,6 +2119,36 @@ model api_keys {
   last_used_at    DateTime?         @db.Timestamptz(6)
   api_access_logs api_access_logs[]
   api_clients     api_clients       @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model physical_qr_codes {
+  id                   String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  qr_code              String              @unique(map: "idx_physical_qr_codes_qr_code") @db.VarChar(255)
+  onboarding_key       String              @unique(map: "idx_physical_qr_codes_onboarding_key") @db.VarChar(50)
+  serial_number        String              @db.VarChar(4)
+  subscription_plan_id String?             @db.Uuid
+  card_batch           String?             @db.VarChar(50)
+  card_type            String?             @default("STANDARD") @db.VarChar(50)
+  status               physical_qr_status  @default(AVAILABLE)
+  assigned_by          String?             @db.Uuid
+  printed_at           DateTime?           @db.Timestamptz(6)
+  assigned_at          DateTime?           @db.Timestamptz(6)
+  first_used_at        DateTime?           @db.Timestamptz(6)
+  disabled_at          DateTime?           @db.Timestamptz(6)
+  metadata             Json?               @default("{}")
+  created_at           DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime            @default(now()) @db.Timestamptz(6)
+  users                users?              @relation(fields: [assigned_by], references: [id], onUpdate: NoAction, map: "fk_physical_qr_codes_assigned_by")
+  subscription_plans   subscription_plans? @relation(fields: [subscription_plan_id], references: [id], onUpdate: NoAction, map: "fk_physical_qr_codes_subscription_plan")
+
+  @@index([assigned_by], map: "idx_physical_qr_codes_assigned_by")
+  @@index([card_batch], map: "idx_physical_qr_codes_batch")
+  @@index([printed_at, assigned_at], map: "idx_physical_qr_codes_dates")
+  @@index([serial_number], map: "idx_physical_qr_codes_serial_number")
+  @@index([status], map: "idx_physical_qr_codes_status")
+  @@index([subscription_plan_id], map: "idx_physical_qr_codes_subscription_plan")
 }
 
 /// This enum is commented in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -2638,6 +2653,7 @@ enum seat_status {
   MAINTENANCE
   RESERVED
   HELD
+  RESERVED_TEMPORARY
 }
 
 enum seat_type {
@@ -2766,23 +2782,29 @@ enum api_status {
 
 /// Types de tokens persistants
 enum persistent_token_type {
-  API_KEY           // Token API public pour intégrations
-  REFRESH_LONG      // Refresh token longue durée (remember me)
-  ACCESS_LONG       // Access token longue durée (pour apps)
-  MOBILE_SESSION    // Session mobile persistante
-  INTEGRATION       // Token pour intégrations tierces
+  API_KEY
+  REFRESH_LONG
+  ACCESS_LONG
+  MOBILE_SESSION
+  INTEGRATION
 }
 
 /// Types de tokens de validation
 enum validation_token_type {
-  EMAIL_VERIFICATION    // Vérification email inscription
-  EMAIL_CHANGE         // Changement d'email
-  PASSWORD_RESET       // Reset mot de passe
-  ACCOUNT_ACTIVATION   // Activation compte
-  INVITATION_USER      // Invitation utilisateur
-  INVITATION_GROUP     // Invitation groupe/organisation
-  MAGIC_LINK_LOGIN     // Lien magique connexion
-  MAGIC_LINK_ACTION    // Lien magique action spécifique
-  PHONE_VERIFICATION   // Vérification téléphone
-  ACCOUNT_DELETION     // Confirmation suppression compte
+  EMAIL_VERIFICATION
+  EMAIL_CHANGE
+  PASSWORD_RESET
+  ACCOUNT_ACTIVATION
+  INVITATION_USER
+  INVITATION_GROUP
+  MAGIC_LINK_LOGIN
+  MAGIC_LINK_ACTION
+  PHONE_VERIFICATION
+  ACCOUNT_DELETION
+}
+
+enum physical_qr_status {
+  AVAILABLE
+  ASSIGNED
+  DISABLED
 }

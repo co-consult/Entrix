@@ -1,18 +1,10 @@
-declare class ProfilePreferencesDto {
-    eventTypes?: string[];
-    language?: string;
-    timezone?: string;
-    currency?: string;
-    notifications?: {
-        email?: boolean;
-        sms?: boolean;
-        push?: boolean;
-        marketing?: boolean;
-        eventUpdates?: boolean;
-        groupInvitations?: boolean;
-    };
+export declare class ProfilePreferencesDto {
+    emailNotifications?: boolean;
+    pushNotifications?: boolean;
+    publicProfile?: boolean;
     privacy?: {
-        profileVisible?: boolean;
+        showEmail?: boolean;
+        showPhone?: boolean;
         showActivity?: boolean;
         allowFriendRequests?: boolean;
         showPurchaseHistory?: boolean;
@@ -31,6 +23,6 @@ export declare class CreateProfileDto {
     website?: string;
     favoriteTeamId?: string;
     supporterSince?: string;
+    fanId?: string;
     preferences?: ProfilePreferencesDto;
 }
-export {};

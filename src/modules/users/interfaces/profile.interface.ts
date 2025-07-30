@@ -62,7 +62,7 @@ export interface IProfileRepository {
   count(filters?: ProfileFilters): Promise<number>;
 }
 
-// Données de création de profil (pour l'API)
+// Données de création de profil (pour l'API) - UPDATED avec fan_id
 export interface CreateProfileData {
   userId: string;
   dateOfBirth?: Date;
@@ -76,6 +76,7 @@ export interface CreateProfileData {
   website?: string;
   favoriteTeamId?: string;
   supporterSince?: Date;
+  fanId?: string; // ✅ NOUVEAU CHAMP OPTIONNEL
   preferences?: UserProfilePreferences;
 }
 
@@ -101,6 +102,7 @@ export interface PublicProfileInfo {
     reviewsWritten?: number;
   };
   isVerified: boolean;
+  fanId?: string; // ✅ AJOUTÉ pour visibilité publique si autorisé
 }
 
 // Suggestion pour améliorer le profil
@@ -124,7 +126,7 @@ export interface UploadedFile {
   size: number;
 }
 
-// Filtres de profil
+// Filtres de profil - UPDATED avec fan_id
 export interface ProfileFilters {
   country?: string;
   city?: string;
@@ -135,6 +137,7 @@ export interface ProfileFilters {
   hasAvatar?: boolean;
   isComplete?: boolean;
   favoriteTeamId?: string;
+  fanId?: string; // ✅ NOUVEAU FILTRE pour recherche par fan_id
   createdAfter?: Date;
   createdBefore?: Date;
 }
@@ -157,11 +160,12 @@ export interface IProfileValidator {
   validateLanguage(language: string): boolean;
   validateWebsite(url: string): boolean;
   validateBio(bio: string): boolean;
+  validateFanId(fanId: string): boolean; // ✅ NOUVELLE VALIDATION pour fan_id
 }
 
 // Événement profil
 export interface ProfileEvent {
-  type: 'PROFILE_CREATED' | 'PROFILE_UPDATED' | 'AVATAR_UPLOADED' | 'BADGE_EARNED' | 'COMPLETION_MILESTONE';
+  type: 'PROFILE_CREATED' | 'PROFILE_UPDATED' | 'AVATAR_UPLOADED' | 'BADGE_EARNED' | 'COMPLETION_MILESTONE' | 'FAN_ID_ASSIGNED';
   profileId: string;
   userId: string;
   data: Record<string, any>;
@@ -178,13 +182,10 @@ export interface ProfileSearchParams {
   offset?: number;
 }
 
-// Résultat de recherche paginée
-export interface PaginatedProfileResult {
-  data: ProfileResponse[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-  hasNext: boolean;
-  hasPrev: boolean;
+// Interface pour recherche par fan_id
+export interface FanIdSearchResult {
+  profile: ProfileResponse | null;
+  isValid: boolean;
+  isUnique: boolean;
+  errorMessage?: string;
 }
