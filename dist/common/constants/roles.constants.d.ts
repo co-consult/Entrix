@@ -119,8 +119,8 @@ export declare const SYSTEM_ROLES: {
         readonly permissions: readonly ["users.read.self", "users.update.self", "users.profile.update", "events.read", "ticketing.sell"];
     };
 };
-export declare const ROLE_HIERARCHY: ("USER" | "ADMIN" | "SUPER_ADMIN" | "ORGANIZER_ADMIN" | "ORGANIZER_MANAGER" | "VENUE_ADMIN" | "VENUE_MANAGER" | "SECURITY_MANAGER" | "SUPPORT_AGENT" | "VALIDATOR" | "STAFF" | "VIP_GOLD" | "SUBSCRIBER")[];
-export declare const ADMIN_ROLES: ("USER" | "ADMIN" | "SUPER_ADMIN" | "ORGANIZER_ADMIN" | "ORGANIZER_MANAGER" | "VENUE_ADMIN" | "VENUE_MANAGER" | "SECURITY_MANAGER" | "SUPPORT_AGENT" | "VALIDATOR" | "STAFF" | "VIP_GOLD" | "SUBSCRIBER")[];
+export declare const ROLE_HIERARCHY: ("ADMIN" | "USER" | "SUPER_ADMIN" | "ORGANIZER_ADMIN" | "ORGANIZER_MANAGER" | "VENUE_ADMIN" | "VENUE_MANAGER" | "SECURITY_MANAGER" | "SUPPORT_AGENT" | "VALIDATOR" | "STAFF" | "VIP_GOLD" | "SUBSCRIBER")[];
+export declare const ADMIN_ROLES: ("ADMIN" | "USER" | "SUPER_ADMIN" | "ORGANIZER_ADMIN" | "ORGANIZER_MANAGER" | "VENUE_ADMIN" | "VENUE_MANAGER" | "SECURITY_MANAGER" | "SUPPORT_AGENT" | "VALIDATOR" | "STAFF" | "VIP_GOLD" | "SUBSCRIBER")[];
 export declare const ORGANIZER_ROLES: ("ORGANIZER_ADMIN" | "ORGANIZER_MANAGER")[];
 export declare const VENUE_ROLES: ("VENUE_ADMIN" | "VENUE_MANAGER")[];
 export declare const END_USER_ROLES: ("USER" | "VIP_GOLD" | "SUBSCRIBER")[];

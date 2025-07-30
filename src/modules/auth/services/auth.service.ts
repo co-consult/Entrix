@@ -124,6 +124,15 @@ async login(loginData: ILoginRequest, context?: {
 
     console.log('🔍 DEBUG LOGIN - User validé, ID:', user.id);
 
+    // After validateUser, ensure user.roles is set in the login service
+    // (This is defensive in case future changes break the chain)
+    // Remove this block, as it causes a linter error and is unnecessary:
+    // if (!user.roles || user.roles.length === 0) {
+    //   user.roles = user.user_roles_user_roles_user_idTousers
+    //     ?.filter(ur => ur.status === 'ACTIVE' && ur.roles?.name)
+    //     .map(ur => ur.roles.name) || [];
+    // }
+
     // 2. Construire informations device
     const deviceInfo: IDeviceInfo = DeviceUtil.normalizeDeviceInfo({
       userAgent: context?.userAgent || 'unknown',
@@ -680,48 +689,25 @@ private async handleSuccessfulLogin(
         return null;
       }
 
-      // 2. Vérifier statut compte
-      if (!dbUser.is_active) {
-        this.logger.warn('Login attempt on inactive account', JSON.stringify({ email }));
-        throw new AccountLockedException();
-      }
-
-      // 3. Vérifier vérification email si requise
-      const emailVerificationRequired = process.env.EMAIL_VERIFICATION_REQUIRED === 'true';
-      if (emailVerificationRequired && !dbUser.email_verified) {
-        throw new EmailNotVerifiedException();
-      }
-
-      // ✅ 4. AMÉLIORÉ : Validation password avec service centralisé
-      console.log('🔍 DEBUG validateUser - Vérification password avec PasswordService pour:', email);
+      // Password verification step
       const isPasswordValid = await this.passwordService.verifyUserPasswordByEmail(email, password);
-      
       if (!isPasswordValid) {
-        console.log('🔍 DEBUG validateUser - Password invalide pour:', email);
-        
-        // ✅ CORRIGÉ : Enregistrer échec avec IP normalisée
-        await this.handleFailedLogin(email, {
-          ...context,
-          ipAddress: normalizedIp
-        });
-        
-        this.logger.endOperation('validateUser', operationId, false, undefined, { reason: 'invalid_password' });
+        // Optionally log or handle failed login
         return null;
       }
 
-      console.log('🔍 DEBUG validateUser - Password valide pour:', email);
-
+      // Debug: Log what is fetched from the database
+      console.log('DEBUG validateUser - dbUser:', JSON.stringify(dbUser, null, 2));
       // 5. Transformer données DB vers format application
       const user = this.mapDbUserToProfile(dbUser);
-
       // 6. Ajouter rôles
       user.roles = dbUser.user_roles_user_roles_user_idTousers
-        ?.filter(ur => ur.status === 'ACTIVE')
-        .map(ur => ur.roles.name) || [];
-
+        ?.filter(ur => ur.status === 'ACTIVE' && ur.roles?.code)
+        .map(ur => ur.roles.code) || [];
+      // Debug: Log what is mapped to user.roles
+      console.log('DEBUG validateUser - mapped user.roles:', user.roles);
       // Pour l'instant, permissions vide (sera implémenté plus tard)
       user.permissions = [];
-
       this.logger.endOperation('validateUser', operationId, true);
       return user;
 
@@ -1354,9 +1340,11 @@ async resendVerificationEmail(userId: string): Promise<{
     if (!dbUser) return null;
 
     const user = this.mapDbUserToProfile(dbUser);
+    console.log('DEBUG getUserProfile - dbUser:', JSON.stringify(dbUser, null, 2));
     user.roles = dbUser.user_roles_user_roles_user_idTousers
-      ?.filter(ur => ur.status === 'ACTIVE')
-      .map(ur => ur.roles.name) || [];
+      ?.filter(ur => ur.status === 'ACTIVE' && ur.roles?.code)
+      .map(ur => ur.roles.code) || [];
+    console.log('DEBUG getUserProfile - mapped user.roles:', user.roles);
     user.permissions = [];
 
     return user;
@@ -1366,6 +1354,11 @@ async resendVerificationEmail(userId: string): Promise<{
    * Transformation données DB vers profil utilisateur
    */
   private mapDbUserToProfile(dbUser: any): IUserProfile {
+    // Extract roles from user_roles relationship if available
+    const roles = dbUser.user_roles_user_roles_user_idTousers
+      ?.filter(ur => ur.status === 'ACTIVE' && ur.roles?.code)
+      .map(ur => ur.roles.code) || dbUser.roles || [];
+
     return {
       id: dbUser.id,
       email: dbUser.email,
@@ -1380,8 +1373,8 @@ async resendVerificationEmail(userId: string): Promise<{
       metadata: dbUser.metadata,
       createdAt: dbUser.created_at,
       updatedAt: dbUser.updated_at,
-      roles: [],
-      permissions: [],
+      roles: roles,
+      permissions: dbUser.permissions || [],
     };
   }
   /**

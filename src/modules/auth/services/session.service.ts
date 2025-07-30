@@ -425,7 +425,7 @@ export class SessionService implements ISessionService {
       const user = sessionData.users;
       const userRoles = user.user_roles_user_roles_user_idTousers
         ?.filter(ur => ur.status === 'ACTIVE')
-        .map(ur => ur.roles.name) || [];
+        .map(ur => ur.roles.code) || [];
 
       // 4. Déterminer le type de session (remember me basé sur durée ou token persistant)
       const sessionDuration = sessionData.expires_at.getTime() - sessionData.created_at.getTime();
@@ -714,7 +714,7 @@ export class SessionService implements ISessionService {
           user_roles_user_roles_user_idTousers: {
             where: { status: 'ACTIVE' },
             include: {
-              roles: { select: { name: true } }
+              roles: { select: { name: true, code: true } }
             }
           }
         },
@@ -725,7 +725,7 @@ export class SessionService implements ISessionService {
       }
 
       const userRoles = user.user_roles_user_roles_user_idTousers
-        ?.map(ur => ur.roles.name) || [];
+        ?.map(ur => ur.roles.code) || [];
 
       // Générer access token JWT (toujours temporaire)
       const accessTokenPayload = {

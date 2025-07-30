@@ -582,8 +582,8 @@ export class UsersService implements IUserService {
         where: whereConditions,
         include: includeConditions,
         orderBy: sorting ? { [sorting.field]: sorting.order } : { created_at: 'desc' },
-        skip: offset,
-        take: limit
+        skip: Number(offset),
+        take: Number(limit)
       });
 
       const result: PaginatedUserResult = {
@@ -971,7 +971,10 @@ export class UsersService implements IUserService {
         by: ['country'],
         _count: { user_id: true },
         where: {
-          country: { not: null }
+          NOT: [
+            { country: null },
+            { country: "" }
+          ]
         },
         orderBy: { _count: { user_id: 'desc' } },
         take: 10

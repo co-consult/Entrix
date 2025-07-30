@@ -269,7 +269,7 @@ let SessionService = class SessionService {
             const user = sessionData.users;
             const userRoles = user.user_roles_user_roles_user_idTousers
                 ?.filter(ur => ur.status === 'ACTIVE')
-                .map(ur => ur.roles.name) || [];
+                .map(ur => ur.roles.code) || [];
             const sessionDuration = sessionData.expires_at.getTime() - sessionData.created_at.getTime();
             const isRememberMe = isPersistentToken ||
                 sessionDuration > session_constants_1.SESSION_CONSTANTS.DURATION.DEFAULT_SESSION * 1000;
@@ -450,7 +450,7 @@ let SessionService = class SessionService {
                     user_roles_user_roles_user_idTousers: {
                         where: { status: 'ACTIVE' },
                         include: {
-                            roles: { select: { name: true } }
+                            roles: { select: { name: true, code: true } }
                         }
                     }
                 },
@@ -459,7 +459,7 @@ let SessionService = class SessionService {
                 throw new Error('User not found for session');
             }
             const userRoles = user.user_roles_user_roles_user_idTousers
-                ?.map(ur => ur.roles.name) || [];
+                ?.map(ur => ur.roles.code) || [];
             const accessTokenPayload = {
                 sub: session.user_id,
                 email: user.email,

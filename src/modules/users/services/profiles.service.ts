@@ -98,7 +98,6 @@ export class ProfilesService {
         users: { connect: { id: profileData.userId } },
         date_of_birth: profileData.dateOfBirth ? new Date(profileData.dateOfBirth) : null,
         gender: profileData.gender as any, // gender? enum dans le schema
-        fan_id:profileData.fanId,
         city: profileData.city || null,
         country: profileData.country, // obligatoire dans DTO
         language: profileData.language, // obligatoire dans DTO

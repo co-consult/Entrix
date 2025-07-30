@@ -52,7 +52,7 @@ export declare class SecurityController {
                 suspiciousIp: boolean;
                 multipleSessions: boolean;
             };
-            recommendation: "ALLOW" | "REQUIRE_MFA" | "BLOCK" | "ALERT";
+            recommendation: "ALLOW" | "ALERT" | "REQUIRE_MFA" | "BLOCK";
             requiresMfa: boolean;
             details: {
                 geolocation: {

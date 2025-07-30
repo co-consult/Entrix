@@ -44,7 +44,6 @@ export interface CreateProfileData {
     website?: string;
     favoriteTeamId?: string;
     supporterSince?: Date;
-    fanId?: string;
     preferences?: UserProfilePreferences;
 }
 export interface CreateProfileDataWithUserId extends CreateProfileData {
@@ -66,7 +65,6 @@ export interface PublicProfileInfo {
         reviewsWritten?: number;
     };
     isVerified: boolean;
-    fanId?: string;
 }
 export interface ProfileSuggestion {
     field: string;
@@ -95,7 +93,6 @@ export interface ProfileFilters {
     hasAvatar?: boolean;
     isComplete?: boolean;
     favoriteTeamId?: string;
-    fanId?: string;
     createdAfter?: Date;
     createdBefore?: Date;
 }
@@ -114,10 +111,9 @@ export interface IProfileValidator {
     validateLanguage(language: string): boolean;
     validateWebsite(url: string): boolean;
     validateBio(bio: string): boolean;
-    validateFanId(fanId: string): boolean;
 }
 export interface ProfileEvent {
-    type: 'PROFILE_CREATED' | 'PROFILE_UPDATED' | 'AVATAR_UPLOADED' | 'BADGE_EARNED' | 'COMPLETION_MILESTONE' | 'FAN_ID_ASSIGNED';
+    type: 'PROFILE_CREATED' | 'PROFILE_UPDATED' | 'AVATAR_UPLOADED' | 'BADGE_EARNED' | 'COMPLETION_MILESTONE';
     profileId: string;
     userId: string;
     data: Record<string, any>;
@@ -131,9 +127,12 @@ export interface ProfileSearchParams {
     limit?: number;
     offset?: number;
 }
-export interface FanIdSearchResult {
-    profile: ProfileResponse | null;
-    isValid: boolean;
-    isUnique: boolean;
-    errorMessage?: string;
+export interface PaginatedProfileResult {
+    data: ProfileResponse[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
 }

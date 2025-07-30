@@ -401,6 +401,170 @@ let SubscriptionPlansService = class SubscriptionPlansService {
             }));
         }
     }
+    async getAllPlansByOrganizer(organizerId) {
+        const operationId = this.logger.startOperation('getAllPlansByOrganizer', { organizerId });
+        try {
+            const cacheKey = `${this.CACHE_PREFIX}all-organizer:${organizerId}`;
+            const cached = await this.redis.getCache(cacheKey);
+            if (cached) {
+                this.logger.logCacheEvent('hit', cacheKey);
+                this.logger.endOperation('getAllPlansByOrganizer', operationId, true);
+                return cached;
+            }
+            const plans = await this.prisma.subscription_plans.findMany({
+                where: {
+                    organizer_id: organizerId,
+                },
+                include: {
+                    organizers: {
+                        select: {
+                            id: true,
+                            name: true,
+                            code: true,
+                            contact_email: true,
+                        }
+                    },
+                    subscription_plan_zones: {
+                        where: { is_included: true },
+                        include: {
+                            venue_zones: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    code: true,
+                                    capacity: true,
+                                    zone_type: true,
+                                    category: true,
+                                    _count: {
+                                        select: {
+                                            seats: {
+                                                where: {
+                                                    status: 'AVAILABLE'
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        orderBy: { priority_level: 'desc' }
+                    },
+                    subscription_plan_events: {
+                        where: { is_included: true },
+                        include: {
+                            events: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    scheduled_start: true,
+                                    scheduled_end: true,
+                                    status: true,
+                                }
+                            }
+                        },
+                        orderBy: { events: { scheduled_start: 'asc' } }
+                    },
+                    _count: {
+                        select: {
+                            subscriptions: {
+                                where: {
+                                    status: 'ACTIVE'
+                                }
+                            }
+                        }
+                    }
+                },
+                orderBy: [
+                    { is_active: 'desc' },
+                    { created_at: 'desc' }
+                ]
+            });
+            if (plans.length === 0) {
+                this.logger.info('Aucun plan trouvé pour cet organisateur', JSON.stringify({ organizerId }));
+            }
+            const result = plans.map(plan => ({
+                id: plan.id,
+                code: plan.code,
+                name: plan.name,
+                description: plan.description,
+                type: plan.type,
+                price: Number(plan.price),
+                currency: plan.currency,
+                isActive: plan.is_active,
+                maxSubscribers: plan.max_subscribers,
+                currentSubscribers: plan.current_subscribers,
+                activeSubscriptions: plan._count.subscriptions,
+                availableSlots: plan.max_subscribers
+                    ? plan.max_subscribers - plan.current_subscribers
+                    : null,
+                validFrom: plan.valid_from,
+                validUntil: plan.valid_until,
+                saleStartDate: plan.sale_start_date,
+                saleEndDate: plan.sale_end_date,
+                isCurrentlyOnSale: this.isPlanCurrentlyOnSale(plan),
+                transferable: plan.transferable,
+                maxTransfers: plan.max_transfers,
+                autoRenew: plan.auto_renew,
+                includesPlayoffs: plan.includes_playoffs,
+                priorityBooking: plan.priority_booking,
+                benefits: plan.benefits,
+                restrictions: plan.restrictions,
+                organizer: {
+                    id: plan.organizers.id,
+                    name: plan.organizers.name,
+                    code: plan.organizers.code,
+                    contactEmail: plan.organizers.contact_email,
+                },
+                zones: plan.subscription_plan_zones.map(spz => ({
+                    id: spz.venue_zones.id,
+                    name: spz.venue_zones.name,
+                    code: spz.venue_zones.code,
+                    capacity: spz.venue_zones.capacity,
+                    hasSeats: spz.venue_zones._count.seats > 0,
+                    availableSeatsCount: spz.venue_zones._count.seats,
+                    zoneType: spz.venue_zones.zone_type,
+                    category: spz.venue_zones.category,
+                    isIncluded: spz.is_included,
+                    priceOverride: spz.price_override ? Number(spz.price_override) : null,
+                    priorityLevel: spz.priority_level,
+                })),
+                includedEvents: plan.subscription_plan_events.map(spe => ({
+                    id: spe.events.id,
+                    name: spe.events.name,
+                    scheduledStart: spe.events.scheduled_start,
+                    scheduledEnd: spe.events.scheduled_end,
+                    status: spe.events.status,
+                    isPriority: spe.is_priority,
+                    accessLevel: spe.access_level,
+                })),
+                metadata: plan.metadata,
+                createdAt: plan.created_at,
+                updatedAt: plan.updated_at,
+            }));
+            await this.redis.setCache(cacheKey, result, 900);
+            this.logger.logCacheEvent('set', cacheKey, 900);
+            this.logger.logBusinessEvent('ALL_PLANS_FETCHED_BY_ORGANIZER', {
+                organizerId,
+                totalPlans: result.length,
+                activePlans: result.filter(p => p.isActive).length,
+                inactivePlans: result.filter(p => !p.isActive).length,
+                plansOnSale: result.filter(p => p.isCurrentlyOnSale).length,
+            });
+            this.logger.endOperation('getAllPlansByOrganizer', operationId, true);
+            return result;
+        }
+        catch (error) {
+            this.logger.logErrorEvent(error, 'SubscriptionPlansService.getAllPlansByOrganizer', undefined, JSON.stringify({ organizerId }));
+            this.logger.endOperation('getAllPlansByOrganizer', operationId, false);
+            throw error;
+        }
+    }
+    isPlanCurrentlyOnSale(plan) {
+        const now = new Date();
+        const saleStarted = !plan.sale_start_date || plan.sale_start_date <= now;
+        const saleNotEnded = !plan.sale_end_date || plan.sale_end_date >= now;
+        return plan.is_active && saleStarted && saleNotEnded;
+    }
 };
 exports.SubscriptionPlansService = SubscriptionPlansService;
 exports.SubscriptionPlansService = SubscriptionPlansService = __decorate([

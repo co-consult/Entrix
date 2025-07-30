@@ -1,0 +1,33 @@
+import { PrismaService } from '../../../shared/prisma/prisma.service';
+import { RedisService } from '../../../shared/redis/redis.service';
+import { LoggerService } from '../../../shared/logger/logger.service';
+import { BullmqService } from '../../../shared/bullmq/bullmq.service';
+import { CreateAccessRightDto, UpdateAccessRightDto, ValidateAccessDto, AccessRightsQueryDto } from '../dto/access-rights';
+import { AccessRight, AccessValidationResult, AccessRightsListResponse } from '../interfaces/rbac.interface';
+export declare class AccessRightsService {
+    private readonly prisma;
+    private readonly redis;
+    private readonly bullmq;
+    private readonly logger;
+    constructor(prisma: PrismaService, redis: RedisService, bullmq: BullmqService, loggerService: LoggerService);
+    create(accessRightData: CreateAccessRightDto): Promise<AccessRight>;
+    findById(id: string): Promise<AccessRight>;
+    findByAccessCode(accessCode: string): Promise<AccessRight>;
+    findMany(query: AccessRightsQueryDto): Promise<AccessRightsListResponse>;
+    update(id: string, updateData: UpdateAccessRightDto): Promise<AccessRight>;
+    validateAccess(validateData: ValidateAccessDto): Promise<AccessValidationResult>;
+    private performBasicValidations;
+    private performContextualValidations;
+    private generateUniqueAccessCode;
+    private validateAccessRightCreation;
+    private cacheAccessRight;
+    private invalidateAccessRightCache;
+    private buildValidationResult;
+    private markAccessRightAsUsed;
+    private shouldMarkAsUsed;
+    private getZoneAccess;
+    private validateSpecialPermissions;
+    private validateGeographicRestrictions;
+    private auditAccessRightEvent;
+    private auditAccessValidation;
+}

@@ -1,0 +1,31 @@
+import { PrismaService } from '../../../shared/prisma/prisma.service';
+import { RedisService } from '../../../shared/redis/redis.service';
+import { LoggerService } from '../../../shared/logger/logger.service';
+import { BullmqService } from '../../../shared/bullmq/bullmq.service';
+import { CreatePermissionDto, BulkAssignPermissionsDto } from '../dto/permissions';
+import { Permission, PermissionsListResponse, PermissionFilters } from '../interfaces/rbac.interface';
+export declare class PermissionsService {
+    private readonly prisma;
+    private readonly redis;
+    private readonly bullmq;
+    private readonly logger;
+    constructor(prisma: PrismaService, redis: RedisService, bullmq: BullmqService, loggerService: LoggerService);
+    createPermission(permissionData: CreatePermissionDto): Promise<Permission>;
+    findPermissionById(id: string): Promise<Permission>;
+    findPermissionByName(name: string): Promise<Permission>;
+    findManyPermissions(filters?: PermissionFilters): Promise<PermissionsListResponse>;
+    updatePermission(id: string, updateData: Partial<CreatePermissionDto>): Promise<Permission>;
+    assignPermissionToRole(roleId: string, permissionId: string): Promise<void>;
+    removePermissionFromRole(roleId: string, permissionId: string): Promise<void>;
+    bulkAssignPermissions(bulkData: BulkAssignPermissionsDto): Promise<void>;
+    getRolePermissions(roleId: string): Promise<Permission[]>;
+    initializeSystemPermissions(): Promise<void>;
+    private getSystemPermissionsDefinitions;
+    private validatePermissionUniqueness;
+    private validatePermissionCreation;
+    private validatePermissionConditions;
+    private cachePermission;
+    private invalidatePermissionCache;
+    private invalidateRolePermissionsCache;
+    private auditPermissionEvent;
+}

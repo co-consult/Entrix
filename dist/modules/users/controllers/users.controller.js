@@ -21,13 +21,16 @@ const user_search_dto_1 = require("../dto/users/user-search.dto");
 const update_privacy_dto_1 = require("../dto/users/update-privacy.dto");
 const user_preferences_dto_1 = require("../dto/users/user-preferences.dto");
 const users_service_1 = require("../services/users.service");
+const prisma_service_1 = require("../../../shared/prisma/prisma.service");
 const jwt_auth_guard_1 = require("../../auth/guards/jwt-auth.guard");
 const current_user_decorator_1 = require("../decorators/current-user.decorator");
 const common_2 = require("@nestjs/common");
 let UsersController = class UsersController {
     usersService;
-    constructor(usersService) {
+    prisma;
+    constructor(usersService, prisma) {
         this.usersService = usersService;
+        this.prisma = prisma;
     }
     async createUser(dto) {
         try {
@@ -107,6 +110,12 @@ let UsersController = class UsersController {
             success: true,
             data: stats,
         };
+    }
+    async getAllRoles() {
+        const roles = await this.prisma.roles.findMany({
+            select: { id: true, code: true, name: true, description: true, is_active: true }
+        });
+        return { success: true, data: roles };
     }
     async getUserById(id) {
         const user = await this.usersService.findById(id);
@@ -307,6 +316,15 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "getUserStats", null);
 __decorate([
+    (0, common_1.Get)('roles'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiOperation)({ summary: 'Liste de tous les rôles', description: 'Récupérer tous les rôles disponibles' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Liste des rôles' }),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "getAllRoles", null);
+__decorate([
     (0, common_1.Get)(':id'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, swagger_1.ApiOperation)({
@@ -488,6 +506,6 @@ exports.UsersController = UsersController = __decorate([
     (0, swagger_1.ApiTags)('Users'),
     (0, common_1.Controller)('users'),
     (0, swagger_1.ApiBearerAuth)(),
-    __metadata("design:paramtypes", [users_service_1.UsersService])
+    __metadata("design:paramtypes", [users_service_1.UsersService, prisma_service_1.PrismaService])
 ], UsersController);
 //# sourceMappingURL=users.controller.js.map

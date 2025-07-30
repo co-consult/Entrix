@@ -23,6 +23,7 @@ const create_subscription_sale_dto_1 = require("../dto/create-subscription-sale.
 const convert_anonymous_subscription_dto_1 = require("../dto/convert-anonymous-subscription.dto");
 const subscription_sale_response_dto_1 = require("../dto/subscription-sale-response.dto");
 const sales_flow_dto_1 = require("../dto/sales-flow.dto");
+const jwt_auth_guard_1 = require("../../auth/guards/jwt-auth.guard");
 const sale_types_1 = require("../types/sale-types");
 let SubscriptionSalesController = class SubscriptionSalesController {
     subscriptionSalesService;
@@ -277,6 +278,21 @@ let SubscriptionSalesController = class SubscriptionSalesController {
                 onboardingInfo: sub.metadata?.onboarding,
             })),
             message: `${subscriptions.length} abonnement(s) trouvé(s) avec cette clé d'onboarding`,
+        };
+    }
+    async getAllPlansByOrganizer(organizerId) {
+        const plans = await this.subscriptionPlansService.getAllPlansByOrganizer(organizerId);
+        const activePlans = plans.filter(p => p.isActive).length;
+        const inactivePlans = plans.filter(p => !p.isActive).length;
+        const plansOnSale = plans.filter(p => p.isCurrentlyOnSale).length;
+        return {
+            success: true,
+            data: plans,
+            totalPlans: plans.length,
+            activePlans,
+            inactivePlans,
+            plansOnSale,
+            message: `${plans.length} plan(s) trouvé(s) pour cet organisateur`,
         };
     }
 };
@@ -647,8 +663,82 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], SubscriptionSalesController.prototype, "getSubscriptionsByOnboardingKey", null);
+__decorate([
+    (0, common_1.Get)('organizers/:organizerId/plans'),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Obtenir tous les plans d\'abonnement d\'un organisateur',
+        description: 'Récupère la liste complète de tous les plans d\'abonnement (actifs et inactifs) pour un organisateur spécifique.',
+    }),
+    (0, swagger_1.ApiParam)({
+        name: 'organizerId',
+        description: 'ID de l\'organisateur',
+        example: '550e8400-e29b-41d4-a716-446655440000'
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: 'Plans de l\'organisateur récupérés avec succès',
+        schema: {
+            type: 'object',
+            properties: {
+                success: { type: 'boolean', example: true },
+                data: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string' },
+                            code: { type: 'string' },
+                            name: { type: 'string' },
+                            description: { type: 'string' },
+                            type: { type: 'string' },
+                            price: { type: 'number' },
+                            currency: { type: 'string' },
+                            isActive: { type: 'boolean' },
+                            isCurrentlyOnSale: { type: 'boolean' },
+                            maxSubscribers: { type: 'number' },
+                            currentSubscribers: { type: 'number' },
+                            activeSubscriptions: { type: 'number' },
+                            availableSlots: { type: 'number', nullable: true },
+                            validFrom: { type: 'string', format: 'date' },
+                            validUntil: { type: 'string', format: 'date' },
+                            saleStartDate: { type: 'string', format: 'date', nullable: true },
+                            saleEndDate: { type: 'string', format: 'date', nullable: true },
+                            organizer: {
+                                type: 'object',
+                                properties: {
+                                    id: { type: 'string' },
+                                    name: { type: 'string' },
+                                    code: { type: 'string' },
+                                    contactEmail: { type: 'string' }
+                                }
+                            },
+                            zones: { type: 'array' },
+                            includedEvents: { type: 'array' },
+                            createdAt: { type: 'string', format: 'date-time' },
+                            updatedAt: { type: 'string', format: 'date-time' }
+                        }
+                    }
+                },
+                totalPlans: { type: 'number', example: 5 },
+                activePlans: { type: 'number', example: 3 },
+                inactivePlans: { type: 'number', example: 2 },
+                plansOnSale: { type: 'number', example: 2 },
+                message: { type: 'string', example: '5 plan(s) trouvé(s) pour cet organisateur' }
+            }
+        }
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 404,
+        description: 'Organisateur non trouvé ou aucun plan'
+    }),
+    __param(0, (0, common_1.Param)('organizerId', common_1.ParseUUIDPipe)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], SubscriptionSalesController.prototype, "getAllPlansByOrganizer", null);
 exports.SubscriptionSalesController = SubscriptionSalesController = __decorate([
     (0, swagger_1.ApiTags)('Subscription Sales'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Controller)('subscription-sales'),
     __metadata("design:paramtypes", [subscription_sales_service_1.SubscriptionSalesService,
         subscription_plans_service_1.SubscriptionPlansService,

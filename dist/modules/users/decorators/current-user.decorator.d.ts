@@ -59,7 +59,7 @@ export interface CurrentUserData {
     ipAddress?: string;
     userAgent?: string;
 }
-export declare const CurrentUser: (...dataOrPipes: (import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>> | keyof CurrentUserData)[]) => ParameterDecorator;
+export declare const CurrentUser: (...dataOrPipes: (keyof CurrentUserData | import("@nestjs/common").PipeTransform<any, any> | import("@nestjs/common").Type<import("@nestjs/common").PipeTransform<any, any>>)[]) => ParameterDecorator;
 export declare const CurrentUserId: (...dataOrPipes: unknown[]) => ParameterDecorator;
 export declare const CurrentUserEmail: (...dataOrPipes: unknown[]) => ParameterDecorator;
 export declare const CurrentUserFullName: (...dataOrPipes: unknown[]) => ParameterDecorator;

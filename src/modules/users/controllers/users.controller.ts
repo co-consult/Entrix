@@ -32,6 +32,7 @@ import { UserPreferencesDto } from '../dto/users/user-preferences.dto';
 
 // Services
 import { UsersService } from '../services/users.service';
+import { PrismaService } from '../../../shared/prisma/prisma.service';
 
 // Guards
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -71,7 +72,7 @@ import {
 @Controller('users')
 @ApiBearerAuth()
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService, private readonly prisma: PrismaService) {}
 
   @Post()
   @ApiOperation({
@@ -204,6 +205,17 @@ export class UsersController {
       success: true,
       data: stats,
     };
+  }
+
+  @Get('roles')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Liste de tous les rôles', description: 'Récupérer tous les rôles disponibles' })
+  @ApiResponse({ status: 200, description: 'Liste des rôles' })
+  async getAllRoles() {
+    const roles = await this.prisma.roles.findMany({
+      select: { id: true, code: true, name: true, description: true, is_active: true }
+    });
+    return { success: true, data: roles };
   }
 
   @Get(':id')

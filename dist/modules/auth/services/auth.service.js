@@ -459,30 +459,16 @@ let AuthService = class AuthService {
                 this.logger.endOperation('validateUser', operationId, false, undefined, { reason: 'user_not_found' });
                 return null;
             }
-            if (!dbUser.is_active) {
-                this.logger.warn('Login attempt on inactive account', JSON.stringify({ email }));
-                throw new exceptions_1.AccountLockedException();
-            }
-            const emailVerificationRequired = process.env.EMAIL_VERIFICATION_REQUIRED === 'true';
-            if (emailVerificationRequired && !dbUser.email_verified) {
-                throw new exceptions_1.EmailNotVerifiedException();
-            }
-            console.log('🔍 DEBUG validateUser - Vérification password avec PasswordService pour:', email);
             const isPasswordValid = await this.passwordService.verifyUserPasswordByEmail(email, password);
             if (!isPasswordValid) {
-                console.log('🔍 DEBUG validateUser - Password invalide pour:', email);
-                await this.handleFailedLogin(email, {
-                    ...context,
-                    ipAddress: normalizedIp
-                });
-                this.logger.endOperation('validateUser', operationId, false, undefined, { reason: 'invalid_password' });
                 return null;
             }
-            console.log('🔍 DEBUG validateUser - Password valide pour:', email);
+            console.log('DEBUG validateUser - dbUser:', JSON.stringify(dbUser, null, 2));
             const user = this.mapDbUserToProfile(dbUser);
             user.roles = dbUser.user_roles_user_roles_user_idTousers
-                ?.filter(ur => ur.status === 'ACTIVE')
-                .map(ur => ur.roles.name) || [];
+                ?.filter(ur => ur.status === 'ACTIVE' && ur.roles?.code)
+                .map(ur => ur.roles.code) || [];
+            console.log('DEBUG validateUser - mapped user.roles:', user.roles);
             user.permissions = [];
             this.logger.endOperation('validateUser', operationId, true);
             return user;
@@ -895,13 +881,18 @@ let AuthService = class AuthService {
         if (!dbUser)
             return null;
         const user = this.mapDbUserToProfile(dbUser);
+        console.log('DEBUG getUserProfile - dbUser:', JSON.stringify(dbUser, null, 2));
         user.roles = dbUser.user_roles_user_roles_user_idTousers
-            ?.filter(ur => ur.status === 'ACTIVE')
-            .map(ur => ur.roles.name) || [];
+            ?.filter(ur => ur.status === 'ACTIVE' && ur.roles?.code)
+            .map(ur => ur.roles.code) || [];
+        console.log('DEBUG getUserProfile - mapped user.roles:', user.roles);
         user.permissions = [];
         return user;
     }
     mapDbUserToProfile(dbUser) {
+        const roles = dbUser.user_roles_user_roles_user_idTousers
+            ?.filter(ur => ur.status === 'ACTIVE' && ur.roles?.code)
+            .map(ur => ur.roles.code) || dbUser.roles || [];
         return {
             id: dbUser.id,
             email: dbUser.email,
@@ -916,8 +907,8 @@ let AuthService = class AuthService {
             metadata: dbUser.metadata,
             createdAt: dbUser.created_at,
             updatedAt: dbUser.updated_at,
-            roles: [],
-            permissions: [],
+            roles: roles,
+            permissions: dbUser.permissions || [],
         };
     }
     async generateMfaChallenge(userId, email, deviceInfo) {

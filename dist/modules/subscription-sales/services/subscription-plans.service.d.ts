@@ -16,4 +16,6 @@ export declare class SubscriptionPlansService {
         current_subscribers: number;
     }>;
     invalidatePlanCache(planId: string, organizerId?: string): Promise<void>;
+    getAllPlansByOrganizer(organizerId: string): Promise<any>;
+    private isPlanCurrentlyOnSale;
 }

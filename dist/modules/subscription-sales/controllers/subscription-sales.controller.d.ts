@@ -84,4 +84,13 @@ export declare class SubscriptionSalesController {
         }[];
         message: string;
     }>;
+    getAllPlansByOrganizer(organizerId: string): Promise<{
+        success: boolean;
+        data: any;
+        totalPlans: any;
+        activePlans: any;
+        inactivePlans: any;
+        plansOnSale: any;
+        message: string;
+    }>;
 }

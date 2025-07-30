@@ -319,8 +319,8 @@ let UsersService = class UsersService {
                 where: whereConditions,
                 include: includeConditions,
                 orderBy: sorting ? { [sorting.field]: sorting.order } : { created_at: 'desc' },
-                skip: offset,
-                take: limit
+                skip: Number(offset),
+                take: Number(limit)
             });
             const result = {
                 data: users.map(u => this.transformUserFromPrisma(u)),
@@ -582,7 +582,10 @@ let UsersService = class UsersService {
                 by: ['country'],
                 _count: { user_id: true },
                 where: {
-                    country: { not: null }
+                    NOT: [
+                        { country: null },
+                        { country: "" }
+                    ]
                 },
                 orderBy: { _count: { user_id: 'desc' } },
                 take: 10
