@@ -1,0 +1,1512 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "E Entrix":
+    - /url: /
+  - navigation:
+    - link "Accueil":
+      - /url: /
+    - link "Événements":
+      - /url: /events
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+    - link "Billets":
+      - /url: /tickets
+  - link "Se connecter":
+    - /url: /auth/login
+  - link "S'inscrire":
+    - /url: /auth/register
+- main:
+  - heading "Découvrir les événements" [level=1]
+  - paragraph: Trouvez et participez aux événements les plus passionnants près de chez vous
+  - img
+  - textbox "Rechercher des événements, lieux ou organisateurs..."
+  - combobox: Toutes les villes
+  - combobox: Tous les statuts
+  - text: PUBLISHED
+  - img
+  - text: mercredi 24 décembre 2025 Special Event 4 - Organizer Demo Exclusive event 4 for organizer cmcyqxed7000flf7p63cg6l25
+  - img
+  - text: 22:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Special Organizer
+  - link "Voir détails":
+    - /url: /events/cmd6qpz55005tk9vxk0kvjmso
+  - text: PUBLISHED
+  - img
+  - text: lundi 22 décembre 2025 Match 8 - Tunis United vs Sousse Stars Week 8 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo589001310yh10s5lrdc
+  - text: PUBLISHED
+  - img
+  - text: lundi 22 décembre 2025 Match 8 - Tunis United vs Sousse Stars Week 8 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgw9x001t9bueefszackl
+  - text: PUBLISHED
+  - img
+  - text: lundi 22 décembre 2025 Match 8 - Tunis United vs Sousse Stars Week 8 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpye40013k9vxcylgluyo
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 décembre 2025 Classical Piano Recital - Concert 5 Monthly concert featuring Classical Piano Recital
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyfd001ek9vxegrdbc4b
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 décembre 2025 Classical Piano Recital - Concert 5 Monthly concert featuring Classical Piano Recital
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwb400249bue60sbxudt
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 décembre 2025 Classical Piano Recital - Concert 5 Monthly concert featuring Classical Piano Recital
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo59f001e10yhoequyl4y
+  - text: PUBLISHED
+  - img
+  - text: mercredi 10 décembre 2025 Special Event 3 - Organizer Demo Exclusive event 3 for organizer cmcyqxed7000flf7p63cg6l25
+  - img
+  - text: 21:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Special Organizer
+  - link "Voir détails":
+    - /url: /events/cmd6qpz4x005rk9vx3tct2qoe
+  - text: PUBLISHED
+  - img
+  - text: lundi 8 décembre 2025 Match 7 - Tunis United vs Sousse Stars Week 7 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgw9p001r9bue3lchce57
+  - text: PUBLISHED
+  - img
+  - text: lundi 8 décembre 2025 Match 7 - Tunis United vs Sousse Stars Week 7 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpydw0011k9vxi5faehs2
+  - text: PUBLISHED
+  - img
+  - text: lundi 8 décembre 2025 Match 7 - Tunis United vs Sousse Stars Week 7 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo581001110yh687timi3
+  - text: PUBLISHED
+  - img
+  - text: dimanche 30 novembre 2025 Modern Pop Group - Concert 4 Monthly concert featuring Modern Pop Group
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyf5001ck9vxu28mfevf
+  - text: PUBLISHED
+  - img
+  - text: dimanche 30 novembre 2025 Modern Pop Group - Concert 4 Monthly concert featuring Modern Pop Group
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwax00229bueicly5do8
+  - text: PUBLISHED
+  - img
+  - text: dimanche 30 novembre 2025 Modern Pop Group - Concert 4 Monthly concert featuring Modern Pop Group
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo597001c10yhvi79j1ur
+  - text: PUBLISHED
+  - img
+  - text: mardi 25 novembre 2025 Digital Transformation Conference Quarterly tech conference focusing on Digital Transformation
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyge001nk9vxm9h2rids
+  - text: PUBLISHED
+  - img
+  - text: mardi 25 novembre 2025 Digital Transformation Conference Quarterly tech conference focusing on Digital Transformation
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwc4002d9buewn48ba6t
+  - text: PUBLISHED
+  - img
+  - text: mardi 25 novembre 2025 Digital Transformation Conference Quarterly tech conference focusing on Digital Transformation
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5af001n10yh6nrsjl5b
+  - text: PUBLISHED
+  - img
+  - text: lundi 24 novembre 2025 Match 6 - Tunis United vs Sousse Stars Week 6 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo57u000z10yhoe6b2prh
+  - text: PUBLISHED
+  - img
+  - text: lundi 24 novembre 2025 Match 6 - Tunis United vs Sousse Stars Week 6 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgw9i001p9buercxo5gm6
+  - text: PUBLISHED
+  - img
+  - text: lundi 24 novembre 2025 Match 6 - Tunis United vs Sousse Stars Week 6 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpydo000zk9vx4qg0ksaa
+  - text: PUBLISHED
+  - img
+  - text: jeudi 20 novembre 2025 Special Event 2 - Organizer Demo Exclusive event 2 for organizer cmcyqxed7000flf7p63cg6l25
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Special Organizer
+  - link "Voir détails":
+    - /url: /events/cmd6qpz4q005pk9vxfk80kp0b
+  - text: PUBLISHED
+  - img
+  - text: lundi 10 novembre 2025 Match 5 - Tunis United vs Sousse Stars Week 5 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpydg000xk9vxad4go9k0
+  - text: PUBLISHED
+  - img
+  - text: lundi 10 novembre 2025 Match 5 - Tunis United vs Sousse Stars Week 5 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo57m000x10yhpyogj7z8
+  - text: PUBLISHED
+  - img
+  - text: lundi 10 novembre 2025 Match 5 - Tunis United vs Sousse Stars Week 5 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgw9a001n9buedj7aq3c2
+  - text: PUBLISHED
+  - img
+  - text: mercredi 5 novembre 2025 Special Event 1 - Organizer Demo Exclusive event 1 for organizer cmcyqxed7000flf7p63cg6l25
+  - img
+  - text: 19:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Special Organizer
+  - link "Voir détails":
+    - /url: /events/cmd6qpz4i005nk9vx3yyze729
+  - text: PUBLISHED
+  - img
+  - text: lundi 27 octobre 2025 Match 4 - Tunis United vs Sousse Stars Week 4 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpyd9000vk9vx7d3um557
+  - text: PUBLISHED
+  - img
+  - text: lundi 27 octobre 2025 Match 4 - Tunis United vs Sousse Stars Week 4 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgw93001l9bue3yxxwd73
+  - text: PUBLISHED
+  - img
+  - text: lundi 27 octobre 2025 Match 4 - Tunis United vs Sousse Stars Week 4 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo57f000v10yhrk6t210u
+  - text: PUBLISHED
+  - img
+  - text: samedi 25 octobre 2025 Traditional Tunisian Ensemble - Concert 3 Monthly concert featuring Traditional Tunisian Ensemble
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyey001ak9vxnscgwb97
+  - text: PUBLISHED
+  - img
+  - text: samedi 25 octobre 2025 Traditional Tunisian Ensemble - Concert 3 Monthly concert featuring Traditional Tunisian Ensemble
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwap00209bue3ltmh2wn
+  - text: PUBLISHED
+  - img
+  - text: samedi 25 octobre 2025 Traditional Tunisian Ensemble - Concert 3 Monthly concert featuring Traditional Tunisian Ensemble
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo590001a10yhm6fcx68o
+  - text: PUBLISHED
+  - img
+  - text: lundi 20 octobre 2025 Cybersecurity & Privacy Conference Quarterly tech conference focusing on Cybersecurity & Privacy
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5a7001l10yhpup8kwk8
+  - text: PUBLISHED
+  - img
+  - text: lundi 20 octobre 2025 Cybersecurity & Privacy Conference Quarterly tech conference focusing on Cybersecurity & Privacy
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyg6001lk9vxjomemklu
+  - text: PUBLISHED
+  - img
+  - text: lundi 20 octobre 2025 Cybersecurity & Privacy Conference Quarterly tech conference focusing on Cybersecurity & Privacy
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwbx002b9bueeuw7ravb
+  - text: PUBLISHED
+  - img
+  - text: lundi 13 octobre 2025 Match 3 - Tunis United vs Sousse Stars Week 3 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo576000t10yhym87a4ds
+  - text: PUBLISHED
+  - img
+  - text: lundi 13 octobre 2025 Match 3 - Tunis United vs Sousse Stars Week 3 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpyd1000tk9vx4rv7ccme
+  - text: PUBLISHED
+  - img
+  - text: lundi 13 octobre 2025 Match 3 - Tunis United vs Sousse Stars Week 3 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgw8v001j9buek83p8hkf
+  - text: PUBLISHED
+  - img
+  - text: mardi 7 octobre 2025 Closing Ceremony Day 7 of the Tunis Cultural Festival
+  - img
+  - text: 19:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyko002rk9vxj8vygnx2
+  - text: PUBLISHED
+  - img
+  - text: mardi 7 octobre 2025 Closing Ceremony Day 7 of the Tunis Cultural Festival
+  - img
+  - text: 19:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5eq002r10yhne60ywei
+  - text: PUBLISHED
+  - img
+  - text: mardi 7 octobre 2025 Closing Ceremony Day 7 of the Tunis Cultural Festival
+  - img
+  - text: 19:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwgh003h9bue66firmcq
+  - text: PUBLISHED
+  - img
+  - text: lundi 6 octobre 2025 Film Screening Day 6 of the Tunis Cultural Festival
+  - img
+  - text: 20:30
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5ek002p10yhhnvaxl5q
+  - text: PUBLISHED
+  - img
+  - text: lundi 6 octobre 2025 Film Screening Day 6 of the Tunis Cultural Festival
+  - img
+  - text: 20:30
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwg9003f9buec4iepiza
+  - text: PUBLISHED
+  - img
+  - text: lundi 6 octobre 2025 Film Screening Day 6 of the Tunis Cultural Festival
+  - img
+  - text: 20:30
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpykg002pk9vxqt0u4ecu
+  - text: PUBLISHED
+  - img
+  - text: dimanche 5 octobre 2025 Poetry Reading Day 5 of the Tunis Cultural Festival
+  - img
+  - text: 17:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5ed002n10yhkkx36qi1
+  - text: PUBLISHED
+  - img
+  - text: dimanche 5 octobre 2025 Poetry Reading Day 5 of the Tunis Cultural Festival
+  - img
+  - text: 17:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyk9002nk9vxmzkjrkh0
+  - text: PUBLISHED
+  - img
+  - text: dimanche 5 octobre 2025 Poetry Reading Day 5 of the Tunis Cultural Festival
+  - img
+  - text: 17:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwg2003d9buec8o0wnoa
+  - text: PUBLISHED
+  - img
+  - text: samedi 4 octobre 2025 Dance Performance Day 4 of the Tunis Cultural Festival
+  - img
+  - text: 21:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5e5002l10yhkfrff2gd
+  - text: PUBLISHED
+  - img
+  - text: samedi 4 octobre 2025 Dance Performance Day 4 of the Tunis Cultural Festival
+  - img
+  - text: 21:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyk2002lk9vxu8fw97ku
+  - text: PUBLISHED
+  - img
+  - text: samedi 4 octobre 2025 Dance Performance Day 4 of the Tunis Cultural Festival
+  - img
+  - text: 21:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwfu003b9buey2x7dmtr
+  - text: PUBLISHED
+  - img
+  - text: vendredi 3 octobre 2025 Art Exhibition Opening Day 3 of the Tunis Cultural Festival
+  - img
+  - text: 11:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwfn00399bue9twdlja9
+  - text: PUBLISHED
+  - img
+  - text: vendredi 3 octobre 2025 Art Exhibition Opening Day 3 of the Tunis Cultural Festival
+  - img
+  - text: 11:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyju002jk9vx0dr1xtfp
+  - text: PUBLISHED
+  - img
+  - text: vendredi 3 octobre 2025 Art Exhibition Opening Day 3 of the Tunis Cultural Festival
+  - img
+  - text: 11:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5dy002j10yhxn4xc0dy
+  - text: PUBLISHED
+  - img
+  - text: jeudi 2 octobre 2025 Traditional Music Night Day 2 of the Tunis Cultural Festival
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5dq002h10yh294ozmwv
+  - text: PUBLISHED
+  - img
+  - text: jeudi 2 octobre 2025 Traditional Music Night Day 2 of the Tunis Cultural Festival
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyjn002hk9vx0zndsi7u
+  - text: PUBLISHED
+  - img
+  - text: jeudi 2 octobre 2025 Traditional Music Night Day 2 of the Tunis Cultural Festival
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwff00379buelbwhpapp
+  - text: PUBLISHED
+  - img
+  - text: mercredi 1 octobre 2025 Opening Ceremony Day 1 of the Tunis Cultural Festival
+  - img
+  - text: 19:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyjf002fk9vxs0of659d
+  - text: PUBLISHED
+  - img
+  - text: mercredi 1 octobre 2025 Opening Ceremony Day 1 of the Tunis Cultural Festival
+  - img
+  - text: 19:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwf800359bueum9suw5p
+  - text: PUBLISHED
+  - img
+  - text: mercredi 1 octobre 2025 Opening Ceremony Day 1 of the Tunis Cultural Festival
+  - img
+  - text: 19:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 2000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5dj002f10yhi9lbut9t
+  - text: PUBLISHED
+  - img
+  - text: lundi 29 septembre 2025 Match 2 - Tunis United vs Sousse Stars Week 2 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo56z000r10yhzv62wm0g
+  - text: PUBLISHED
+  - img
+  - text: lundi 29 septembre 2025 Match 2 - Tunis United vs Sousse Stars Week 2 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpycu000rk9vxlcjb8zpd
+  - text: PUBLISHED
+  - img
+  - text: lundi 29 septembre 2025 Match 2 - Tunis United vs Sousse Stars Week 2 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgw8o001h9buefh0u621h
+  - text: PUBLISHED
+  - img
+  - text: lundi 22 septembre 2025 Theater Acting Workshop Weekly workshop on Theater Acting
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwet00329bue1iem1s38
+  - text: PUBLISHED
+  - img
+  - text: lundi 22 septembre 2025 Theater Acting Workshop Weekly workshop on Theater Acting
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5d5002c10yhv4n85vz6
+  - text: PUBLISHED
+  - img
+  - text: lundi 22 septembre 2025 Theater Acting Workshop Weekly workshop on Theater Acting
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyj2002ck9vxz4vqo31w
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 septembre 2025 Jazz Fusion Band - Concert 2 Monthly concert featuring Jazz Fusion Band
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyeq0018k9vxtnp0z1eg
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 septembre 2025 Jazz Fusion Band - Concert 2 Monthly concert featuring Jazz Fusion Band
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwai001y9buecf4ve4xr
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 septembre 2025 Jazz Fusion Band - Concert 2 Monthly concert featuring Jazz Fusion Band
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo58t001810yhcd3644e7
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Match 1 - Tunis United vs Sousse Stars Week 1 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo56l000p10yh3dxucq7g
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Match 1 - Tunis United vs Sousse Stars Week 1 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpych000pk9vxecieo0yi
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Match 1 - Tunis United vs Sousse Stars Week 1 of the 2025 Football Championship
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgw8a001f9bue8llbe9cp
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Film Making Workshop Weekly workshop on Film Making
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5cy002a10yhejoxkx99
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Film Making Workshop Weekly workshop on Film Making
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwem00309buentqojvda
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Film Making Workshop Weekly workshop on Film Making
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyiv002ak9vxueqqjq96
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Web Development & Cloud Conference Quarterly tech conference focusing on Web Development & Cloud
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5a0001j10yhrkoby293
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Web Development & Cloud Conference Quarterly tech conference focusing on Web Development & Cloud
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyfz001jk9vx3dkc9ee9
+  - text: PUBLISHED
+  - img
+  - text: lundi 15 septembre 2025 Web Development & Cloud Conference Quarterly tech conference focusing on Web Development & Cloud
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwbp00299buelmo2l7r4
+  - text: PUBLISHED
+  - img
+  - text: lundi 8 septembre 2025 Craft & DIY Workshop Weekly workshop on Craft & DIY
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwee002y9buef4fc87zw
+  - text: PUBLISHED
+  - img
+  - text: lundi 8 septembre 2025 Craft & DIY Workshop Weekly workshop on Craft & DIY
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5cq002810yhp5034nk6
+  - text: PUBLISHED
+  - img
+  - text: lundi 8 septembre 2025 Craft & DIY Workshop Weekly workshop on Craft & DIY
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyio0028k9vxom3syzsg
+  - text: PUBLISHED
+  - img
+  - text: lundi 1 septembre 2025 TEST - Football Season 2025 Test event for annual football season - starts in 2 months
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgwhe003l9buec5m7whm4
+  - text: PUBLISHED
+  - img
+  - text: lundi 1 septembre 2025 TEST - Football Season 2025 Test event for annual football season - starts in 2 months
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo5fd002t10yh32fip00u
+  - text: PUBLISHED
+  - img
+  - text: lundi 1 septembre 2025 TEST - Football Season 2025 Test event for annual football season - starts in 2 months
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpyl9002tk9vxstq1ab4e
+  - text: PUBLISHED
+  - img
+  - text: lundi 1 septembre 2025 Fitness & Wellness Workshop Weekly workshop on Fitness & Wellness
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyig0026k9vxuif6sctl
+  - text: PUBLISHED
+  - img
+  - text: lundi 1 septembre 2025 Fitness & Wellness Workshop Weekly workshop on Fitness & Wellness
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwe7002w9bue0ma6v1qj
+  - text: PUBLISHED
+  - img
+  - text: lundi 1 septembre 2025 Fitness & Wellness Workshop Weekly workshop on Fitness & Wellness
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5ch002610yhfi6mufg2
+  - text: PUBLISHED
+  - img
+  - text: lundi 25 août 2025 Language Learning Workshop Weekly workshop on Language Learning
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyi90024k9vxsjsw37zi
+  - text: PUBLISHED
+  - img
+  - text: lundi 25 août 2025 Language Learning Workshop Weekly workshop on Language Learning
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5ca002410yhvnutp5p5
+  - text: PUBLISHED
+  - img
+  - text: lundi 25 août 2025 Language Learning Workshop Weekly workshop on Language Learning
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwdz002u9buedprex2qx
+  - text: PUBLISHED
+  - img
+  - text: lundi 18 août 2025 Pottery & Ceramics Workshop Weekly workshop on Pottery & Ceramics
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyi10022k9vxj2nmpb50
+  - text: PUBLISHED
+  - img
+  - text: lundi 18 août 2025 Pottery & Ceramics Workshop Weekly workshop on Pottery & Ceramics
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5c3002210yh1mx9jrfr
+  - text: PUBLISHED
+  - img
+  - text: lundi 18 août 2025 Pottery & Ceramics Workshop Weekly workshop on Pottery & Ceramics
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwds002s9bueuj5120z4
+  - text: PUBLISHED
+  - img
+  - text: vendredi 15 août 2025 Layla Ben Ali & Orchestra - Concert 1 Monthly concert featuring Layla Ben Ali & Orchestra
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyej0016k9vxqxy4gc0v
+  - text: PUBLISHED
+  - img
+  - text: vendredi 15 août 2025 Layla Ben Ali & Orchestra - Concert 1 Monthly concert featuring Layla Ben Ali & Orchestra
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwaa001w9bueqatgtvvd
+  - text: PUBLISHED
+  - img
+  - text: vendredi 15 août 2025 TEST - Monthly Concert Series Test event for monthly concert series - starts in 1 month
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwhm003n9bueq5j7vao4
+  - text: PUBLISHED
+  - img
+  - text: vendredi 15 août 2025 TEST - Monthly Concert Series Test event for monthly concert series - starts in 1 month
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5fk002v10yhpvc7r4zt
+  - text: PUBLISHED
+  - img
+  - text: vendredi 15 août 2025 Layla Ben Ali & Orchestra - Concert 1 Monthly concert featuring Layla Ben Ali & Orchestra
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo58m001610yhehx4c5tq
+  - text: PUBLISHED
+  - img
+  - text: vendredi 15 août 2025 TEST - Monthly Concert Series Test event for monthly concert series - starts in 1 month
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpylh002vk9vxe72xqrn1
+  - text: PUBLISHED
+  - img
+  - text: lundi 11 août 2025 Dance Workshop Workshop Weekly workshop on Dance Workshop
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5bv002010yh89y1s2pb
+  - text: PUBLISHED
+  - img
+  - text: lundi 11 août 2025 Dance Workshop Workshop Weekly workshop on Dance Workshop
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwdk002q9bueuna3by66
+  - text: PUBLISHED
+  - img
+  - text: lundi 11 août 2025 Dance Workshop Workshop Weekly workshop on Dance Workshop
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyhu0020k9vxb2xq2fq1
+  - text: PUBLISHED
+  - img
+  - text: dimanche 10 août 2025 AI & Machine Learning Conference Quarterly tech conference focusing on AI & Machine Learning
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo59s001h10yhqxnlluj2
+  - text: PUBLISHED
+  - img
+  - text: dimanche 10 août 2025 AI & Machine Learning Conference Quarterly tech conference focusing on AI & Machine Learning
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwbi00279bueaj9ub19g
+  - text: PUBLISHED
+  - img
+  - text: dimanche 10 août 2025 AI & Machine Learning Conference Quarterly tech conference focusing on AI & Machine Learning
+  - img
+  - text: 10:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 500 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyfr001hk9vxf8ip9ljs
+  - text: PUBLISHED
+  - img
+  - text: lundi 4 août 2025 Cooking Masterclass Workshop Weekly workshop on Cooking Masterclass
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwdd002o9buea4zdjwz6
+  - text: PUBLISHED
+  - img
+  - text: lundi 4 août 2025 Cooking Masterclass Workshop Weekly workshop on Cooking Masterclass
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5bo001y10yhorhmuja0
+  - text: PUBLISHED
+  - img
+  - text: lundi 4 août 2025 Cooking Masterclass Workshop Weekly workshop on Cooking Masterclass
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyhn001yk9vxrfvgjgqw
+  - text: PUBLISHED
+  - img
+  - text: vendredi 1 août 2025 TEST - Quarterly Festival Test event for quarterly festival - starts in 3 weeks
+  - img
+  - text: 19:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 8000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgwht003p9bueiegtfbvk
+  - text: PUBLISHED
+  - img
+  - text: vendredi 1 août 2025 TEST - Quarterly Festival Test event for quarterly festival - starts in 3 weeks
+  - img
+  - text: 19:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 8000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo5fr002x10yhm2bjechh
+  - text: PUBLISHED
+  - img
+  - text: vendredi 1 août 2025 TEST - Quarterly Festival Test event for quarterly festival - starts in 3 weeks
+  - img
+  - text: 19:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 0 / 8000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpylo002xk9vxprb6i0gz
+  - text: PUBLISHED
+  - img
+  - text: lundi 28 juillet 2025 TEST - Weekly Workshop Series Test event for weekly workshop - starts next week
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 100 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpylv002zk9vx7d16r80w
+  - text: PUBLISHED
+  - img
+  - text: lundi 28 juillet 2025 TEST - Weekly Workshop Series Test event for weekly workshop - starts next week
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 100 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5fy002z10yhjmpqnfu2
+  - text: PUBLISHED
+  - img
+  - text: lundi 28 juillet 2025 TEST - Weekly Workshop Series Test event for weekly workshop - starts next week
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 100 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwi1003r9bue67kgqjy1
+  - text: PUBLISHED
+  - img
+  - text: lundi 28 juillet 2025 Music Production Workshop Weekly workshop on Music Production
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyhf001wk9vxdsytsjdw
+  - text: PUBLISHED
+  - img
+  - text: lundi 28 juillet 2025 Music Production Workshop Weekly workshop on Music Production
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5bg001w10yhoo60v6j1
+  - text: PUBLISHED
+  - img
+  - text: lundi 28 juillet 2025 Music Production Workshop Weekly workshop on Music Production
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwd5002m9buesleb4ihi
+  - text: PUBLISHED
+  - img
+  - text: lundi 21 juillet 2025 Photography Basics Workshop Weekly workshop on Photography Basics
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwcy002k9bue1b9cpdn2
+  - text: PUBLISHED
+  - img
+  - text: lundi 21 juillet 2025 Photography Basics Workshop Weekly workshop on Photography Basics
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5b9001u10yhydw6963t
+  - text: PUBLISHED
+  - img
+  - text: lundi 21 juillet 2025 Photography Basics Workshop Weekly workshop on Photography Basics
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyh6001uk9vxk6lkbbmz
+  - text: PUBLISHED
+  - img
+  - text: lundi 14 juillet 2025 Creative Writing Workshop Weekly workshop on Creative Writing
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpygz001sk9vx5wuorvqh
+  - text: PUBLISHED
+  - img
+  - text: lundi 14 juillet 2025 Creative Writing Workshop Weekly workshop on Creative Writing
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwcr002i9buevkmrlm6m
+  - text: PUBLISHED
+  - img
+  - text: lundi 14 juillet 2025 Creative Writing Workshop Weekly workshop on Creative Writing
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5b1001s10yhacslhkdh
+  - text: PUBLISHED
+  - img
+  - text: lundi 7 juillet 2025 Digital Art & Design Workshop Weekly workshop on Digital Art & Design
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5au001q10yh5tjp2obw
+  - text: PUBLISHED
+  - img
+  - text: lundi 7 juillet 2025 Digital Art & Design Workshop Weekly workshop on Digital Art & Design
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwcj002g9buex92uwkse
+  - text: PUBLISHED
+  - img
+  - text: lundi 7 juillet 2025 Digital Art & Design Workshop Weekly workshop on Digital Art & Design
+  - img
+  - text: 15:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 0 / 50 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpygr001qk9vxn0ckrmj1
+  - text: PUBLISHED
+  - img
+  - text: mardi 15 octobre 2024 Tunis Derby 2024 Epic clash between Tunis United and Sousse Stars
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 2 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qpym30031k9vxgrls5viv
+  - text: PUBLISHED
+  - img
+  - text: mardi 15 octobre 2024 Tunis Derby 2024 Epic clash between Tunis United and Sousse Stars
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 2 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qgwi8003t9buert6p9edo
+  - text: PUBLISHED
+  - img
+  - text: mardi 15 octobre 2024 Tunis Derby 2024 Epic clash between Tunis United and Sousse Stars
+  - img
+  - text: 21:00
+  - img
+  - text: Tunis Olympic Arena, Tunis
+  - img
+  - text: 2 / 15000 participants par Tunis Sports Club
+  - link "Voir détails":
+    - /url: /events/cmd6qo5g5003110yh7hkw559q
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 juillet 2024 Beethoven Symphony No. 9 Masterpiece performance by Tunis Symphony Orchestra
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 1 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qpyma0033k9vxx1z900gb
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 juillet 2024 Beethoven Symphony No. 9 Masterpiece performance by Tunis Symphony Orchestra
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 1 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qgwig003v9bue8swxteui
+  - text: PUBLISHED
+  - img
+  - text: samedi 20 juillet 2024 Beethoven Symphony No. 9 Masterpiece performance by Tunis Symphony Orchestra
+  - img
+  - text: 20:00
+  - img
+  - text: Sousse Cultural Center, Sousse
+  - img
+  - text: 1 / 3000 participants par Tunis Cultural Productions
+  - link "Voir détails":
+    - /url: /events/cmd6qo5gd003310yhws8m2bz4
+- contentinfo:
+  - text: E Entrix
+  - paragraph: La plateforme de référence pour la gestion d'événements et la billetterie en Tunisie et au Maghreb.
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - heading "Liens rapides" [level=3]
+  - list:
+    - listitem:
+      - link "Événements":
+        - /url: /events
+    - listitem:
+      - link "Lieux":
+        - /url: /venues
+    - listitem:
+      - link "Organisateurs":
+        - /url: /organizers
+    - listitem:
+      - link "À propos":
+        - /url: /about
+  - heading "Support" [level=3]
+  - list:
+    - listitem:
+      - link "Centre d'aide":
+        - /url: /help
+    - listitem:
+      - link "Nous contacter":
+        - /url: /contact
+    - listitem:
+      - link "FAQ":
+        - /url: /faq
+    - listitem:
+      - link "Conditions d'utilisation":
+        - /url: /terms
+  - heading "Contact" [level=3]
+  - img
+  - text: contact@entrix.tn
+  - img
+  - text: +216 XX XXX XXX
+  - img
+  - text: Tunis, Tunisie
+  - paragraph: © 2025 Entrix. Tous droits réservés.
+  - link "Politique de confidentialité":
+    - /url: /privacy
+  - link "Conditions d'utilisation":
+    - /url: /terms
+- region "Notifications (F8)":
+  - list
+- alert
+```

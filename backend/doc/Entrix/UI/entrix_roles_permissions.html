@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix Admin - Rôles & Permissions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .admin-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #475569;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            color: #e2e8f0;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(90deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            background: #f8fafc;
+        }
+        
+        .top-bar {
+            background: white;
+            padding: 16px 32px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .breadcrumb {
+            font-size: 14px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        
+        .breadcrumb a {
+            color: #DC143C;
+            text-decoration: none;
+        }
+        
+        .content-area {
+            padding: 32px;
+        }
+        
+        /* Summary Panel */
+        .summary-panel {
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            padding: 24px;
+            border-radius: 16px;
+            margin-bottom: 32px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        
+        .summary-title {
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+        
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+        
+        .summary-stat {
+            text-align: center;
+        }
+        
+        .summary-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #DC143C;
+            margin-bottom: 6px;
+        }
+        
+        .summary-label {
+            font-size: 13px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        
+        /* Layout */
+        .roles-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 32px;
+            height: calc(100vh - 280px);
+        }
+        
+        /* Roles Panel */
+        .roles-panel {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel-header {
+            padding: 20px 24px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .panel-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(220, 20, 60, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .roles-search {
+            padding: 16px 24px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 10px 12px 10px 40px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E") no-repeat 12px center;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .roles-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .role-item {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .role-item:hover {
+            background: #f8fafc;
+        }
+        
+        .role-item.selected {
+            background: #fef2f2;
+            border-left: 4px solid #DC143C;
+        }
+        
+        .role-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        
+        .role-name {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 4px;
+            font-size: 15px;
+        }
+        
+        .role-level {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .role-level.low {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        
+        .role-level.medium {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .role-level.high {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .role-level.critical {
+            background: #1e293b;
+            color: white;
+        }
+        
+        .role-description {
+            color: #64748b;
+            font-size: 13px;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+        
+        .role-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .role-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        /* Templates Section */
+        .templates-section {
+            background: #f8fafc;
+            padding: 16px 24px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .templates-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+        
+        .templates-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        
+        .template-btn {
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .template-btn:hover {
+            border-color: #DC143C;
+            color: #DC143C;
+        }
+        
+        /* Permissions Panel */
+        .permissions-panel {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .permissions-header {
+            padding: 20px 24px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .permissions-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .role-badge {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .permissions-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        
+        .permission-section {
+            margin-bottom: 32px;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+        
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section-toggle {
+            background: none;
+            border: none;
+            color: #DC143C;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .section-toggle:hover {
+            background: #fef2f2;
+        }
+        
+        .permissions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        
+        .permission-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background: #f8fafc;
+            border-radius: 8px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        
+        .permission-item:hover {
+            background: #f1f5f9;
+            border-color: #e2e8f0;
+        }
+        
+        .permission-info {
+            flex: 1;
+            margin-right: 12px;
+        }
+        
+        .permission-name {
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+        
+        .permission-desc {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.3;
+        }
+        
+        .permission-toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        
+        .permission-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .permission-toggle input:checked + .toggle-slider {
+            background-color: #DC143C;
+        }
+        
+        .permission-toggle input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        
+        /* Actions Bar */
+        .actions-bar {
+            padding: 20px 24px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .actions-left {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .actions-right {
+            display: flex;
+            gap: 12px;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            padding: 24px 24px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #64748b;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: #f1f5f9;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            font-size: 14px;
+        }
+        
+        .form-textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .roles-layout {
+                grid-template-columns: 300px 1fr;
+            }
+            
+            .permissions-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .roles-layout {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+                height: auto;
+            }
+            
+            .summary-stats {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            
+            .actions-bar {
+                flex-direction: column;
+                gap: 12px;
+                align-items: stretch;
+            }
+            
+            .actions-left,
+            .actions-right {
+                justify-content: center;
+            }
+        }
+        
+        /* Animations */
+        .role-item {
+            animation: slideInLeft 0.3s ease-out;
+        }
+        
+        .permission-item {
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">E</div>
+                    <span>Entrix Admin</span>
+                </div>
+            </div>
+            
+            <div style="padding: 20px 0;">
+                <a href="#" class="nav-item">
+                    <span>👥</span>
+                    Dashboard Users
+                </a>
+                <a href="#" class="nav-item">
+                    <span>🙋</span>
+                    Gestion Utilisateurs
+                </a>
+                <a href="#" class="nav-item active">
+                    <span>🔐</span>
+                    Rôles & Permissions
+                </a>
+                <a href="#" class="nav-item">
+                    <span>👪</span>
+                    Groupes
+                </a>
+                <a href="#" class="nav-item">
+                    <span>🛡️</span>
+                    Centre Sécurité
+                </a>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div>
+                    <h1 class="page-title">Rôles & Permissions</h1>
+                    <div class="breadcrumb">
+                        <a href="#">Dashboard</a> > <a href="#">Users & Rôles</a> > Rôles & Permissions
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Summary Panel -->
+                <div class="summary-panel">
+                    <h3 class="summary-title">Résumé des Rôles Système</h3>
+                    <div class="summary-stats">
+                        <div class="summary-stat">
+                            <div class="summary-value">12</div>
+                            <div class="summary-label">Rôles Actifs</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-value">147</div>
+                            <div class="summary-label">Permissions Total</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-value">24,847</div>
+                            <div class="summary-label">Utilisateurs Assignés</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main Layout -->
+                <div class="roles-layout">
+                    <!-- Roles Panel -->
+                    <div class="roles-panel">
+                        <div class="panel-header">
+                            <h2 class="panel-title">Rôles Système</h2>
+                            <button class="btn btn-primary btn-small" onclick="showNewRoleModal()">
+                                ➕ Nouveau
+                            </button>
+                        </div>
+                        
+                        <div class="roles-search">
+                            <input type="text" class="search-input" placeholder="Rechercher rôles..." id="roleSearch">
+                        </div>
+                        
+                        <!-- Templates Section -->
+                        <div class="templates-section">
+                            <div class="templates-title">Templates Rapides</div>
+                            <div class="templates-grid">
+                                <button class="template-btn" onclick="applyTemplate('admin')">Admin</button>
+                                <button class="template-btn" onclick="applyTemplate('manager')">Manager</button>
+                                <button class="template-btn" onclick="applyTemplate('staff')">Staff</button>
+                                <button class="template-btn" onclick="applyTemplate('viewer')">Viewer</button>
+                            </div>
+                        </div>
+                        
+                        <div class="roles-list" id="rolesList">
+                            <!-- Super Admin -->
+                            <div class="role-item selected" onclick="selectRole('super_admin')" data-role="super_admin">
+                                <div class="role-header">
+                                    <div>
+                                        <div class="role-name">Super Admin</div>
+                                        <div class="role-level critical">Critique</div>
+                                    </div>
+                                </div>
+                                <div class="role-description">
+                                    Accès complet au système. Gestion des utilisateurs, événements, venues et sécurité.
+                                </div>
+                                <div class="role-stats">
+                                    <div class="role-stat">
+                                        <span>👥</span>
+                                        <span>3 utilisateurs</span>
+                                    </div>
+                                    <div class="role-stat">
+                                        <span>🔐</span>
+                                        <span>147/147 permissions</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Club Admin -->
+                            <div class="role-item" onclick="selectRole('club_admin')" data-role="club_admin">
+                                <div class="role-header">
+                                    <div>
+                                        <div class="role-name">Club Admin</div>
+                                        <div class="role-level high">Élevé</div>
+                                    </div>
+                                </div>
+                                <div class="role-description">
+                                    Administration club. Gestion événements, billetterie et supporters.
+                                </div>
+                                <div class="role-stats">
+                                    <div class="role-stat">
+                                        <span>👥</span>
+                                        <span>8 utilisateurs</span>
+                                    </div>
+                                    <div class="role-stat">
+                                        <span>🔐</span>
+                                        <span>89/147 permissions</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Event Manager -->
+                            <div class="role-item" onclick="selectRole('event_manager')" data-role="event_manager">
+                                <div class="role-header">
+                                    <div>
+                                        <div class="role-name">Event Manager</div>
+                                        <div class="role-level medium">Moyen</div>
+                                    </div>
+                                </div>
+                                <div class="role-description">
+                                    Gestion des événements et coordination. Accès limité aux venues.
+                                </div>
+                                <div class="role-stats">
+                                    <div class="role-stat">
+                                        <span>👥</span>
+                                        <span>15 utilisateurs</span>
+                                    </div>
+                                    <div class="role-stat">
+                                        <span>🔐</span>
+                                        <span>45/147 permissions</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Security Manager -->
+                            <div class="role-item" onclick="selectRole('security_manager')" data-role="security_manager">
+                                <div class="role-header">
+                                    <div>
+                                        <div class="role-name">Security Manager</div>
+                                        <div class="role-level high">Élevé</div>
+                                    </div>
+                                </div>
+                                <div class="role-description">
+                                    Responsable sécurité. Gestion contrôle d'accès et incidents.
+                                </div>
+                                <div class="role-stats">
+                                    <div class="role-stat">
+                                        <span>👥</span>
+                                        <span>6 utilisateurs</span>
+                                    </div>
+                                    <div class="role-stat">
+                                        <span>🔐</span>
+                                        <span>52/147 permissions</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Staff -->
+                            <div class="role-item" onclick="selectRole('staff')" data-role="staff">
+                                <div class="role-header">
+                                    <div>
+                                        <div class="role-name">Staff</div>
+                                        <div class="role-level medium">Moyen</div>
+                                    </div>
+                                </div>
+                                <div class="role-description">
+                                    Personnel terrain. Accès aux outils opérationnels quotidiens.
+                                </div>
+                                <div class="role-stats">
+                                    <div class="role-stat">
+                                        <span>👥</span>
+                                        <span>89 utilisateurs</span>
+                                    </div>
+                                    <div class="role-stat">
+                                        <span>🔐</span>
+                                        <span>28/147 permissions</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- VIP Gold -->
+                            <div class="role-item" onclick="selectRole('vip_gold')" data-role="vip_gold">
+                                <div class="role-header">
+                                    <div>
+                                        <div class="role-name">VIP Gold</div>
+                                        <div class="role-level low">Bas</div>
+                                    </div>
+                                </div>
+                                <div class="role-description">
+                                    Membres VIP premium. Accès privilèges et services exclusifs.
+                                </div>
+                                <div class="role-stats">
+                                    <div class="role-stat">
+                                        <span>👥</span>
+                                        <span>347 utilisateurs</span>
+                                    </div>
+                                    <div class="role-stat">
+                                        <span>🔐</span>
+                                        <span>12/147 permissions</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Subscriber -->
+                            <div class="role-item" onclick="selectRole('subscriber')" data-role="subscriber">
+                                <div class="role-header">
+                                    <div>
+                                        <div class="role-name">Subscriber</div>
+                                        <div class="role-level low">Bas</div>
+                                    </div>
+                                </div>
+                                <div class="role-description">
+                                    Abonnés réguliers. Accès prioritaire billetterie et contenus.
+                                </div>
+                                <div class="role-stats">
+                                    <div class="role-stat">
+                                        <span>👥</span>
+                                        <span>4,856 utilisateurs</span>
+                                    </div>
+                                    <div class="role-stat">
+                                        <span>🔐</span>
+                                        <span>8/147 permissions</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- User -->
+                            <div class="role-item" onclick="selectRole('user')" data-role="user">
+                                <div class="role-header">
+                                    <div>
+                                        <div class="role-name">User</div>
+                                        <div class="role-level low">Bas</div>
+                                    </div>
+                                </div>
+                                <div class="role-description">
+                                    Utilisateurs standards. Accès de base aux fonctionnalités publiques.
+                                </div>
+                                <div class="role-stats">
+                                    <div class="role-stat">
+                                        <span>👥</span>
+                                        <span>19,523 utilisateurs</span>
+                                    </div>
+                                    <div class="role-stat">
+                                        <span>🔐</span>
+                                        <span>5/147 permissions</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Permissions Panel -->
+                    <div class="permissions-panel">
+                        <div class="permissions-header">
+                            <h2 class="permissions-title">Matrice des Permissions</h2>
+                            <div class="role-badge" id="currentRoleBadge">Super Admin</div>
+                        </div>
+                        
+                        <div class="permissions-content" id="permissionsContent">
+                            <!-- Users & Groups -->
+                            <div class="permission-section">
+                                <div class="section-header">
+                                    <h3 class="section-title">
+                                        <span>👥</span>
+                                        Utilisateurs & Groupes
+                                    </h3>
+                                    <button class="section-toggle" onclick="toggleSection('users')">Tout activer</button>
+                                </div>
+                                <div class="permissions-grid">
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Créer Utilisateur</div>
+                                            <div class="permission-desc">Ajouter nouveaux utilisateurs au système</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="users.create">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Modifier Utilisateur</div>
+                                            <div class="permission-desc">Éditer profils et informations existants</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="users.update">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Supprimer Utilisateur</div>
+                                            <div class="permission-desc">Supprimer définitivement des comptes</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="users.delete">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Gérer Groupes</div>
+                                            <div class="permission-desc">Créer et modifier les groupes d'utilisateurs</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="groups.manage">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Assigner Rôles</div>
+                                            <div class="permission-desc">Modifier les rôles des utilisateurs</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="users.assign_roles">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Import/Export</div>
+                                            <div class="permission-desc">Import en masse et export de données</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="users.import_export">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Events -->
+                            <div class="permission-section">
+                                <div class="section-header">
+                                    <h3 class="section-title">
+                                        <span>🎪</span>
+                                        Événements
+                                    </h3>
+                                    <button class="section-toggle" onclick="toggleSection('events')">Tout activer</button>
+                                </div>
+                                <div class="permissions-grid">
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Créer Événement</div>
+                                            <div class="permission-desc">Créer de nouveaux événements</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="events.create">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Modifier Événement</div>
+                                            <div class="permission-desc">Éditer les détails des événements</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="events.update">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Annuler Événement</div>
+                                            <div class="permission-desc">Annuler ou reporter des événements</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="events.cancel">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Gérer Participants</div>
+                                            <div class="permission-desc">Gérer équipes, artistes et intervenants</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="events.manage_participants">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Venues -->
+                            <div class="permission-section">
+                                <div class="section-header">
+                                    <h3 class="section-title">
+                                        <span>🏟️</span>
+                                        Venues & Cartographie
+                                    </h3>
+                                    <button class="section-toggle" onclick="toggleSection('venues')">Tout activer</button>
+                                </div>
+                                <div class="permissions-grid">
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Gérer Venues</div>
+                                            <div class="permission-desc">CRUD complet des lieux</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="venues.manage">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Éditer Cartographies</div>
+                                            <div class="permission-desc">Modifier les plans et configurations</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="venues.edit_mappings">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Gérer Zones</div>
+                                            <div class="permission-desc">Configuration zones et places</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="venues.manage_zones">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Points d'Accès</div>
+                                            <div class="permission-desc">Configuration des entrées et sorties</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="venues.access_points">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Ticketing -->
+                            <div class="permission-section">
+                                <div class="section-header">
+                                    <h3 class="section-title">
+                                        <span>🎫</span>
+                                        Billetterie
+                                    </h3>
+                                    <button class="section-toggle" onclick="toggleSection('ticketing')">Tout activer</button>
+                                </div>
+                                <div class="permissions-grid">
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Configuration Billetterie</div>
+                                            <div class="permission-desc">Paramétrer types de billets et prix</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="ticketing.configure">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Ventes Manuelles</div>
+                                            <div class="permission-desc">Vendre des billets au guichet</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="ticketing.manual_sales">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Remboursements</div>
+                                            <div class="permission-desc">Traiter les demandes de remboursement</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="ticketing.refunds">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Rapports Ventes</div>
+                                            <div class="permission-desc">Accès aux analytics de vente</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="ticketing.reports">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Access Control -->
+                            <div class="permission-section">
+                                <div class="section-header">
+                                    <h3 class="section-title">
+                                        <span>🛡️</span>
+                                        Contrôle d'Accès
+                                    </h3>
+                                    <button class="section-toggle" onclick="toggleSection('access')">Tout activer</button>
+                                </div>
+                                <div class="permissions-grid">
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Scanner QR</div>
+                                            <div class="permission-desc">Valider les entrées aux événements</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="access.scan_qr">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Gérer Blacklist</div>
+                                            <div class="permission-desc">Bloquer et débloquer des utilisateurs</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="access.manage_blacklist">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Logs d'Accès</div>
+                                            <div class="permission-desc">Consulter l'historique des accès</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="access.view_logs">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Alertes Sécurité</div>
+                                            <div class="permission-desc">Recevoir les notifications de sécurité</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="access.security_alerts">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- System -->
+                            <div class="permission-section">
+                                <div class="section-header">
+                                    <h3 class="section-title">
+                                        <span>⚙️</span>
+                                        Système & Configuration
+                                    </h3>
+                                    <button class="section-toggle" onclick="toggleSection('system')">Tout activer</button>
+                                </div>
+                                <div class="permissions-grid">
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Paramètres Système</div>
+                                            <div class="permission-desc">Modifier la configuration globale</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="system.settings">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Gestion Rôles</div>
+                                            <div class="permission-desc">Créer et modifier les rôles système</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="system.manage_roles">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Audit & Logs</div>
+                                            <div class="permission-desc">Accès aux logs système et audit</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="system.audit_logs">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-item">
+                                        <div class="permission-info">
+                                            <div class="permission-name">Intégrations</div>
+                                            <div class="permission-desc">Gérer les APIs et webhooks</div>
+                                        </div>
+                                        <label class="permission-toggle">
+                                            <input type="checkbox" checked data-permission="system.integrations">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Actions Bar -->
+                        <div class="actions-bar">
+                            <div class="actions-left">
+                                <button class="btn btn-secondary" onclick="copyFromRole()">
+                                    📋 Copier depuis...
+                                </button>
+                                <button class="btn btn-secondary" onclick="previewRole()">
+                                    👁️ Aperçu
+                                </button>
+                            </div>
+                            <div class="actions-right">
+                                <button class="btn btn-secondary" onclick="resetPermissions()">
+                                    🔄 Réinitialiser
+                                </button>
+                                <button class="btn btn-primary" onclick="savePermissions()">
+                                    💾 Sauvegarder
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Nouveau Rôle -->
+    <div class="modal" id="newRoleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Créer un Nouveau Rôle</h2>
+                <button class="modal-close" onclick="hideModal('newRoleModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="newRoleForm">
+                    <div class="form-group">
+                        <label class="form-label">Nom du Rôle</label>
+                        <input type="text" class="form-input" placeholder="Ex: Content Manager" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Code du Rôle</label>
+                        <input type="text" class="form-input" placeholder="Ex: CONTENT_MANAGER" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Niveau de Sécurité</label>
+                        <select class="form-select" required>
+                            <option value="">Sélectionner niveau...</option>
+                            <option value="low">Bas - Accès limité</option>
+                            <option value="medium">Moyen - Accès modéré</option>
+                            <option value="high">Élevé - Accès étendu</option>
+                            <option value="critical">Critique - Accès complet</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-textarea" placeholder="Description du rôle et de ses responsabilités..." required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Template de Base</label>
+                        <select class="form-select">
+                            <option value="">Créer depuis zéro</option>
+                            <option value="admin">Admin - Permissions étendues</option>
+                            <option value="manager">Manager - Gestion opérationnelle</option>
+                            <option value="staff">Staff - Accès terrain</option>
+                            <option value="viewer">Viewer - Lecture seule</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                        <button type="button" class="btn btn-secondary" onclick="hideModal('newRoleModal')">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Créer Rôle</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Variables globales
+        let currentRole = 'super_admin';
+        let permissions = new Map();
+        let roleTemplates = {
+            admin: ['users.create', 'users.update', 'events.create', 'events.update', 'venues.manage'],
+            manager: ['events.create', 'events.update', 'ticketing.configure', 'access.view_logs'],
+            staff: ['access.scan_qr', 'ticketing.manual_sales'],
+            viewer: ['events.view', 'venues.view', 'ticketing.view']
+        };
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            loadRolePermissions(currentRole);
+        });
+        
+        function setupEventListeners() {
+            // Search functionality
+            document.getElementById('roleSearch').addEventListener('input', handleRoleSearch);
+            
+            // Permission toggles
+            document.addEventListener('change', function(e) {
+                if (e.target.type === 'checkbox' && e.target.dataset.permission) {
+                    updatePermission(e.target.dataset.permission, e.target.checked);
+                }
+            });
+            
+            // Form handling
+            document.getElementById('newRoleForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                createNewRole();
+            });
+            
+            // Close modal when clicking outside
+            window.addEventListener('click', function(e) {
+                if (e.target.classList.contains('modal')) {
+                    e.target.classList.remove('show');
+                }
+            });
+        }
+        
+        // Role Management
+        function selectRole(roleId) {
+            // Remove selection from all roles
+            document.querySelectorAll('.role-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // Select new role
+            const roleElement = document.querySelector(`[data-role="${roleId}"]`);
+            if (roleElement) {
+                roleElement.classList.add('selected');
+                currentRole = roleId;
+                loadRolePermissions(roleId);
+                updateRoleBadge(roleId);
+            }
+        }
+        
+        function loadRolePermissions(roleId) {
+            const rolePermissions = getRolePermissions(roleId);
+            
+            // Mettre à jour les checkboxes
+            document.querySelectorAll('[data-permission]').forEach(checkbox => {
+                const permission = checkbox.dataset.permission;
+                checkbox.checked = rolePermissions.includes(permission);
+            });
+            
+            permissions.set(roleId, rolePermissions);
+        }
+        
+        function getRolePermissions(roleId) {
+            const rolePerms = {
+                'super_admin': [
+                    'users.create', 'users.update', 'users.delete', 'groups.manage', 'users.assign_roles', 'users.import_export',
+                    'events.create', 'events.update', 'events.cancel', 'events.manage_participants',
+                    'venues.manage', 'venues.edit_mappings', 'venues.manage_zones', 'venues.access_points',
+                    'ticketing.configure', 'ticketing.manual_sales', 'ticketing.refunds', 'ticketing.reports',
+                    'access.scan_qr', 'access.manage_blacklist', 'access.view_logs', 'access.security_alerts',
+                    'system.settings', 'system.manage_roles', 'system.audit_logs', 'system.integrations'
+                ],
+                'club_admin': [
+                    'users.create', 'users.update', 'groups.manage', 'users.assign_roles',
+                    'events.create', 'events.update', 'events.manage_participants',
+                    'venues.manage', 'venues.manage_zones',
+                    'ticketing.configure', 'ticketing.manual_sales', 'ticketing.reports',
+                    'access.view_logs', 'access.security_alerts'
+                ],
+                'event_manager': [
+                    'events.create', 'events.update', 'events.manage_participants',
+                    'venues.manage_zones',
+                    'ticketing.configure', 'ticketing.manual_sales',
+                    'access.view_logs'
+                ],
+                'security_manager': [
+                    'access.scan_qr', 'access.manage_blacklist', 'access.view_logs', 'access.security_alerts',
+                    'venues.access_points',
+                    'users.update'
+                ],
+                'staff': [
+                    'access.scan_qr',
+                    'ticketing.manual_sales'
+                ],
+                'vip_gold': [
+                    'ticketing.priority_access'
+                ],
+                'subscriber': [
+                    'ticketing.subscriber_access'
+                ],
+                'user': [
+                    'ticketing.public_access'
+                ]
+            };
+            
+            return rolePerms[roleId] || [];
+        }
+        
+        function updateRoleBadge(roleId) {
+            const roleNames = {
+                'super_admin': 'Super Admin',
+                'club_admin': 'Club Admin',
+                'event_manager': 'Event Manager',
+                'security_manager': 'Security Manager',
+                'staff': 'Staff',
+                'vip_gold': 'VIP Gold',
+                'subscriber': 'Subscriber',
+                'user': 'User'
+            };
+            
+            document.getElementById('currentRoleBadge').textContent = roleNames[roleId] || roleId;
+        }
+        
+        // Permission Management
+        function updatePermission(permission, enabled) {
+            let rolePerms = permissions.get(currentRole) || [];
+            
+            if (enabled && !rolePerms.includes(permission)) {
+                rolePerms.push(permission);
+            } else if (!enabled && rolePerms.includes(permission)) {
+                rolePerms = rolePerms.filter(p => p !== permission);
+            }
+            
+            permissions.set(currentRole, rolePerms);
+            console.log(`Permission ${permission} ${enabled ? 'activée' : 'désactivée'} pour ${currentRole}`);
+        }
+        
+        function toggleSection(sectionName) {
+            const sectionElement = document.querySelector(`[onclick="toggleSection('${sectionName}')"]`);
+            const permissionInputs = sectionElement.closest('.permission-section').querySelectorAll('input[type="checkbox"]');
+            
+            const allChecked = Array.from(permissionInputs).every(input => input.checked);
+            
+            permissionInputs.forEach(input => {
+                input.checked = !allChecked;
+                updatePermission(input.dataset.permission, input.checked);
+            });
+            
+            sectionElement.textContent = allChecked ? 'Tout activer' : 'Tout désactiver';
+        }
+        
+        // Template Functions
+        function applyTemplate(templateType) {
+            if (!roleTemplates[templateType]) return;
+            
+            document.querySelectorAll('[data-permission]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            roleTemplates[templateType].forEach(permission => {
+                const checkbox = document.querySelector(`[data-permission="${permission}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    updatePermission(permission, true);
+                }
+            });
+            
+            console.log(`Template ${templateType} appliqué`);
+        }
+        
+        // Search Functions
+        function handleRoleSearch(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const roleItems = document.querySelectorAll('.role-item');
+            
+            roleItems.forEach(item => {
+                const roleName = item.querySelector('.role-name').textContent.toLowerCase();
+                const roleDesc = item.querySelector('.role-description').textContent.toLowerCase();
+                
+                if (roleName.includes(searchTerm) || roleDesc.includes(searchTerm)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });

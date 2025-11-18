@@ -1,0 +1,39 @@
+
+services:
+  redis:
+    image: redis:8.0-M02
+    container_name: spark-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - hannon_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: spark-redis-ui
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/db
+    networks:
+      - hannon_network
+    depends_on:
+      redis:
+        condition: service_healthy
+
+networks:
+  hannon_network:
+    external: true
+volumes:
+  redis_data:
+    driver: local
+  redisinsight_data:
+    driver: local

@@ -1,0 +1,82 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "E Entrix":
+    - /url: /
+  - navigation:
+    - link "Accueil":
+      - /url: /
+    - link "Événements":
+      - /url: /events
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+    - link "Billets":
+      - /url: /tickets
+- main:
+  - heading "404" [level=1]
+  - heading "Page non trouvée" [level=2]
+  - paragraph: Désolé, la page que vous recherchez n'existe pas ou a été déplacée.
+  - link "Retour à l'accueil":
+    - /url: /
+    - img
+    - text: Retour à l'accueil
+  - button "Page précédente":
+    - img
+    - text: Page précédente
+- contentinfo:
+  - text: E Entrix
+  - paragraph: La plateforme de référence pour la gestion d'événements et la billetterie en Tunisie et au Maghreb.
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - heading "Liens rapides" [level=3]
+  - list:
+    - listitem:
+      - link "Événements":
+        - /url: /events
+    - listitem:
+      - link "Lieux":
+        - /url: /venues
+    - listitem:
+      - link "Organisateurs":
+        - /url: /organizers
+    - listitem:
+      - link "À propos":
+        - /url: /about
+  - heading "Support" [level=3]
+  - list:
+    - listitem:
+      - link "Centre d'aide":
+        - /url: /help
+    - listitem:
+      - link "Nous contacter":
+        - /url: /contact
+    - listitem:
+      - link "FAQ":
+        - /url: /faq
+    - listitem:
+      - link "Conditions d'utilisation":
+        - /url: /terms
+  - heading "Contact" [level=3]
+  - img
+  - text: contact@entrix.tn
+  - img
+  - text: +216 XX XXX XXX
+  - img
+  - text: Tunis, Tunisie
+  - paragraph: © 2025 Entrix. Tous droits réservés.
+  - link "Politique de confidentialité":
+    - /url: /privacy
+  - link "Conditions d'utilisation":
+    - /url: /terms
+- region "Notifications (F8)":
+  - list
+- alert
+```

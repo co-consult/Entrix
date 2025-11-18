@@ -1,0 +1,69 @@
+Always scan and analyze the relevant codebase before starting any development task. 
+Understand the current implementation, architecture, and context before making changes.
+
+
+- Follow existing code style and conventions in the project
+- Write clean, readable, and maintainable code
+- Add appropriate comments and documentation
+- Use TypeScript strict mode and proper typing
+
+
+- Always update backend/CHANGELOG.md when making backend changes
+- Follow the existing folder structure and naming conventions
+- Test changes before suggesting them
+- Consider security implications of any changes
+
+
+- Explain your reasoning and approach before making changes
+- Provide clear explanations of what you'm doing and why
+- Ask for clarification if requirements are unclear
+- Suggest improvements when you see opportunities
+
+
+- Check for existing similar functionality before creating new code
+- Consider backward compatibility when making changes
+- Validate that changes work with the existing architecture
+- Provide step-by-step instructions for testing changes
+
+- DO NOT run commands yourself - provide commands for the user to run and wait for their output
+- When suggesting commands, explain what each command does and why it's needed
+- Wait for user to execute commands and provide output before proceeding
+
+## Security Rules
+- NEVER hardcode sensitive data (API keys, passwords, secrets) in code
+- Always use environment variables for configuration and secrets
+- Validate and sanitize all user inputs to prevent injection attacks
+- Implement proper authentication and authorization checks
+- Use HTTPS in production and secure headers (Helmet.js)
+- Follow OWASP security guidelines for web applications
+- Implement rate limiting to prevent abuse and DDoS attacks
+- Use parameterized queries to prevent SQL injection
+- Validate file uploads and implement proper file type restrictions
+- Keep dependencies updated and scan for known vulnerabilities
+- Implement proper session management and token expiration
+- Use secure random generators for cryptographic operations
+- Log security events and implement audit trails
+- Implement proper error handling without exposing sensitive information
+- Use Content Security Policy (CSP) headers
+- Validate JWT tokens and implement proper token refresh
+- Implement proper CORS policies
+- Use secure cookie settings (httpOnly, secure, sameSite)
+- Implement input length limits and validation
+- Use prepared statements for database queries
+
+## Database & Schema Rules
+- Check Prisma schema before making database changes
+- Follow existing naming conventions (snake_case for tables/columns)
+- Use proper UUID types and timestamptz
+- Check SQL docs in backend/doc/Entrix/Data_Model/ if confused about schema
+
+## Documentation Rules
+- Check backend/doc/Entrix/ and ARBORESCENCE_ENTRIX.md if confused about structure
+- Update relevant README files when adding new features
+- Document API changes in Swagger/OpenAPI
+
+## Testing & Quality Rules
+- Consider mobile app compatibility when making API changes
+- Test both web frontend and mobile app when modifying shared functionality
+- Ensure API endpoints work with Flutter mobile app requirements
+- Consider QR code validation flow when modifying access control

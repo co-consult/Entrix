@@ -1,0 +1,113 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "E Entrix":
+    - /url: /
+  - navigation:
+    - link "Accueil":
+      - /url: /
+    - link "Événements":
+      - /url: /events
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+    - link "Billets":
+      - /url: /tickets
+  - link "Se connecter":
+    - /url: /auth/login
+  - link "S'inscrire":
+    - /url: /auth/register
+- main:
+  - text: Créer un compte Rejoignez Entrix et commencez à organiser vos événements Prénom
+  - img
+  - textbox "Prénom"
+  - text: Nom
+  - img
+  - textbox "Nom"
+  - text: Email
+  - img
+  - textbox "Email"
+  - text: Téléphone
+  - img
+  - textbox "Téléphone"
+  - text: Pays
+  - combobox: Tunisie
+  - text: Mot de passe
+  - img
+  - textbox "Mot de passe"
+  - button:
+    - img
+  - text: Confirmer le mot de passe
+  - img
+  - textbox "Confirmer le mot de passe"
+  - button:
+    - img
+  - checkbox "J'accepte les conditions d'utilisation et la politique de confidentialité"
+  - text: J'accepte les
+  - link "conditions d'utilisation":
+    - /url: /terms
+  - text: et la
+  - link "politique de confidentialité":
+    - /url: /privacy
+  - checkbox "Je souhaite recevoir des informations sur les événements et promotions"
+  - text: Je souhaite recevoir des informations sur les événements et promotions
+  - button "Créer mon compte"
+  - text: Déjà un compte ?
+  - link "Se connecter":
+    - /url: /auth/login
+- contentinfo:
+  - text: E Entrix
+  - paragraph: La plateforme de référence pour la gestion d'événements et la billetterie en Tunisie et au Maghreb.
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - heading "Liens rapides" [level=3]
+  - list:
+    - listitem:
+      - link "Événements":
+        - /url: /events
+    - listitem:
+      - link "Lieux":
+        - /url: /venues
+    - listitem:
+      - link "Organisateurs":
+        - /url: /organizers
+    - listitem:
+      - link "À propos":
+        - /url: /about
+  - heading "Support" [level=3]
+  - list:
+    - listitem:
+      - link "Centre d'aide":
+        - /url: /help
+    - listitem:
+      - link "Nous contacter":
+        - /url: /contact
+    - listitem:
+      - link "FAQ":
+        - /url: /faq
+    - listitem:
+      - link "Conditions d'utilisation":
+        - /url: /terms
+  - heading "Contact" [level=3]
+  - img
+  - text: contact@entrix.tn
+  - img
+  - text: +216 XX XXX XXX
+  - img
+  - text: Tunis, Tunisie
+  - paragraph: © 2025 Entrix. Tous droits réservés.
+  - link "Politique de confidentialité":
+    - /url: /privacy
+  - link "Conditions d'utilisation":
+    - /url: /terms
+- region "Notifications (F8)":
+  - list
+- alert
+```

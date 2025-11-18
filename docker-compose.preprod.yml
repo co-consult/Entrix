@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: entrix_preprod_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: entrix_preprod_db
+      POSTGRES_USER: entrix_preprod_user
+      POSTGRES_PASSWORD: bAQTuhY6Rgq6rt9uPuaAwxXQq
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    ports:
+      - "5432:5432"
+    networks:
+      - entrix_preprod_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U entrix_preprod_user -d entrix_preprod_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: entrix_preprod_redis
+    restart: unless-stopped
+    command: redis-server --requirepass kryPInDeW2rt0MLgiacih0MsK
+    volumes:
+      - redis_data:/data
+    networks:
+      - entrix_preprod_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: entrix_preprod_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: kryPInDeW2rt0MLgiacih0MsK
+      
+      # SMTP Configuration - HARDCODED
+      SMTP_HOST: smtp.ionos.fr
+      SMTP_PORT: 465
+      SMTP_USER: entrix@lawej.com
+      SMTP_PASSWORD: "Zazou2002;!"
+      SMTP_SECURE: "true"
+      
+      # Email Configuration
+      EMAIL_HOST: smtp.ionos.fr
+      EMAIL_PORT: 465
+      EMAIL_USER: entrix@lawej.com
+      EMAIL_PASS: "Zazou2002;!"
+      EMAIL_FROM: entrix@lawej.com
+      EMAIL_SECURE: "true"
+      EMAIL_DEFAULT_REPLY_TO: entrix@lawej.com
+      
+      # Frontend URL - localhost for local development
+      FRONTEND_URL: http://localhost:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    networks:
+      - entrix_preprod_network
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: entrix_preprod_frontend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3001:3001"
+    networks:
+      - entrix_preprod_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  entrix_preprod_network:
+    driver: bridge

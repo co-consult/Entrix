@@ -1,0 +1,860 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "E Entrix":
+    - /url: /
+  - navigation:
+    - link "Accueil":
+      - /url: /
+    - link "Événements":
+      - /url: /events
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+    - link "Billets":
+      - /url: /tickets
+  - link "Se connecter":
+    - /url: /auth/login
+  - link "S'inscrire":
+    - /url: /auth/register
+- main:
+  - heading "Réservation de billets" [level=1]
+  - paragraph: Sélectionnez un événement pour commencer votre achat
+  - img
+  - textbox "Rechercher un événement..."
+  - text: Special Event 4 - Organizer Demo
+  - img
+  - text: 24/12/2025
+  - img
+  - text: Sousse Cultural Center Exclusive event 4 for organizer cmcyqxed7000flf7p63cg6l25
+  - button "Choisir"
+  - text: Match 8 - Tunis United vs Sousse Stars
+  - img
+  - text: 22/12/2025
+  - img
+  - text: Tunis Olympic Arena Week 8 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 8 - Tunis United vs Sousse Stars
+  - img
+  - text: 22/12/2025
+  - img
+  - text: Tunis Olympic Arena Week 8 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 8 - Tunis United vs Sousse Stars
+  - img
+  - text: 22/12/2025
+  - img
+  - text: Tunis Olympic Arena Week 8 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Classical Piano Recital - Concert 5
+  - img
+  - text: 20/12/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Classical Piano Recital
+  - button "Choisir"
+  - text: Classical Piano Recital - Concert 5
+  - img
+  - text: 20/12/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Classical Piano Recital
+  - button "Choisir"
+  - text: Classical Piano Recital - Concert 5
+  - img
+  - text: 20/12/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Classical Piano Recital
+  - button "Choisir"
+  - text: Special Event 3 - Organizer Demo
+  - img
+  - text: 10/12/2025
+  - img
+  - text: Sousse Cultural Center Exclusive event 3 for organizer cmcyqxed7000flf7p63cg6l25
+  - button "Choisir"
+  - text: Match 7 - Tunis United vs Sousse Stars
+  - img
+  - text: 08/12/2025
+  - img
+  - text: Tunis Olympic Arena Week 7 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 7 - Tunis United vs Sousse Stars
+  - img
+  - text: 08/12/2025
+  - img
+  - text: Tunis Olympic Arena Week 7 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 7 - Tunis United vs Sousse Stars
+  - img
+  - text: 08/12/2025
+  - img
+  - text: Tunis Olympic Arena Week 7 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Modern Pop Group - Concert 4
+  - img
+  - text: 30/11/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Modern Pop Group
+  - button "Choisir"
+  - text: Modern Pop Group - Concert 4
+  - img
+  - text: 30/11/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Modern Pop Group
+  - button "Choisir"
+  - text: Modern Pop Group - Concert 4
+  - img
+  - text: 30/11/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Modern Pop Group
+  - button "Choisir"
+  - text: Digital Transformation Conference
+  - img
+  - text: 25/11/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Digital Transformation
+  - button "Choisir"
+  - text: Digital Transformation Conference
+  - img
+  - text: 25/11/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Digital Transformation
+  - button "Choisir"
+  - text: Digital Transformation Conference
+  - img
+  - text: 25/11/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Digital Transformation
+  - button "Choisir"
+  - text: Match 6 - Tunis United vs Sousse Stars
+  - img
+  - text: 24/11/2025
+  - img
+  - text: Tunis Olympic Arena Week 6 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 6 - Tunis United vs Sousse Stars
+  - img
+  - text: 24/11/2025
+  - img
+  - text: Tunis Olympic Arena Week 6 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 6 - Tunis United vs Sousse Stars
+  - img
+  - text: 24/11/2025
+  - img
+  - text: Tunis Olympic Arena Week 6 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Special Event 2 - Organizer Demo
+  - img
+  - text: 20/11/2025
+  - img
+  - text: Sousse Cultural Center Exclusive event 2 for organizer cmcyqxed7000flf7p63cg6l25
+  - button "Choisir"
+  - text: Match 5 - Tunis United vs Sousse Stars
+  - img
+  - text: 10/11/2025
+  - img
+  - text: Tunis Olympic Arena Week 5 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 5 - Tunis United vs Sousse Stars
+  - img
+  - text: 10/11/2025
+  - img
+  - text: Tunis Olympic Arena Week 5 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 5 - Tunis United vs Sousse Stars
+  - img
+  - text: 10/11/2025
+  - img
+  - text: Tunis Olympic Arena Week 5 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Special Event 1 - Organizer Demo
+  - img
+  - text: 05/11/2025
+  - img
+  - text: Sousse Cultural Center Exclusive event 1 for organizer cmcyqxed7000flf7p63cg6l25
+  - button "Choisir"
+  - text: Match 4 - Tunis United vs Sousse Stars
+  - img
+  - text: 27/10/2025
+  - img
+  - text: Tunis Olympic Arena Week 4 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 4 - Tunis United vs Sousse Stars
+  - img
+  - text: 27/10/2025
+  - img
+  - text: Tunis Olympic Arena Week 4 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 4 - Tunis United vs Sousse Stars
+  - img
+  - text: 27/10/2025
+  - img
+  - text: Tunis Olympic Arena Week 4 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Traditional Tunisian Ensemble - Concert 3
+  - img
+  - text: 25/10/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Traditional Tunisian Ensemble
+  - button "Choisir"
+  - text: Traditional Tunisian Ensemble - Concert 3
+  - img
+  - text: 25/10/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Traditional Tunisian Ensemble
+  - button "Choisir"
+  - text: Traditional Tunisian Ensemble - Concert 3
+  - img
+  - text: 25/10/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Traditional Tunisian Ensemble
+  - button "Choisir"
+  - text: Cybersecurity & Privacy Conference
+  - img
+  - text: 20/10/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Cybersecurity & Privacy
+  - button "Choisir"
+  - text: Cybersecurity & Privacy Conference
+  - img
+  - text: 20/10/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Cybersecurity & Privacy
+  - button "Choisir"
+  - text: Cybersecurity & Privacy Conference
+  - img
+  - text: 20/10/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Cybersecurity & Privacy
+  - button "Choisir"
+  - text: Match 3 - Tunis United vs Sousse Stars
+  - img
+  - text: 13/10/2025
+  - img
+  - text: Tunis Olympic Arena Week 3 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 3 - Tunis United vs Sousse Stars
+  - img
+  - text: 13/10/2025
+  - img
+  - text: Tunis Olympic Arena Week 3 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 3 - Tunis United vs Sousse Stars
+  - img
+  - text: 13/10/2025
+  - img
+  - text: Tunis Olympic Arena Week 3 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Closing Ceremony
+  - img
+  - text: 07/10/2025
+  - img
+  - text: Sousse Cultural Center Day 7 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Closing Ceremony
+  - img
+  - text: 07/10/2025
+  - img
+  - text: Sousse Cultural Center Day 7 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Closing Ceremony
+  - img
+  - text: 07/10/2025
+  - img
+  - text: Sousse Cultural Center Day 7 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Film Screening
+  - img
+  - text: 06/10/2025
+  - img
+  - text: Sousse Cultural Center Day 6 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Film Screening
+  - img
+  - text: 06/10/2025
+  - img
+  - text: Sousse Cultural Center Day 6 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Film Screening
+  - img
+  - text: 06/10/2025
+  - img
+  - text: Sousse Cultural Center Day 6 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Poetry Reading
+  - img
+  - text: 05/10/2025
+  - img
+  - text: Sousse Cultural Center Day 5 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Poetry Reading
+  - img
+  - text: 05/10/2025
+  - img
+  - text: Sousse Cultural Center Day 5 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Poetry Reading
+  - img
+  - text: 05/10/2025
+  - img
+  - text: Sousse Cultural Center Day 5 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Dance Performance
+  - img
+  - text: 04/10/2025
+  - img
+  - text: Sousse Cultural Center Day 4 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Dance Performance
+  - img
+  - text: 04/10/2025
+  - img
+  - text: Sousse Cultural Center Day 4 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Dance Performance
+  - img
+  - text: 04/10/2025
+  - img
+  - text: Sousse Cultural Center Day 4 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Art Exhibition Opening
+  - img
+  - text: 03/10/2025
+  - img
+  - text: Sousse Cultural Center Day 3 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Art Exhibition Opening
+  - img
+  - text: 03/10/2025
+  - img
+  - text: Sousse Cultural Center Day 3 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Art Exhibition Opening
+  - img
+  - text: 03/10/2025
+  - img
+  - text: Sousse Cultural Center Day 3 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Traditional Music Night
+  - img
+  - text: 02/10/2025
+  - img
+  - text: Sousse Cultural Center Day 2 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Traditional Music Night
+  - img
+  - text: 02/10/2025
+  - img
+  - text: Sousse Cultural Center Day 2 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Traditional Music Night
+  - img
+  - text: 02/10/2025
+  - img
+  - text: Sousse Cultural Center Day 2 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Opening Ceremony
+  - img
+  - text: 01/10/2025
+  - img
+  - text: Sousse Cultural Center Day 1 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Opening Ceremony
+  - img
+  - text: 01/10/2025
+  - img
+  - text: Sousse Cultural Center Day 1 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Opening Ceremony
+  - img
+  - text: 01/10/2025
+  - img
+  - text: Sousse Cultural Center Day 1 of the Tunis Cultural Festival
+  - button "Choisir"
+  - text: Match 2 - Tunis United vs Sousse Stars
+  - img
+  - text: 29/09/2025
+  - img
+  - text: Tunis Olympic Arena Week 2 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 2 - Tunis United vs Sousse Stars
+  - img
+  - text: 29/09/2025
+  - img
+  - text: Tunis Olympic Arena Week 2 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 2 - Tunis United vs Sousse Stars
+  - img
+  - text: 29/09/2025
+  - img
+  - text: Tunis Olympic Arena Week 2 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Theater Acting Workshop
+  - img
+  - text: 22/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Theater Acting
+  - button "Choisir"
+  - text: Theater Acting Workshop
+  - img
+  - text: 22/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Theater Acting
+  - button "Choisir"
+  - text: Theater Acting Workshop
+  - img
+  - text: 22/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Theater Acting
+  - button "Choisir"
+  - text: Jazz Fusion Band - Concert 2
+  - img
+  - text: 20/09/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Jazz Fusion Band
+  - button "Choisir"
+  - text: Jazz Fusion Band - Concert 2
+  - img
+  - text: 20/09/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Jazz Fusion Band
+  - button "Choisir"
+  - text: Jazz Fusion Band - Concert 2
+  - img
+  - text: 20/09/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Jazz Fusion Band
+  - button "Choisir"
+  - text: Match 1 - Tunis United vs Sousse Stars
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Tunis Olympic Arena Week 1 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 1 - Tunis United vs Sousse Stars
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Tunis Olympic Arena Week 1 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Match 1 - Tunis United vs Sousse Stars
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Tunis Olympic Arena Week 1 of the 2025 Football Championship
+  - button "Choisir"
+  - text: Film Making Workshop
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Film Making
+  - button "Choisir"
+  - text: Film Making Workshop
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Film Making
+  - button "Choisir"
+  - text: Film Making Workshop
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Film Making
+  - button "Choisir"
+  - text: Web Development & Cloud Conference
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Web Development & Cloud
+  - button "Choisir"
+  - text: Web Development & Cloud Conference
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Web Development & Cloud
+  - button "Choisir"
+  - text: Web Development & Cloud Conference
+  - img
+  - text: 15/09/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on Web Development & Cloud
+  - button "Choisir"
+  - text: Craft & DIY Workshop
+  - img
+  - text: 08/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Craft & DIY
+  - button "Choisir"
+  - text: Craft & DIY Workshop
+  - img
+  - text: 08/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Craft & DIY
+  - button "Choisir"
+  - text: Craft & DIY Workshop
+  - img
+  - text: 08/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Craft & DIY
+  - button "Choisir"
+  - text: TEST - Football Season 2025
+  - img
+  - text: 01/09/2025
+  - img
+  - text: Tunis Olympic Arena Test event for annual football season - starts in 2 months
+  - button "Choisir"
+  - text: TEST - Football Season 2025
+  - img
+  - text: 01/09/2025
+  - img
+  - text: Tunis Olympic Arena Test event for annual football season - starts in 2 months
+  - button "Choisir"
+  - text: TEST - Football Season 2025
+  - img
+  - text: 01/09/2025
+  - img
+  - text: Tunis Olympic Arena Test event for annual football season - starts in 2 months
+  - button "Choisir"
+  - text: Fitness & Wellness Workshop
+  - img
+  - text: 01/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Fitness & Wellness
+  - button "Choisir"
+  - text: Fitness & Wellness Workshop
+  - img
+  - text: 01/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Fitness & Wellness
+  - button "Choisir"
+  - text: Fitness & Wellness Workshop
+  - img
+  - text: 01/09/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Fitness & Wellness
+  - button "Choisir"
+  - text: Language Learning Workshop
+  - img
+  - text: 25/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Language Learning
+  - button "Choisir"
+  - text: Language Learning Workshop
+  - img
+  - text: 25/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Language Learning
+  - button "Choisir"
+  - text: Language Learning Workshop
+  - img
+  - text: 25/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Language Learning
+  - button "Choisir"
+  - text: Pottery & Ceramics Workshop
+  - img
+  - text: 18/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Pottery & Ceramics
+  - button "Choisir"
+  - text: Pottery & Ceramics Workshop
+  - img
+  - text: 18/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Pottery & Ceramics
+  - button "Choisir"
+  - text: Pottery & Ceramics Workshop
+  - img
+  - text: 18/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Pottery & Ceramics
+  - button "Choisir"
+  - text: Layla Ben Ali & Orchestra - Concert 1
+  - img
+  - text: 15/08/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Layla Ben Ali & Orchestra
+  - button "Choisir"
+  - text: Layla Ben Ali & Orchestra - Concert 1
+  - img
+  - text: 15/08/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Layla Ben Ali & Orchestra
+  - button "Choisir"
+  - text: TEST - Monthly Concert Series
+  - img
+  - text: 15/08/2025
+  - img
+  - text: Sousse Cultural Center Test event for monthly concert series - starts in 1 month
+  - button "Choisir"
+  - text: TEST - Monthly Concert Series
+  - img
+  - text: 15/08/2025
+  - img
+  - text: Sousse Cultural Center Test event for monthly concert series - starts in 1 month
+  - button "Choisir"
+  - text: Layla Ben Ali & Orchestra - Concert 1
+  - img
+  - text: 15/08/2025
+  - img
+  - text: Sousse Cultural Center Monthly concert featuring Layla Ben Ali & Orchestra
+  - button "Choisir"
+  - text: TEST - Monthly Concert Series
+  - img
+  - text: 15/08/2025
+  - img
+  - text: Sousse Cultural Center Test event for monthly concert series - starts in 1 month
+  - button "Choisir"
+  - text: Dance Workshop Workshop
+  - img
+  - text: 11/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Dance Workshop
+  - button "Choisir"
+  - text: Dance Workshop Workshop
+  - img
+  - text: 11/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Dance Workshop
+  - button "Choisir"
+  - text: Dance Workshop Workshop
+  - img
+  - text: 11/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Dance Workshop
+  - button "Choisir"
+  - text: AI & Machine Learning Conference
+  - img
+  - text: 10/08/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on AI & Machine Learning
+  - button "Choisir"
+  - text: AI & Machine Learning Conference
+  - img
+  - text: 10/08/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on AI & Machine Learning
+  - button "Choisir"
+  - text: AI & Machine Learning Conference
+  - img
+  - text: 10/08/2025
+  - img
+  - text: Sousse Cultural Center Quarterly tech conference focusing on AI & Machine Learning
+  - button "Choisir"
+  - text: Cooking Masterclass Workshop
+  - img
+  - text: 04/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Cooking Masterclass
+  - button "Choisir"
+  - text: Cooking Masterclass Workshop
+  - img
+  - text: 04/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Cooking Masterclass
+  - button "Choisir"
+  - text: Cooking Masterclass Workshop
+  - img
+  - text: 04/08/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Cooking Masterclass
+  - button "Choisir"
+  - text: TEST - Quarterly Festival
+  - img
+  - text: 01/08/2025
+  - img
+  - text: Tunis Olympic Arena Test event for quarterly festival - starts in 3 weeks
+  - button "Choisir"
+  - text: TEST - Quarterly Festival
+  - img
+  - text: 01/08/2025
+  - img
+  - text: Tunis Olympic Arena Test event for quarterly festival - starts in 3 weeks
+  - button "Choisir"
+  - text: TEST - Quarterly Festival
+  - img
+  - text: 01/08/2025
+  - img
+  - text: Tunis Olympic Arena Test event for quarterly festival - starts in 3 weeks
+  - button "Choisir"
+  - text: TEST - Weekly Workshop Series
+  - img
+  - text: 28/07/2025
+  - img
+  - text: Sousse Cultural Center Test event for weekly workshop - starts next week
+  - button "Choisir"
+  - text: TEST - Weekly Workshop Series
+  - img
+  - text: 28/07/2025
+  - img
+  - text: Sousse Cultural Center Test event for weekly workshop - starts next week
+  - button "Choisir"
+  - text: TEST - Weekly Workshop Series
+  - img
+  - text: 28/07/2025
+  - img
+  - text: Sousse Cultural Center Test event for weekly workshop - starts next week
+  - button "Choisir"
+  - text: Music Production Workshop
+  - img
+  - text: 28/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Music Production
+  - button "Choisir"
+  - text: Music Production Workshop
+  - img
+  - text: 28/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Music Production
+  - button "Choisir"
+  - text: Music Production Workshop
+  - img
+  - text: 28/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Music Production
+  - button "Choisir"
+  - text: Photography Basics Workshop
+  - img
+  - text: 21/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Photography Basics
+  - button "Choisir"
+  - text: Photography Basics Workshop
+  - img
+  - text: 21/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Photography Basics
+  - button "Choisir"
+  - text: Photography Basics Workshop
+  - img
+  - text: 21/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Photography Basics
+  - button "Choisir"
+  - text: Creative Writing Workshop
+  - img
+  - text: 14/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Creative Writing
+  - button "Choisir"
+  - text: Creative Writing Workshop
+  - img
+  - text: 14/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Creative Writing
+  - button "Choisir"
+  - text: Creative Writing Workshop
+  - img
+  - text: 14/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Creative Writing
+  - button "Choisir"
+  - text: Digital Art & Design Workshop
+  - img
+  - text: 07/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Digital Art & Design
+  - button "Choisir"
+  - text: Digital Art & Design Workshop
+  - img
+  - text: 07/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Digital Art & Design
+  - button "Choisir"
+  - text: Digital Art & Design Workshop
+  - img
+  - text: 07/07/2025
+  - img
+  - text: Sousse Cultural Center Weekly workshop on Digital Art & Design
+  - button "Choisir"
+  - text: Tunis Derby 2024
+  - img
+  - text: 15/10/2024
+  - img
+  - text: Tunis Olympic Arena Epic clash between Tunis United and Sousse Stars
+  - button "Choisir"
+  - text: Tunis Derby 2024
+  - img
+  - text: 15/10/2024
+  - img
+  - text: Tunis Olympic Arena Epic clash between Tunis United and Sousse Stars
+  - button "Choisir"
+  - text: Tunis Derby 2024
+  - img
+  - text: 15/10/2024
+  - img
+  - text: Tunis Olympic Arena Epic clash between Tunis United and Sousse Stars
+  - button "Choisir"
+  - text: Beethoven Symphony No. 9
+  - img
+  - text: 20/07/2024
+  - img
+  - text: Sousse Cultural Center Masterpiece performance by Tunis Symphony Orchestra
+  - button "Choisir"
+  - text: Beethoven Symphony No. 9
+  - img
+  - text: 20/07/2024
+  - img
+  - text: Sousse Cultural Center Masterpiece performance by Tunis Symphony Orchestra
+  - button "Choisir"
+  - text: Beethoven Symphony No. 9
+  - img
+  - text: 20/07/2024
+  - img
+  - text: Sousse Cultural Center Masterpiece performance by Tunis Symphony Orchestra
+  - button "Choisir"
+- contentinfo:
+  - text: E Entrix
+  - paragraph: La plateforme de référence pour la gestion d'événements et la billetterie en Tunisie et au Maghreb.
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - heading "Liens rapides" [level=3]
+  - list:
+    - listitem:
+      - link "Événements":
+        - /url: /events
+    - listitem:
+      - link "Lieux":
+        - /url: /venues
+    - listitem:
+      - link "Organisateurs":
+        - /url: /organizers
+    - listitem:
+      - link "À propos":
+        - /url: /about
+  - heading "Support" [level=3]
+  - list:
+    - listitem:
+      - link "Centre d'aide":
+        - /url: /help
+    - listitem:
+      - link "Nous contacter":
+        - /url: /contact
+    - listitem:
+      - link "FAQ":
+        - /url: /faq
+    - listitem:
+      - link "Conditions d'utilisation":
+        - /url: /terms
+  - heading "Contact" [level=3]
+  - img
+  - text: contact@entrix.tn
+  - img
+  - text: +216 XX XXX XXX
+  - img
+  - text: Tunis, Tunisie
+  - paragraph: © 2025 Entrix. Tous droits réservés.
+  - link "Politique de confidentialité":
+    - /url: /privacy
+  - link "Conditions d'utilisation":
+    - /url: /terms
+- region "Notifications (F8)":
+  - list
+- alert
+```

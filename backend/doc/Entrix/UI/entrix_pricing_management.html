@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix Admin - Pricing & Promotions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .admin-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #475569;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .nav-menu {
+            padding: 20px 0;
+        }
+        
+        .nav-section {
+            margin-bottom: 30px;
+        }
+        
+        .nav-section-title {
+            padding: 0 24px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            color: #e2e8f0;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(90deg, #DC143C, #B91C3C);
+            color: white;
+            border-right: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            min-height: 100vh;
+        }
+        
+        .top-bar {
+            background: white;
+            padding: 20px 32px;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .page-info h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .breadcrumb {
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .breadcrumb a {
+            color: #64748b;
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            color: #DC143C;
+        }
+        
+        .top-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .content-area {
+            padding: 32px;
+        }
+        
+        /* Tabs */
+        .tabs-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+        
+        .tabs-header {
+            display: flex;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 20px 24px;
+            background: none;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab-btn.active {
+            color: #DC143C;
+            border-bottom-color: #DC143C;
+            background: #fef2f2;
+        }
+        
+        .tab-btn:hover:not(.active) {
+            color: #475569;
+            background: #f8fafc;
+        }
+        
+        .tab-content {
+            padding: 32px;
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Pricing Rules Grid */
+        .pricing-rules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .pricing-rule-card {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .pricing-rule-card:hover {
+            border-color: #DC143C;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+        
+        .pricing-rule-card.featured {
+            border-color: #DC143C;
+            background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+        }
+        
+        .rule-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 16px;
+        }
+        
+        .rule-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        
+        .rule-type {
+            background: #DC143C;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .rule-description {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        
+        .rule-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .value-display {
+            font-size: 32px;
+            font-weight: 700;
+            color: #DC143C;
+        }
+        
+        .value-unit {
+            font-size: 16px;
+            color: #64748b;
+        }
+        
+        .rule-conditions {
+            margin: 16px 0;
+        }
+        
+        .condition-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            font-size: 14px;
+            color: #475569;
+        }
+        
+        .condition-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #dcfce7;
+            color: #16a34a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+        
+        .rule-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 20px 0;
+            padding: 16px 0;
+            border-top: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #DC143C;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .rule-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .rule-toggle {
+            margin-left: auto;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #e2e8f0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .toggle-switch.active {
+            background: #DC143C;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(20px);
+        }
+        
+        /* Promotions Section */
+        .promotions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+        }
+        
+        .promotion-card {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .promotion-card.active {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+        }
+        
+        .promotion-card.expired {
+            border-color: #ef4444;
+            background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+            opacity: 0.7;
+        }
+        
+        .promo-badge {
+            position: absolute;
+            top: -8px;
+            right: 16px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .promo-header {
+            margin-bottom: 16px;
+        }
+        
+        .promo-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .promo-code {
+            font-family: 'Courier New', monospace;
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            color: #DC143C;
+            border: 1px dashed #DC143C;
+            display: inline-block;
+        }
+        
+        .promo-discount {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .discount-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #DC143C;
+        }
+        
+        .discount-type {
+            font-size: 14px;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+        
+        .promo-validity {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 16px 0;
+        }
+        
+        .validity-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+        
+        .validity-label {
+            color: #64748b;
+        }
+        
+        .validity-value {
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        /* Dynamic Pricing */
+        .dynamic-pricing-container {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+        }
+        
+        .pricing-chart {
+            height: 300px;
+            background: #f8fafc;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            margin: 20px 0;
+        }
+        
+        .demand-indicators {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+        
+        .demand-card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .demand-level {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .demand-level.low { color: #10b981; }
+        .demand-level.medium { color: #f59e0b; }
+        .demand-level.high { color: #ef4444; }
+        
+        .demand-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+        
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px -3px rgba(220, 20, 60, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: #DC143C;
+            border: 2px solid #DC143C;
+        }
+        
+        .btn-outline:hover {
+            background: #DC143C;
+            color: white;
+        }
+        
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            padding: 24px 24px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #64748b;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .pricing-rules-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .promotions-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .top-bar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">E</div>
+                    <span>Entrix Admin</span>
+                </div>
+            </div>
+            
+            <div class="nav-menu">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        Dashboard
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎪</span>
+                        Événements
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🏟️</span>
+                        Venues
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Billetterie</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎫</span>
+                        Dashboard
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📋</span>
+                        Abonnements
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🏭</span>
+                        Génération Masse
+                    </a>
+                    <a href="#" class="nav-item active">
+                        <span class="nav-icon">💰</span>
+                        Pricing & Promo
+                    </a>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="page-info">
+                    <h1>Pricing & Promotions</h1>
+                    <div class="breadcrumb">
+                        <a href="#">Dashboard</a> > <a href="#">Billetterie</a> > Pricing
+                    </div>
+                </div>
+                <div class="top-actions">
+                    <button class="btn btn-secondary">📊 Analytics</button>
+                    <button class="btn btn-primary" onclick="showNewRuleModal()">➕ Nouvelle Règle</button>
+                </div>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Tabs -->
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab('rules')">Règles de Prix</button>
+                        <button class="tab-btn" onclick="switchTab('promotions')">Promotions</button>
+                        <button class="tab-btn" onclick="switchTab('dynamic')">Pricing Dynamique</button>
+                    </div>
+                    
+                    <!-- Pricing Rules Tab -->
+                    <div class="tab-content active" id="rulesTab">
+                        <div class="pricing-rules-grid">
+                            <!-- Early Bird Rule -->
+                            <div class="pricing-rule-card featured">
+                                <div class="rule-header">
+                                    <div>
+                                        <div class="rule-title">Early Bird</div>
+                                        <div class="rule-description">Réduction pour les achats anticipés</div>
+                                    </div>
+                                    <div class="rule-type">Réduction</div>
+                                </div>
+                                
+                                <div class="rule-value">
+                                    <div class="value-display">15</div>
+                                    <div class="value-unit">% de réduction</div>
+                                </div>
+                                
+                                <div class="rule-conditions">
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Achat avant 30 jours de l'événement</span>
+                                    </div>
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Applicable sur tous les types de billets</span>
+                                    </div>
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Limite de 5000 billets</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-stats">
+                                    <div class="stat-item">
+                                        <div class="stat-value">2,847</div>
+                                        <div class="stat-label">Billets vendus</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value">85K TND</div>
+                                        <div class="stat-label">Économies clients</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-actions">
+                                    <button class="btn btn-outline btn-small">✏️ Modifier</button>
+                                    <button class="btn btn-secondary btn-small">📊 Stats</button>
+                                    <div class="rule-toggle">
+                                        <div class="toggle-switch active" onclick="toggleRule(this)">
+                                            <div class="toggle-slider"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Group Discount Rule -->
+                            <div class="pricing-rule-card">
+                                <div class="rule-header">
+                                    <div>
+                                        <div class="rule-title">Réduction Groupe</div>
+                                        <div class="rule-description">Tarif préférentiel pour les achats groupés</div>
+                                    </div>
+                                    <div class="rule-type">Palier</div>
+                                </div>
+                                
+                                <div class="rule-value">
+                                    <div class="value-display">10</div>
+                                    <div class="value-unit">% de réduction</div>
+                                </div>
+                                
+                                <div class="rule-conditions">
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Minimum 10 billets par commande</span>
+                                    </div>
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Même événement et zone</span>
+                                    </div>
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Valide pour organismes certifiés</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-stats">
+                                    <div class="stat-item">
+                                        <div class="stat-value">156</div>
+                                        <div class="stat-label">Commandes</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value">23K TND</div>
+                                        <div class="stat-label">Économies</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-actions">
+                                    <button class="btn btn-outline btn-small">✏️ Modifier</button>
+                                    <button class="btn btn-secondary btn-small">📊 Stats</button>
+                                    <div class="rule-toggle">
+                                        <div class="toggle-switch active" onclick="toggleRule(this)">
+                                            <div class="toggle-slider"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- VIP Premium Rule -->
+                            <div class="pricing-rule-card">
+                                <div class="rule-header">
+                                    <div>
+                                        <div class="rule-title">Majoration VIP</div>
+                                        <div class="rule-description">Services premium inclus dans les zones VIP</div>
+                                    </div>
+                                    <div class="rule-type">Majoration</div>
+                                </div>
+                                
+                                <div class="rule-value">
+                                    <div class="value-display">+50</div>
+                                    <div class="value-unit">% majoration</div>
+                                </div>
+                                
+                                <div class="rule-conditions">
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Zones VIP et Loges uniquement</span>
+                                    </div>
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Services premium inclus</span>
+                                    </div>
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Accès salon VIP + restauration</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-stats">
+                                    <div class="stat-item">
+                                        <div class="stat-value">892</div>
+                                        <div class="stat-label">Billets VIP</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value">245K TND</div>
+                                        <div class="stat-label">Revenus sup.</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-actions">
+                                    <button class="btn btn-outline btn-small">✏️ Modifier</button>
+                                    <button class="btn btn-secondary btn-small">📊 Stats</button>
+                                    <div class="rule-toggle">
+                                        <div class="toggle-switch active" onclick="toggleRule(this)">
+                                            <div class="toggle-slider"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Student Discount Rule -->
+                            <div class="pricing-rule-card">
+                                <div class="rule-header">
+                                    <div>
+                                        <div class="rule-title">Tarif Étudiant</div>
+                                        <div class="rule-description">Réduction pour étudiants avec justificatif</div>
+                                    </div>
+                                    <div class="rule-type">Spécial</div>
+                                </div>
+                                
+                                <div class="rule-value">
+                                    <div class="value-display">25</div>
+                                    <div class="value-unit">% de réduction</div>
+                                </div>
+                                
+                                <div class="rule-conditions">
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Carte étudiant valide requise</span>
+                                    </div>
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Zones populaires uniquement</span>
+                                    </div>
+                                    <div class="condition-item">
+                                        <div class="condition-icon">✓</div>
+                                        <span>Limite de 2 billets par étudiant</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-stats">
+                                    <div class="stat-item">
+                                        <div class="stat-value">1,234</div>
+                                        <div class="stat-label">Étudiants</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value">18K TND</div>
+                                        <div class="stat-label">Économies</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-actions">
+                                    <button class="btn btn-outline btn-small">✏️ Modifier</button>
+                                    <button class="btn btn-secondary btn-small">📊 Stats</button>
+                                    <div class="rule-toggle">
+                                        <div class="toggle-switch" onclick="toggleRule(this)">
+                                            <div class="toggle-slider"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Promotions Tab -->
+                    <div class="tab-content" id="promotionsTab">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                            <h2 style="color: #1e293b;">Promotions Actives</h2>
+                            <button class="btn btn-primary" onclick="showNewPromoModal()">➕ Nouvelle Promotion</button>
+                        </div>
+                        
+                        <div class="promotions-grid">
+                            <!-- Derby Special Promotion -->
+                            <div class="promotion-card active">
+                                <div class="promo-badge">ACTIF</div>
+                                <div class="promo-header">
+                                    <div class="promo-title">Derby Special</div>
+                                    <div class="promo-code">DERBY2025</div>
+                                </div>
+                                
+                                <div class="promo-discount">
+                                    <div class="discount-value">20%</div>
+                                    <div class="discount-type">de réduction</div>
+                                </div>
+                                
+                                <div class="promo-validity">
+                                    <div class="validity-item">
+                                        <span class="validity-label">Début:</span>
+                                        <span class="validity-value">1 Fév 2025</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Fin:</span>
+                                        <span class="validity-value">10 Fév 2025</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Utilisé:</span>
+                                        <span class="validity-value">156 / 500</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Événement:</span>
+                                        <span class="validity-value">CA vs EST</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-actions">
+                                    <button class="btn btn-outline btn-small">✏️ Modifier</button>
+                                    <button class="btn btn-secondary btn-small">📋 Copier Code</button>
+                                    <button class="btn btn-outline btn-small">⏸️ Suspendre</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Flash Sale Promotion -->
+                            <div class="promotion-card active">
+                                <div class="promo-badge">ACTIF</div>
+                                <div class="promo-header">
+                                    <div class="promo-title">Flash Sale 48h</div>
+                                    <div class="promo-code">FLASH48</div>
+                                </div>
+                                
+                                <div class="promo-discount">
+                                    <div class="discount-value">30%</div>
+                                    <div class="discount-type">de réduction</div>
+                                </div>
+                                
+                                <div class="promo-validity">
+                                    <div class="validity-item">
+                                        <span class="validity-label">Début:</span>
+                                        <span class="validity-value">28 Jan 2025</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Fin:</span>
+                                        <span class="validity-value">30 Jan 2025</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Utilisé:</span>
+                                        <span class="validity-value">89 / 200</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Zones:</span>
+                                        <span class="validity-value">Toutes sauf VIP</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-actions">
+                                    <button class="btn btn-outline btn-small">✏️ Modifier</button>
+                                    <button class="btn btn-secondary btn-small">📋 Copier Code</button>
+                                    <button class="btn btn-outline btn-small">⏸️ Suspendre</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Supporter Club Promotion -->
+                            <div class="promotion-card expired">
+                                <div class="promo-badge" style="background: #ef4444;">EXPIRÉ</div>
+                                <div class="promo-header">
+                                    <div class="promo-title">Club Supporters</div>
+                                    <div class="promo-code">CLUB2024</div>
+                                </div>
+                                
+                                <div class="promo-discount">
+                                    <div class="discount-value">15%</div>
+                                    <div class="discount-type">de réduction</div>
+                                </div>
+                                
+                                <div class="promo-validity">
+                                    <div class="validity-item">
+                                        <span class="validity-label">Début:</span>
+                                        <span class="validity-value">1 Sep 2024</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Fin:</span>
+                                        <span class="validity-value">31 Déc 2024</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Utilisé:</span>
+                                        <span class="validity-value">2,847 / 3,000</span>
+                                    </div>
+                                    <div class="validity-item">
+                                        <span class="validity-label">Restriction:</span>
+                                        <span class="validity-value">Membres uniquement</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="rule-actions">
+                                    <button class="btn btn-outline btn-small">📊 Rapport</button>
+                                    <button class="btn btn-secondary btn-small">🔄 Renouveler</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dynamic Pricing Tab -->
+                    <div class="tab-content" id="dynamicTab">
+                        <div class="dynamic-pricing-container">
+                            <h2 style="margin-bottom: 24px; color: #1e293b;">Pricing Dynamique en Temps Réel</h2>
+                            
+                            <div class="demand-indicators">
+                                <div class="demand-card">
+                                    <div class="demand-level low">23%</div>
+                                    <div class="demand-label">Tribune Nord</div>
+                                </div>
+                                <div class="demand-card">
+                                    <div class="demand-level medium">67%</div>
+                                    <div class="demand-label">Tribune Sud</div>
+                                </div>
+                                <div class="demand-card">
+                                    <div class="demand-level high">89%</div>
+                                    <div class="demand-label">VIP</div>
+                                </div>
+                                <div class="demand-card">
+                                    <div class="demand-level medium">45%</div>
+                                    <div class="demand-label">Tribune Est</div>
+                                </div>
+                            </div>
+                            
+                            <div class="pricing-chart">
+                                <div style="text-align: center;">
+                                    <h3 style="color: #1e293b; margin-bottom: 12px;">📈 Évolution des Prix par Zone</h3>
+                                    <p>Intégration Chart.js pour visualisation des ajustements de prix en temps réel</p>
+                                    <p style="font-size: 14px; color: #64748b; margin-top: 8px;">
+                                        Demand curve • Price elasticity • Optimization algorithms
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-top: 20px;">
+                                <h3 style="margin-bottom: 16px; color: #1e293b;">Configuration Algorithme</h3>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Sensibilité à la demande</label>
+                                        <input type="range" min="1" max="10" value="7" style="width: 100%;">
+                                        <div style="font-size: 12px; color: #64748b;">Élevée (7/10)</div>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Variation maximale</label>
+                                        <input type="range" min="10" max="50" value="25" style="width: 100%;">
+                                        <div style="font-size: 12px; color: #64748b;">±25%</div>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Fréquence d'ajustement</label>
+                                        <select style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                            <option>Toutes les heures</option>
+                                            <option selected>Toutes les 6 heures</option>
+                                            <option>Quotidien</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div style="margin-top: 20px; display: flex; gap: 12px;">
+                                    <button class="btn btn-primary">💾 Sauvegarder Config</button>
+                                    <button class="btn btn-secondary">🔄 Réinitialiser</button>
+                                    <button class="btn btn-outline">⏸️ Suspendre Auto-Pricing</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Rule Modal -->
+    <div class="modal" id="newRuleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Nouvelle Règle de Pricing</h2>
+                <button class="modal-close" onclick="hideModal('newRuleModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="newRuleForm">
+                    <div class="form-group">
+                        <label class="form-label">Nom de la Règle</label>
+                        <input type="text" class="form-input" placeholder="Ex: Réduction Famille" required>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Type de Règle</label>
+                            <select class="form-input" required>
+                                <option value="">Sélectionner un type</option>
+                                <option value="DISCOUNT">Réduction (%)</option>
+                                <option value="FIXED_AMOUNT">Montant fixe</option>
+                                <option value="MARKUP">Majoration (%)</option>
+                                <option value="TIERED">Tarification étagée</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Valeur</label>
+                            <input type="number" class="form-input" placeholder="15" step="0.01" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-input" rows="3" placeholder="Description de la règle de pricing..." required></textarea>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Date de début</label>
+                            <input type="datetime-local" class="form-input" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Date de fin</label>
+                            <input type="datetime-local" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+                        <button type="button" class="btn btn-secondary" onclick="hideModal('newRuleModal')">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Créer la Règle</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Promotion Modal -->
+    <div class="modal" id="newPromoModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Nouvelle Promotion</h2>
+                <button class="modal-close" onclick="hideModal('newPromoModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="newPromoForm">
+                    <div class="form-group">
+                        <label class="form-label">Titre de la Promotion</label>
+                        <input type="text" class="form-input" placeholder="Ex: Promotion Saint-Valentin" required>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Code Promo</label>
+                            <input type="text" class="form-input" placeholder="VALENTINE25" style="text-transform: uppercase;" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Réduction (%)</label>
+                            <input type="number" class="form-input" placeholder="15" min="1" max="100" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Date de début</label>
+                            <input type="datetime-local" class="form-input" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Date de fin</label>
+                            <input type="datetime-local" class="form-input" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Limite d'utilisation</label>
+                            <input type="number" class="form-input" placeholder="1000" min="1">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Utilisation par utilisateur</label>
+                            <input type="number" class="form-input" placeholder="1" min="1" value="1">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+                        <button type="button" class="btn btn-secondary" onclick="hideModal('newPromoModal')">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Créer la Promotion</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Tab switching
+        function switchTab(tabName) {
+            // Remove active class from all tabs and contents
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active class to clicked tab and corresponding content
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+        
+        // Modal functions
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+        
+        function hideModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+        
+        function showNewRuleModal() {
+            showModal('newRuleModal');
+        }
+        
+        function showNewPromoModal() {
+            showModal('newPromoModal');
+        }
+        
+        // Toggle rule activation
+        function toggleRule(toggleElement) {
+            toggleElement.classList.toggle('active');
+            
+            const isActive = toggleElement.classList.contains('active');
+            const ruleCard = toggleElement.closest('.pricing-rule-card');
+            const ruleName = ruleCard.querySelector('.rule-title').textContent;
+            
+            console.log(`Règle "${ruleName}" ${isActive ? 'activée' : 'désactivée'}`);
+            
+            // Visual feedback
+            if (isActive) {
+                ruleCard.style.opacity = '1';
+            } else {
+                ruleCard.style.opacity = '0.6';
+            }
+        }
+        
+        // Form submissions
+        document.getElementById('newRuleForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Nouvelle règle de pricing créée avec succès !');
+            hideModal('newRuleModal');
+            this.reset();
+        });
+        
+        document.getElementById('newPromoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Nouvelle promotion créée avec succès !');
+            hideModal('newPromoModal');
+            this.reset();
+        });
+        
+        // Auto-generate promo code
+        document.querySelector('#newPromoForm input[placeholder="VALENTINE25"]').addEventListener('input', function() {
+            this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        });
+        
+        // Copy promo code to clipboard
+        document.querySelectorAll('.btn-secondary:contains("📋 Copier Code")').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const promoCard = this.closest('.promotion-card');
+                const promoCode = promoCard.querySelector('.promo-code').textContent;
+                
+                navigator.clipboard.writeText(promoCode).then(() => {
+                    // Visual feedback
+                    const originalText = this.textContent;
+                    this.textContent = '✅ Copié !';
+                    this.style.background = '#dcfce7';
+                    this.style.color = '#16a34a';
+                    
+                    setTimeout(() => {
+                        this.textContent = originalText;
+                        this.style.background = '';
+                        this.style.color = '';
+                    }, 2000);
+                }).catch(() => {
+                    alert(`Code promo: ${promoCode}`);
+                });
+            });
+        });
+        
+        // Dynamic pricing range inputs
+        document.querySelectorAll('input[type="range"]').forEach(range => {
+            range.addEventListener('input', function() {
+                const label = this.parentElement.querySelector('div');
+                const value = this.value;
+                
+                if (this.min === '1' && this.max === '10') {
+                    // Sensitivity slider
+                    const levels = ['Très faible', 'Faible', 'Modérée', 'Élevée', 'Très élevée'];
+                    const index = Math.floor((value - 1) / 2);
+                    label.textContent = `${levels[index] || 'Élevée'} (${value}/10)`;
+                } else if (this.min === '10' && this.max === '50') {
+                    // Variation slider
+                    label.textContent = `±${value}%`;
+                }
+            });
+        });
+        
+        // Real-time demand simulation
+        function updateDemandIndicators() {
+            document.querySelectorAll('.demand-level').forEach(indicator => {
+                const currentValue = parseInt(indicator.textContent);
+                const variation = Math.floor(Math.random() * 10) - 5; // -5 to +5
+                const newValue = Math.max(0, Math.min(100, currentValue + variation));
+                
+                indicator.textContent = newValue + '%';
+                
+                // Update color based on demand level
+                indicator.className = 'demand-level ';
+                if (newValue < 40) {
+                    indicator.className += 'low';
+                } else if (newValue < 70) {
+                    indicator.className += 'medium';
+                } else {
+                    indicator.className += 'high';
+                }
+            });
+        }
+        
+        // Update demand every 30 seconds
+        setInterval(updateDemandIndicators, 30000);
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal')) {
+                e.target.classList.remove('show');
+            }
+        });
+        
+        // Mobile sidebar toggle
+        function toggleMobileSidebar() {
+            document.querySelector('.sidebar').classList.toggle('mobile-open');
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Module Pricing & Promotions Entrix initialisé');
+        });
+    </script>
+</body>
+</html>

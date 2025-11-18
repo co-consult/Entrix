@@ -1,0 +1,91 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "E Entrix":
+    - /url: /
+  - navigation:
+    - link "Accueil":
+      - /url: /
+    - link "Événements":
+      - /url: /events
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+    - link "Billets":
+      - /url: /tickets
+  - link "Se connecter":
+    - /url: /auth/login
+  - link "S'inscrire":
+    - /url: /auth/register
+- main:
+  - img
+  - text: Entrix Create Account Sign up to start managing your events Full Name
+  - textbox "Full Name"
+  - text: Email
+  - textbox "Email"
+  - text: Account Type
+  - combobox: Attendee
+  - text: Password
+  - textbox "Password"
+  - text: Confirm Password
+  - textbox "Confirm Password"
+  - button "Create Account"
+  - text: Already have an account?
+  - link "Sign in":
+    - /url: /auth/signin
+- contentinfo:
+  - text: E Entrix
+  - paragraph: La plateforme de référence pour la gestion d'événements et la billetterie en Tunisie et au Maghreb.
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - heading "Liens rapides" [level=3]
+  - list:
+    - listitem:
+      - link "Événements":
+        - /url: /events
+    - listitem:
+      - link "Lieux":
+        - /url: /venues
+    - listitem:
+      - link "Organisateurs":
+        - /url: /organizers
+    - listitem:
+      - link "À propos":
+        - /url: /about
+  - heading "Support" [level=3]
+  - list:
+    - listitem:
+      - link "Centre d'aide":
+        - /url: /help
+    - listitem:
+      - link "Nous contacter":
+        - /url: /contact
+    - listitem:
+      - link "FAQ":
+        - /url: /faq
+    - listitem:
+      - link "Conditions d'utilisation":
+        - /url: /terms
+  - heading "Contact" [level=3]
+  - img
+  - text: contact@entrix.tn
+  - img
+  - text: +216 XX XXX XXX
+  - img
+  - text: Tunis, Tunisie
+  - paragraph: © 2025 Entrix. Tous droits réservés.
+  - link "Politique de confidentialité":
+    - /url: /privacy
+  - link "Conditions d'utilisation":
+    - /url: /terms
+- region "Notifications (F8)":
+  - list
+- alert
+```

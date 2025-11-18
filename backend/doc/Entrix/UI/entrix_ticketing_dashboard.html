@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix Admin - Dashboard Billetterie</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .admin-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #475569;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .nav-menu {
+            padding: 20px 0;
+        }
+        
+        .nav-section {
+            margin-bottom: 30px;
+        }
+        
+        .nav-section-title {
+            padding: 0 24px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            color: #e2e8f0;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(90deg, #DC143C, #B91C3C);
+            color: white;
+            border-right: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            min-height: 100vh;
+        }
+        
+        .top-bar {
+            background: white;
+            padding: 20px 32px;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .page-info h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .breadcrumb {
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .breadcrumb a {
+            color: #64748b;
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            color: #DC143C;
+        }
+        
+        .top-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .content-area {
+            padding: 32px;
+        }
+        
+        /* Quick Stats */
+        .quick-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, shadow 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgba(0,0,0,0.1);
+        }
+        
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .stat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .stat-icon.revenue {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .stat-icon.tickets {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+        
+        .stat-icon.subscriptions {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .stat-icon.conversion {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .stat-change {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .stat-change.positive {
+            color: #10b981;
+        }
+        
+        .stat-change.negative {
+            color: #ef4444;
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            margin-bottom: 32px;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 20px;
+        }
+        
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+        }
+        
+        .action-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            text-decoration: none;
+            color: #475569;
+            transition: all 0.2s;
+        }
+        
+        .action-card:hover {
+            border-color: #DC143C;
+            background: #fef2f2;
+            color: #DC143C;
+            transform: translateY(-2px);
+        }
+        
+        .action-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        
+        .action-info {
+            flex: 1;
+        }
+        
+        .action-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .action-desc {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        /* Recent Activity */
+        .recent-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+        
+        .activity-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .activity-list {
+            space-y: 16px;
+        }
+        
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        
+        .activity-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        
+        .activity-icon.purchase {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        
+        .activity-icon.refund {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .activity-icon.transfer {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+        
+        .activity-info {
+            flex: 1;
+        }
+        
+        .activity-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .activity-details {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .activity-time {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        
+        /* Pending Actions */
+        .pending-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .pending-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: #fef3c7;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .pending-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .pending-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: #f59e0b;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        
+        .pending-text {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .pending-action {
+            background: #f59e0b;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px -3px rgba(220, 20, 60, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: #DC143C;
+            border: 2px solid #DC143C;
+        }
+        
+        .btn-outline:hover {
+            background: #DC143C;
+            color: white;
+        }
+        
+        /* Charts Placeholder */
+        .chart-container {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            margin-bottom: 32px;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .quick-stats {
+                grid-template-columns: 1fr;
+            }
+            
+            .recent-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .top-bar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">E</div>
+                    <span>Entrix Admin</span>
+                </div>
+            </div>
+            
+            <div class="nav-menu">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        Dashboard
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎪</span>
+                        Événements
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🏟️</span>
+                        Venues
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">👥</span>
+                        Utilisateurs
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Billetterie</div>
+                    <a href="#" class="nav-item active">
+                        <span class="nav-icon">🎫</span>
+                        Dashboard
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📋</span>
+                        Abonnements
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🎪</span>
+                        Types de Billets
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">💰</span>
+                        Pricing & Promo
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🔄</span>
+                        Transferts
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Sécurité</div>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">🔐</span>
+                        Contrôle d'accès
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="nav-icon">📋</span>
+                        Audit
+                    </a>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="page-info">
+                    <h1>Dashboard Billetterie</h1>
+                    <div class="breadcrumb">
+                        <a href="#">Dashboard</a> > <a href="#">Billetterie</a> > Aperçu
+                    </div>
+                </div>
+                <div class="top-actions">
+                    <button class="btn btn-secondary">📊 Rapports</button>
+                    <button class="btn btn-primary" onclick="showNewTicketModal()">🎫 Nouveau Billet</button>
+                </div>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Quick Stats -->
+                <div class="quick-stats">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-title">Revenus du Mois</div>
+                            <div class="stat-icon revenue">💰</div>
+                        </div>
+                        <div class="stat-value">847K TND</div>
+                        <div class="stat-change positive">+23% vs mois dernier</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-title">Billets Vendus</div>
+                            <div class="stat-icon tickets">🎫</div>
+                        </div>
+                        <div class="stat-value">12,847</div>
+                        <div class="stat-change positive">+15% vs mois dernier</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-title">Abonnements Actifs</div>
+                            <div class="stat-icon subscriptions">📋</div>
+                        </div>
+                        <div class="stat-value">2,394</div>
+                        <div class="stat-change positive">+8% nouvelles souscriptions</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-title">Taux de Conversion</div>
+                            <div class="stat-icon conversion">📈</div>
+                        </div>
+                        <div class="stat-value">89.2%</div>
+                        <div class="stat-change positive">+2.1% vs mois dernier</div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <h2 class="section-title">Actions Rapides</h2>
+                    <div class="actions-grid">
+                        <a href="#" class="action-card" onclick="showSubscriptionModal()">
+                            <div class="action-icon">📋</div>
+                            <div class="action-info">
+                                <div class="action-title">Créer Abonnement</div>
+                                <div class="action-desc">Nouveau plan d'abonnement saisonnier</div>
+                            </div>
+                        </a>
+                        
+                        <a href="#" class="action-card" onclick="showTicketGenerationModal()">
+                            <div class="action-icon">🎫</div>
+                            <div class="action-info">
+                                <div class="action-title">Générer Billets</div>
+                                <div class="action-desc">Génération en masse pour événement</div>
+                            </div>
+                        </a>
+                        
+                        <a href="#" class="action-card" onclick="showPricingModal()">
+                            <div class="action-icon">💰</div>
+                            <div class="action-info">
+                                <div class="action-title">Configurer Prix</div>
+                                <div class="action-desc">Règles de tarification et promotions</div>
+                            </div>
+                        </a>
+                        
+                        <a href="#" class="action-card" onclick="showTransfersModal()">
+                            <div class="action-icon">🔄</div>
+                            <div class="action-info">
+                                <div class="action-title">Gérer Transferts</div>
+                                <div class="action-desc">Supervision des transferts de billets</div>
+                            </div>
+                        </a>
+                        
+                        <a href="#" class="action-card" onclick="showQRGenerationModal()">
+                            <div class="action-icon">📱</div>
+                            <div class="action-info">
+                                <div class="action-title">QR Codes</div>
+                                <div class="action-desc">Génération et gestion des QR</div>
+                            </div>
+                        </a>
+                        
+                        <a href="#" class="action-card" onclick="showAnalyticsModal()">
+                            <div class="action-icon">📊</div>
+                            <div class="action-info">
+                                <div class="action-title">Analytics</div>
+                                <div class="action-desc">Rapports de vente détaillés</div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Recent Activity & Pending Actions -->
+                <div class="recent-section">
+                    <div class="activity-card">
+                        <div class="activity-header">
+                            <h2 class="section-title">Activité Récente</h2>
+                            <button class="btn btn-outline">Voir tout</button>
+                        </div>
+                        
+                        <div class="activity-list">
+                            <div class="activity-item">
+                                <div class="activity-icon purchase">🛒</div>
+                                <div class="activity-info">
+                                    <div class="activity-title">Nouveau billet acheté</div>
+                                    <div class="activity-details">Ahmed Trabelsi - CA vs EST - Tribune Nord</div>
+                                    <div class="activity-time">Il y a 5 minutes</div>
+                                </div>
+                            </div>
+                            
+                            <div class="activity-item">
+                                <div class="activity-icon transfer">🔄</div>
+                                <div class="activity-info">
+                                    <div class="activity-title">Transfert de billet</div>
+                                    <div class="activity-details">Mohamed Jemli → Fatma Sassi - Concert Latifa</div>
+                                    <div class="activity-time">Il y a 12 minutes</div>
+                                </div>
+                            </div>
+                            
+                            <div class="activity-item">
+                                <div class="activity-icon purchase">🛒</div>
+                                <div class="activity-info">
+                                    <div class="activity-title">Abonnement souscrit</div>
+                                    <div class="activity-details">Karim Mansouri - Plan VIP Saison 2025</div>
+                                    <div class="activity-time">Il y a 23 minutes</div>
+                                </div>
+                            </div>
+                            
+                            <div class="activity-item">
+                                <div class="activity-icon refund">💸</div>
+                                <div class="activity-info">
+                                    <div class="activity-title">Remboursement traité</div>
+                                    <div class="activity-details">Sarra Ben Ali - Match annulé - 45 TND</div>
+                                    <div class="activity-time">Il y a 1 heure</div>
+                                </div>
+                            </div>
+                            
+                            <div class="activity-item">
+                                <div class="activity-icon purchase">🛒</div>
+                                <div class="activity-info">
+                                    <div class="activity-title">Achat groupé</div>
+                                    <div class="activity-details">Club des Supporters Nord - 25 billets CA vs CSS</div>
+                                    <div class="activity-time">Il y a 2 heures</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pending-card">
+                        <div class="activity-header">
+                            <h2 class="section-title">Actions Requises</h2>
+                        </div>
+                        
+                        <div class="pending-item">
+                            <div class="pending-icon">⚠️</div>
+                            <div class="pending-text">3 demandes de remboursement en attente</div>
+                            <button class="pending-action">Traiter</button>
+                        </div>
+                        
+                        <div class="pending-item">
+                            <div class="pending-icon">🔍</div>
+                            <div class="pending-text">Validation des transferts VIP</div>
+                            <button class="pending-action">Vérifier</button>
+                        </div>
+                        
+                        <div class="pending-item">
+                            <div class="pending-icon">📊</div>
+                            <div class="pending-text">Rapport mensuel à générer</div>
+                            <button class="pending-action">Générer</button>
+                        </div>
+                        
+                        <div class="pending-item">
+                            <div class="pending-icon">🎫</div>
+                            <div class="pending-text">Configuration billets derby</div>
+                            <button class="pending-action">Configurer</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sales Chart -->
+                <div class="chart-container">
+                    <div style="text-align: center;">
+                        <h3 style="color: #1e293b; margin-bottom: 12px;">📈 Graphique des Ventes</h3>
+                        <p>Intégration Chart.js pour visualisation des ventes par période</p>
+                        <p style="font-size: 14px; color: #64748b; margin-top: 8px;">
+                            Revenue trends • Ticket sales • Subscription growth
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Navigation functions
+        function showSubscriptionModal() {
+            alert('Redirection vers création d\'abonnement - Module à implémenter');
+        }
+        
+        function showTicketGenerationModal() {
+            alert('Redirection vers génération de billets - Module à implémenter');
+        }
+        
+        function showPricingModal() {
+            alert('Redirection vers configuration pricing - Module à implémenter');
+        }
+        
+        function showTransfersModal() {
+            alert('Redirection vers gestion transferts - Module à implémenter');
+        }
+        
+        function showQRGenerationModal() {
+            alert('Redirection vers gestion QR codes - Module à implémenter');
+        }
+        
+        function showAnalyticsModal() {
+            alert('Redirection vers analytics - Module à implémenter');
+        }
+        
+        function showNewTicketModal() {
+            alert('Modal de création de nouveau billet - À implémenter');
+        }
+        
+        // Real-time updates simulation
+        function updateStats() {
+            // Simulate real-time stat updates
+            const revenue = document.querySelector('.stat-icon.revenue').parentElement.parentElement.querySelector('.stat-value');
+            const tickets = document.querySelector('.stat-icon.tickets').parentElement.parentElement.querySelector('.stat-value');
+            
+            // Add subtle animation when stats update
+            revenue.style.transform = 'scale(1.05)';
+            setTimeout(() => {
+                revenue.style.transform = 'scale(1)';
+            }, 200);
+        }
+        
+        // Update stats every 30 seconds
+        setInterval(updateStats, 30000);
+        
+        // Mobile sidebar toggle
+        function toggleMobileSidebar() {
+            document.querySelector('.sidebar').classList.toggle('mobile-open');
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard Billetterie Entrix initialisé');
+            
+            // Add some interactive behaviors
+            document.querySelectorAll('.stat-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const title = this.querySelector('.stat-title').textContent;
+                    console.log(`Clicked on ${title} stat`);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

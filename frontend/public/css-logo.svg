@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="450" viewBox="0 0 400 450" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="450" rx="40" fill="white"/>
+  <rect x="30" y="30" width="340" height="50" rx="12" fill="white" stroke="black" stroke-width="4"/>
+  <text x="200" y="65" font-size="28" font-family="Arial, sans-serif" fill="black" text-anchor="middle" alignment-baseline="middle" direction="rtl">النادي الرياضي الصفاقسي</text>
+  <rect x="30" y="90" width="340" height="320" rx="60" fill="white" stroke="black" stroke-width="4"/>
+  <rect x="70" y="110" width="30" height="290" rx="15" fill="black"/>
+  <rect x="140" y="110" width="30" height="290" rx="15" fill="black"/>
+  <rect x="300" y="110" width="30" height="290" rx="15" fill="black"/>
+  <text x="200" y="270" font-size="90" font-family="Arial Black, Arial, sans-serif" font-weight="bold" fill="black" text-anchor="middle" alignment-baseline="middle">CSS</text>
+</svg> 

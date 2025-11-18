@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenue sur Entrix ! 🎉</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            text-align: center;
+            color: white;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-text {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        .verification-section {
+            background-color: #f1f5f9;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 25px 0;
+            text-align: center;
+            border-left: 4px solid #67C3F3;
+        }
+        .verification-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #67C3F3 0%, #5A9FD4 100%);
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin-top: 15px;
+            transition: transform 0.2s ease;
+        }
+        .verification-button:hover {
+            transform: translateY(-2px);
+        }
+        .features {
+            margin: 30px 0;
+        }
+        .feature {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            padding: 15px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+        }
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #67C3F3 0%, #5A9FD4 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            color: white;
+            font-weight: bold;
+        }
+        .footer {
+            background-color: #1e293b;
+            color: #94a3b8;
+            padding: 30px;
+            text-align: center;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .footer a {
+            color: #67C3F3;
+            text-decoration: none;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+            color: #67C3F3;
+            text-decoration: none;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Bienvenue sur Entrix ! 🎉</h1>
+            <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">
+                Votre plateforme événementielle préférée
+            </p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <div class="welcome-text">
+                <p>Bonjour <strong>{{firstName}}</strong>,</p>
+                
+                <p>Bienvenue dans la communauté Entrix ! 🚀</p>
+                
+                <p>Nous sommes ravis de vous compter parmi nous. Entrix est votre plateforme complète pour découvrir, organiser et participer aux meilleurs événements.</p>
+            </div>
+
+            {{#if emailVerificationToken}}
+            <div class="verification-section">
+                <h3 style="margin-top: 0; color: #1e293b;">📧 Vérifiez votre adresse email</h3>
+                <p>Pour commencer à utiliser toutes les fonctionnalités d'Entrix, veuillez confirmer votre adresse email en cliquant sur le bouton ci-dessous :</p>
+                
+                <a href="{{verificationUrl}}" class="verification-button">
+                    Vérifier mon email
+                </a>
+                
+                <p style="margin-top: 15px; font-size: 12px; color: #64748b;">
+                    Ce lien expire dans 24 heures
+                </p>
+            </div>
+            {{/if}}
+
+            <div class="features">
+                <h3 style="color: #1e293b; margin-bottom: 20px;">🌟 Que pouvez-vous faire avec Entrix ?</h3>
+                
+                <div class="feature">
+                    <div class="feature-icon">🎫</div>
+                    <div>
+                        <strong>Découvrir des événements</strong><br>
+                        <span style="color: #64748b; font-size: 14px;">Explorez une large sélection d'événements près de chez vous</span>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">🎯</div>
+                    <div>
+                        <strong>Organiser vos événements</strong><br>
+                        <span style="color: #64748b; font-size: 14px;">Créez et gérez vos propres événements facilement</span>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">🤝</div>
+                    <div>
+                        <strong>Rejoindre la communauté</strong><br>
+                        <span style="color: #64748b; font-size: 14px;">Connectez-vous avec d'autres passionnés d'événements</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background-color: #f1f5f9; border-radius: 8px; padding: 20px; margin-top: 30px;">
+                <h4 style="margin-top: 0; color: #1e293b;">🚀 Prochaines étapes :</h4>
+                <ul style="margin: 10px 0; padding-left: 20px; color: #475569;">
+                    <li>Complétez votre profil</li>
+                    <li>Explorez les événements populaires</li>
+                    <li>Suivez vos organisateurs préférés</li>
+                    <li>Créez votre premier événement</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="social-links">
+                <a href="{{facebookUrl}}">Facebook</a>
+                <a href="{{instagramUrl}}">Instagram</a>
+                <a href="{{twitterUrl}}">Twitter</a>
+                <a href="{{linkedinUrl}}">LinkedIn</a>
+            </div>
+            
+            <p style="margin: 20px 0;">
+                <strong>Entrix</strong> - Votre plateforme événementielle<br>
+                📍 Tunis, Tunisie<br>
+                📧 <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>
+            </p>
+            
+            <p style="font-size: 12px; opacity: 0.8; margin-top: 20px;">
+                Besoin d'aide ? 
+                Répondez à cet email ou contactez-nous sur <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>
+            </p>
+            
+            <p style="font-size: 12px; opacity: 0.8;">
+                Si vous ne souhaitez plus recevoir ces emails, 
+                <a href="{{unsubscribeUrl}}">cliquez ici pour vous désabonner</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

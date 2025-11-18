@@ -1,0 +1,102 @@
+{{!-- src/modules/auth/templates/mfa-setup.hbs --}}
+{{!-- Template email configuration MFA Entrix V3.0 --}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration authentification à deux facteurs - Entrix</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background: linear-gradient(135deg, #10ac84 0%, #00d2d3 100%); color: white; padding: 40px 30px; text-align: center; }
+        .content { padding: 40px 30px; }
+        .button { display: inline-block; background: linear-gradient(135deg, #10ac84 0%, #00d2d3 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .footer { background-color: #f8f9fa; padding: 20px 30px; text-align: center; color: #6c757d; font-size: 14px; }
+        .qr-code { text-align: center; margin: 20px 0; padding: 20px; background-color: #f8f9fa; border-radius: 5px; }
+        .backup-codes { font-family: 'Courier New', monospace; background-color: #f8f9fa; padding: 15px; border-radius: 5px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 MFA Configuré</h1>
+            <p>Votre compte est maintenant ultra-sécurisé</p>
+        </div>
+        
+        <div class="content">
+            <h2>Félicitations {{firstName}} !</h2>
+            
+            <div class="success">
+                <strong>✅ Authentification à deux facteurs activée</strong>
+                <p>Votre méthode <strong>{{mfaMethod}}</strong> est maintenant configurée et active.</p>
+            </div>
+            
+            {{
+#if
+ qrCodeDataUrl}}
+            <h3>📱 QR Code de sauvegarde</h3>
+            <p>Scannez ce QR code avec votre application d'authentification pour configurer un appareil de secours :</p>
+            <div class="qr-code">
+                <img src="{{qrCodeDataUrl}}" alt="QR Code MFA" style="max-width: 200px;">
+                <p style="font-size: 12px; margin-top: 10px;">Code secret : <code>{{secretKey}}</code></p>
+            </div>
+            {{
+/if
+}}
+            
+            {{
+#if
+ backupCodes}}
+            <h3>🆘 Codes de récupération</h3>
+            <p><strong>IMPORTANT :</strong> Conservez ces codes en lieu sûr. Ils vous permettront d'accéder à votre compte si vous perdez votre appareil MFA.</p>
+            
+            <div class="backup-codes">
+                {{
+#each
+ backupCodes}}
+                <div>{{this}}</div>
+                {{
+/each
+}}
+            </div>
+            
+            <p style="font-size: 14px; color: #dc3545;">
+                ⚠️ Chaque code ne peut être utilisé qu'une seule fois. Imprimez ou sauvegardez-les maintenant !
+            </p>
+            {{
+/if
+}}
+            
+            <h3>🚀 Prochaine connexion</h3>
+            <p>Lors de votre prochaine connexion, vous devrez :</p>
+            <ol>
+                <li>Saisir votre email et mot de passe</li>
+                <li>Fournir le code MFA de votre {{mfaMethodName}}</li>
+                <li>Optionnellement marquer votre appareil comme fiable</li>
+            </ol>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{platformUrl}}/account/security" class="button">Gérer ma sécurité</a>
+            </div>
+            
+            <h3>💡 Conseils</h3>
+            <ul>
+                <li>Gardez vos codes de récupération en lieu sûr</li>
+                <li>Configurez MFA sur plusieurs appareils</li>
+                <li>Vérifiez régulièrement vos connexions actives</li>
+                <li>Contactez le support en cas de problème</li>
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <p>Entrix - Sécurité maximale pour votre tranquillité</p>
+            <p>Questions ? <a href="{{supportUrl}}">Notre support est là pour vous aider</a></p>
+            <p style="font-size: 12px;">
+                Email automatique | <a href="{{platformUrl}}">entrix.tn</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

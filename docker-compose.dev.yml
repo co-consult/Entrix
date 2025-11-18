@@ -1,0 +1,232 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: entrix_dev_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: entrix_preprod_db
+      POSTGRES_USER: entrix_preprod_user
+      POSTGRES_PASSWORD: bAQTuhY6Rgq6rt9uPuaAwxXQq
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    ports:
+      - "5432:5432"
+    networks:
+      - entrix_dev_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U entrix_preprod_user -d entrix_preprod_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: entrix_dev_redis
+    restart: unless-stopped
+    command: redis-server --requirepass kryPInDeW2rt0MLgiacih0MsK
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - entrix_dev_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "kryPInDeW2rt0MLgiacih0MsK", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Insights for monitoring
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: entrix_dev_redis_ui
+    restart: unless-stopped
+    environment:
+      - REDIS_URI=redis://:kryPInDeW2rt0MLgiacih0MsK@redis:6379
+    volumes:
+      - redisinsight_data:/db
+    ports:
+      - "5540:5540"
+    networks:
+      - entrix_dev_network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5540/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: entrix_dev_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@entrix.dev
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - entrix_dev_network
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/misc/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: deps
+    container_name: entrix_dev_backend
+    restart: unless-stopped
+    env_file:
+      - env.dev
+    environment:
+      # Database - use service name for internal communication
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: entrix_preprod_db
+      POSTGRES_USER: entrix_preprod_user
+      POSTGRES_PASSWORD: bAQTuhY6Rgq6rt9uPuaAwxXQq
+      DATABASE_URL: postgresql://entrix_preprod_user:bAQTuhY6Rgq6rt9uPuaAwxXQq@postgres:5432/entrix_preprod_db
+      
+      # Redis - use service name for internal communication
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: kryPInDeW2rt0MLgiacih0MsK
+      REDIS_URL: redis://:kryPInDeW2rt0MLgiacih0MsK@redis:6379
+      
+      # Frontend URL - localhost for development
+      FRONTEND_URL: http://localhost:3001
+      
+      # CORS - allow localhost
+      CORS_ORIGIN: http://localhost:3001
+      
+      # Environment
+      NODE_ENV: development
+      ENVIRONMENT: development
+      PORT: 3000
+      
+      # SMTP Configuration (from env.dev)
+      SMTP_HOST: smtp.ionos.fr
+      SMTP_PORT: 465
+      SMTP_USER: entrix@lawej.com
+      SMTP_PASSWORD: "Zazou2002;!"
+      SMTP_SECURE: "true"
+      
+      # Email Configuration
+      EMAIL_HOST: smtp.ionos.fr
+      EMAIL_PORT: 465
+      EMAIL_USER: entrix@lawej.com
+      EMAIL_PASS: "Zazou2002;!"
+      EMAIL_FROM: entrix@lawej.com
+      EMAIL_SECURE: "true"
+      EMAIL_DEFAULT_REPLY_TO: entrix@lawej.com
+      
+      # Email Server Configuration (for NextAuth)
+      EMAIL_SERVER_HOST: smtp.ionos.fr
+      EMAIL_SERVER_PORT: 465
+      EMAIL_SERVER_USER: entrix@lawej.com
+      EMAIL_SERVER_PASSWORD: "Zazou2002;!"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    networks:
+      - entrix_dev_network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
+    command: sh -c "apk add --no-cache curl && npx prisma generate && npm run start:dev"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: deps
+    container_name: entrix_dev_frontend
+    restart: unless-stopped
+    env_file:
+      - env.dev
+    environment:
+      # Next.js
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api/v1
+      NEXT_PUBLIC_APP_URL: http://localhost:3001
+      
+      # Server-side API URL (for Docker internal communication)
+      API_BASE_URL: http://backend:3000/api/v1
+      
+      # Authentication
+      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_SECRET: tUV6trWFPNv98Nef4BYdRm8GXWOvU0Q24LzsBHCDyIGX4F29TY98TzGQ9004DS3RxRIjOIPytjAJKKDsWSqQ
+      
+      # Organizer
+      NEXT_PUBLIC_ORGANIZER_ID: e219c1e4-2f2e-4719-b2f9-c6ce4d2d8d2e
+      NEXT_PUBLIC_DEFAULT_ORGANIZER_ID: e219c1e4-2f2e-4719-b2f9-c6ce4d2d8d2e
+      
+      # Email - HARDCODED (from env.dev)
+      EMAIL_SERVER_HOST: smtp.ionos.fr
+      EMAIL_SERVER_PORT: 465
+      EMAIL_SERVER_USER: entrix@lawej.com
+      EMAIL_SERVER_PASSWORD: "Zazou2002;!"
+      EMAIL_FROM: entrix@lawej.com
+    depends_on:
+      - backend
+    ports:
+      - "3001:3001"
+    networks:
+      - entrix_dev_network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: sh -c "apk add --no-cache curl && npm run dev"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  redisinsight_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  entrix_dev_network:
+    driver: bridge
+

@@ -1,0 +1,411 @@
+# Arborescence Complète Entrix (Production)
+
+## 1. users (auth, groupes, rôles, permissions, sécurité, blacklist)
+/src/modules/users/
+  /constants
+    users.constants.ts
+    roles.constants.ts
+    permissions.constants.ts
+    blacklist.constants.ts
+  /interfaces
+    users.interface.ts
+    roles.interface.ts
+    permissions.interface.ts
+    blacklist.interface.ts
+    auth.interface.ts
+    group.interface.ts
+  /dtos
+    create-user.dto.ts
+    update-user.dto.ts
+    login-user.dto.ts
+    register-user.dto.ts
+    assign-role.dto.ts
+    assign-permission.dto.ts
+    blacklist.dto.ts
+    ...
+  /services
+    users.service.ts
+    auth.service.ts
+    roles.service.ts
+    permissions.service.ts
+    blacklist.service.ts
+    groups.service.ts
+    sessions.service.ts
+  /controllers
+    users.controller.ts
+    auth.controller.ts
+    roles.controller.ts
+    permissions.controller.ts
+    blacklist.controller.ts
+    groups.controller.ts
+  users.module.ts
+
+## 2. organizers
+/src/modules/organizers/
+  /constants
+    organizers.constants.ts
+    commissions.constants.ts
+  /interfaces
+    organizers.interface.ts
+    commission.interface.ts
+    legal-doc.interface.ts
+  /dtos
+    create-organizer.dto.ts
+    update-organizer.dto.ts
+    commission.dto.ts
+    ...
+  /services
+    organizers.service.ts
+    commissions.service.ts
+    legal-docs.service.ts
+  /controllers
+    organizers.controller.ts
+    commissions.controller.ts
+    legal-docs.controller.ts
+  organizers.module.ts
+
+## 3. participants
+/src/modules/participants/
+  /constants
+    participants.constants.ts
+  /interfaces
+    participants.interface.ts
+  /dtos
+    create-participant.dto.ts
+    update-participant.dto.ts
+    ...
+  /services
+    participants.service.ts
+  /controllers
+    participants.controller.ts
+  participants.module.ts
+
+## 4. venues (cartographie complète)
+/src/modules/venues/
+  /constants
+    venues.constants.ts
+    zones.constants.ts
+    mappings.constants.ts
+    access-points.constants.ts
+    seats.constants.ts
+  /interfaces
+    venues.interface.ts
+    zone.interface.ts
+    mapping.interface.ts
+    access-point.interface.ts
+    seat.interface.ts
+  /dtos
+    create-venue.dto.ts
+    update-venue.dto.ts
+    create-zone.dto.ts
+    update-zone.dto.ts
+    create-mapping.dto.ts
+    update-mapping.dto.ts
+    create-access-point.dto.ts
+    update-access-point.dto.ts
+    create-seat.dto.ts
+    update-seat.dto.ts
+  /services
+    venues.service.ts
+    zones.service.ts
+    mappings.service.ts
+    access-points.service.ts
+    seats.service.ts
+  /controllers
+    venues.controller.ts
+    zones.controller.ts
+    mappings.controller.ts
+    access-points.controller.ts
+    seats.controller.ts
+  venues.module.ts
+
+## 5. events
+/src/modules/events/
+  /constants
+    events.constants.ts
+    categories.constants.ts
+  /interfaces
+    events.interface.ts
+    event-participant.interface.ts
+    category.interface.ts
+  /dtos
+    create-event.dto.ts
+    update-event.dto.ts
+    assign-participant.dto.ts
+    ...
+  /services
+    events.service.ts
+    event-participants.service.ts
+    categories.service.ts
+  /controllers
+    events.controller.ts
+    event-participants.controller.ts
+    categories.controller.ts
+  events.module.ts
+
+## 6. subscription-plans / tickets
+/src/modules/subscriptions/
+  /constants
+    subscriptions.constants.ts
+    plans.constants.ts
+  /interfaces
+    subscriptions.interface.ts
+    plan.interface.ts
+  /dtos
+    create-plan.dto.ts
+    update-plan.dto.ts
+    subscribe.dto.ts
+    ...
+  /services
+    subscriptions.service.ts
+    plans.service.ts
+  /controllers
+    subscriptions.controller.ts
+    plans.controller.ts
+  subscriptions.module.ts
+
+/src/modules/tickets/
+  /constants
+    tickets.constants.ts
+    ticket-types.constants.ts
+  /interfaces
+    tickets.interface.ts
+    ticket-type.interface.ts
+  /dtos
+    create-ticket.dto.ts
+    update-ticket.dto.ts
+    ...
+  /services
+    tickets.service.ts
+    ticket-types.service.ts
+  /controllers
+    tickets.controller.ts
+    ticket-types.controller.ts
+  tickets.module.ts
+
+## 7. billeterie
+/src/modules/billeterie/
+  /constants
+    billeterie.constants.ts
+  /interfaces
+    billeterie.interface.ts
+  /dtos
+    create-sale.dto.ts
+    refund.dto.ts
+    ...
+  /services
+    billeterie.service.ts
+  /controllers
+    billeterie.controller.ts
+  billeterie.module.ts
+
+## 8. access-control
+/src/modules/access-control/
+  /constants
+    access-control.constants.ts
+    access-rights.constants.ts
+    access-log.constants.ts
+  /interfaces
+    access-control.interface.ts
+    access-rights.interface.ts
+    access-log.interface.ts
+  /dtos
+    validate-access.dto.ts
+    scan-log.dto.ts
+    ...
+  /services
+    access-control.service.ts
+    access-rights.service.ts
+    access-log.service.ts
+  /controllers
+    access-control.controller.ts
+    access-rights.controller.ts
+    access-log.controller.ts
+  access-control.module.ts
+
+## 9. payments
+/src/modules/payments/
+  /constants
+    payments.constants.ts
+    payment-methods.constants.ts
+    invoices.constants.ts
+  /interfaces
+    payments.interface.ts
+    payment-method.interface.ts
+    invoice.interface.ts
+  /dtos
+    create-payment.dto.ts
+    update-payment.dto.ts
+    create-invoice.dto.ts
+    ...
+  /services
+    payments.service.ts
+    payment-methods.service.ts
+    invoices.service.ts
+  /controllers
+    payments.controller.ts
+    payment-methods.controller.ts
+    invoices.controller.ts
+  payments.module.ts
+
+## 10. pricing
+/src/modules/pricing/
+  /constants
+    pricing.constants.ts
+    promotions.constants.ts
+    coupons.constants.ts
+  /interfaces
+    pricing.interface.ts
+    promotion.interface.ts
+    coupon.interface.ts
+  /dtos
+    create-pricing-rule.dto.ts
+    create-promotion.dto.ts
+    create-coupon.dto.ts
+    ...
+  /services
+    pricing.service.ts
+    promotions.service.ts
+    coupons.service.ts
+  /controllers
+    pricing.controller.ts
+    promotions.controller.ts
+    coupons.controller.ts
+  pricing.module.ts
+
+## 11. notifications
+/src/modules/notifications/
+  /constants
+    notifications.constants.ts
+  /interfaces
+    notifications.interface.ts
+  /dtos
+    send-notification.dto.ts
+    ...
+  /services
+    notifications.service.ts
+  /controllers
+    notifications.controller.ts
+  notifications.module.ts
+
+## 12. support
+/src/modules/support/
+  /constants
+    support.constants.ts
+  /interfaces
+    support.interface.ts
+  /dtos
+    create-support-ticket.dto.ts
+    ...
+  /services
+    support.service.ts
+  /controllers
+    support.controller.ts
+  support.module.ts
+
+## 13. audit
+/src/modules/audit/
+  /constants
+    audit.constants.ts
+  /interfaces
+    audit.interface.ts
+  /dtos
+    create-audit-log.dto.ts
+    ...
+  /services
+    audit.service.ts
+  /controllers
+    audit.controller.ts
+  audit.module.ts
+
+## 14. settings
+/src/modules/settings/
+  /constants
+    settings.constants.ts
+  /interfaces
+    settings.interface.ts
+  /dtos
+    update-settings.dto.ts
+    ...
+  /services
+    settings.service.ts
+  /controllers
+    settings.controller.ts
+  settings.module.ts
+
+## 15. files
+/src/modules/files/
+  /constants
+    files.constants.ts
+  /interfaces
+    files.interface.ts
+  /dtos
+    upload-file.dto.ts
+    ...
+  /services
+    files.service.ts
+  /controllers
+    files.controller.ts
+  files.module.ts
+
+# Modules techniques transverses
+/src/shared/
+  /prisma
+    prisma.module.ts
+    prisma.service.ts
+  /redis
+    redis.module.ts
+    redis.service.ts
+  /bullmq
+    bullmq.module.ts
+    bullmq.service.ts
+  /logger
+    logger.module.ts
+    logger.service.ts
+  /email
+    email.module.ts
+    email.service.ts
+  /swagger
+    swagger.module.ts
+    swagger.service.ts
+
+# Commun, utilitaires, sécurité, etc.
+/src/common/
+  /enums
+  /interfaces
+  /decorators
+  /filters
+  /interceptors
+  /constants
+  /services
+  /pipes
+  /guards
+  /policies
+  /utils
+
+# Config, racine, tests, docs, etc.
+/src/config/
+  configuration.ts
+  validation.ts
+  app.config.ts
+  redis.config.ts
+  bullmq.config.ts
+  prisma.config.ts
+  swagger.config.ts
+  ...
+app.module.ts
+main.ts
+
+/prisma/
+  schema.prisma
+  migrations/
+
+test/
+docs/
+.env
+.env.example
+.prettierrc
+.eslintrc.js
+tsconfig.json
+package.json
+nest-cli.json 

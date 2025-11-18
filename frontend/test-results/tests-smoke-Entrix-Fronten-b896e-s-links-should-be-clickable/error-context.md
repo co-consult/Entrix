@@ -1,0 +1,131 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "E Entrix":
+    - /url: /
+  - navigation:
+    - link "Accueil":
+      - /url: /
+    - link "Événements":
+      - /url: /events
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+    - link "Billets":
+      - /url: /tickets
+  - link "Se connecter":
+    - /url: /auth/login
+  - link "S'inscrire":
+    - /url: /auth/register
+- main:
+  - heading "Plateforme de Gestion d'Événements" [level=1]
+  - paragraph: Entrix est la solution complète pour organiser, gérer et promouvoir vos événements en Tunisie et au Maghreb. De la billetterie au contrôle d'accès, tout est intégré.
+  - link "Découvrir les Événements":
+    - /url: /events
+  - link "Créer un Compte":
+    - /url: /auth/register
+  - heading "Fonctionnalités Complètes" [level=2]
+  - paragraph: Tout ce dont vous avez besoin pour vos événements
+  - paragraph: Une plateforme moderne et intuitive qui couvre tous les aspects de la gestion d'événements, de la planification à l'analyse post-événement.
+  - term:
+    - img
+    - text: Gestion d'Événements
+  - definition:
+    - paragraph: Créez et gérez vos événements en toute simplicité avec notre interface intuitive.
+  - term:
+    - img
+    - text: Billetterie Intégrée
+  - definition:
+    - paragraph: Système de billetterie complet avec QR codes sécurisés et contrôle d'accès.
+  - term:
+    - img
+    - text: Gestion des Lieux
+  - definition:
+    - paragraph: Configurez vos venues avec plans de salle détaillés et gestion des zones.
+  - term:
+    - img
+    - text: Gestion des Participants
+  - definition:
+    - paragraph: Organisez vos équipes, artistes et intervenants efficacement.
+  - term:
+    - img
+    - text: Sécurité Avancée
+  - definition:
+    - paragraph: Contrôle d'accès en temps réel et système de sécurité multicouches.
+  - term:
+    - img
+    - text: Analytics & Reporting
+  - definition:
+    - paragraph: Tableaux de bord détaillés et rapports pour optimiser vos événements.
+  - heading "Prêt à commencer ?" [level=2]
+  - paragraph: Rejoignez les organisateurs qui font confiance à Entrix pour leurs événements. Créez votre compte et organisez votre premier événement dès aujourd'hui.
+  - link "Commencer Gratuitement":
+    - /url: /auth/register
+  - link "Nous Contacter":
+    - /url: /contact
+  - heading "Entrix en chiffres" [level=2]
+  - paragraph: Une plateforme qui grandit avec la communauté événementielle
+  - term: Événements Organisés
+  - definition: 1,000+
+  - term: Billets Vendus
+  - definition: 50,000+
+  - term: Organisateurs Actifs
+  - definition: 200+
+  - term: Lieux Partenaires
+  - definition: 50+
+- contentinfo:
+  - text: E Entrix
+  - paragraph: La plateforme de référence pour la gestion d'événements et la billetterie en Tunisie et au Maghreb.
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - heading "Liens rapides" [level=3]
+  - list:
+    - listitem:
+      - link "Événements":
+        - /url: /events
+    - listitem:
+      - link "Lieux":
+        - /url: /venues
+    - listitem:
+      - link "Organisateurs":
+        - /url: /organizers
+    - listitem:
+      - link "À propos":
+        - /url: /about
+  - heading "Support" [level=3]
+  - list:
+    - listitem:
+      - link "Centre d'aide":
+        - /url: /help
+    - listitem:
+      - link "Nous contacter":
+        - /url: /contact
+    - listitem:
+      - link "FAQ":
+        - /url: /faq
+    - listitem:
+      - link "Conditions d'utilisation":
+        - /url: /terms
+  - heading "Contact" [level=3]
+  - img
+  - text: contact@entrix.tn
+  - img
+  - text: +216 XX XXX XXX
+  - img
+  - text: Tunis, Tunisie
+  - paragraph: © 2025 Entrix. Tous droits réservés.
+  - link "Politique de confidentialité":
+    - /url: /privacy
+  - link "Conditions d'utilisation":
+    - /url: /terms
+- region "Notifications (F8)":
+  - list
+- alert
+```

@@ -1,0 +1,573 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "E Entrix":
+    - /url: /
+  - navigation:
+    - link "Accueil":
+      - /url: /
+    - link "Événements":
+      - /url: /events
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+    - link "Billets":
+      - /url: /tickets
+  - link "Se connecter":
+    - /url: /auth/login
+  - link "S'inscrire":
+    - /url: /auth/register
+- main:
+  - heading "Plans d'Abonnement" [level=1]
+  - paragraph: Découvrez nos plans d'abonnement pour accéder à des événements exclusifs
+  - img
+  - textbox "Rechercher des plans..."
+  - combobox: Tous les types
+  - button "Réinitialiser":
+    - img
+    - text: Réinitialiser
+  - img
+  - text: Special Organizer Pass 2025 Special Organizer PREMIUM
+  - paragraph: Access to all exclusive events for this organizer in 2025.
+  - text: 129.99 DT Durée variable Jusqu'à 4 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Access to all 4 exclusive events
+    - listitem:
+      - img
+      - text: Premium seating
+    - listitem:
+      - img
+      - text: Meet the organizer
+    - listitem:
+      - img
+      - text: Event souvenirs
+    - listitem: +1 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpz5c005vk9vxapa0r6uv
+  - img
+  - text: Basic Membership Tunis Sports Club BASIC
+  - paragraph: Standard membership with basic benefits
+  - text: 99.99 DT Durée variable Jusqu'à 20 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Event Access
+    - listitem:
+      - img
+      - text: Newsletter
+    - listitem:
+      - img
+      - text: Basic Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyxi004wk9vxr0j16eaw
+  - img
+  - text: Populaire
+  - img
+  - text: VIP Membership Tunis Sports Club VIP
+  - paragraph: Exclusive VIP benefits and early access
+  - text: 299.99 DT Durée variable Jusqu'à 50 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Early Access
+    - listitem:
+      - img
+      - text: VIP Seating
+    - listitem:
+      - img
+      - text: Exclusive Events
+    - listitem:
+      - img
+      - text: Priority Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyx8004uk9vxnnlqte5y
+  - img
+  - text: TEST - Weekly Workshop Pass (7 days) Tunis Sports Club BASIC
+  - paragraph: Test plan for weekly workshop series - 7 days duration
+  - text: 19.99 DT Durée variable Jusqu'à 5 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Weekly Access
+    - listitem:
+      - img
+      - text: Workshop Materials
+    - listitem:
+      - img
+      - text: Basic Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyx2004sk9vxhjbn3hl3
+  - img
+  - text: TEST - Quarterly Festival Pass (90 days) Tunis Sports Club PREMIUM
+  - paragraph: Test plan for quarterly festival access - 90 days duration
+  - text: 149.99 DT Durée variable Jusqu'à 25 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Quarterly Access
+    - listitem:
+      - img
+      - text: Premium Seating
+    - listitem:
+      - img
+      - text: Priority Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyww004qk9vxlpnu3urc
+  - img
+  - text: TEST - Monthly Concert Pass (30 days) Tunis Sports Club BASIC
+  - paragraph: Test plan for monthly concert series - 30 days duration
+  - text: 49.99 DT Durée variable Jusqu'à 10 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Monthly Access
+    - listitem:
+      - img
+      - text: General Seating
+    - listitem:
+      - img
+      - text: Basic Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpywo004ok9vxpmrl6xde
+  - img
+  - text: Populaire
+  - img
+  - text: TEST - Annual Football Pass (365 days) Tunis Sports Club VIP
+  - paragraph: Test plan for annual football season subscription - 365 days duration
+  - text: 299.99 DT Durée variable Jusqu'à 50 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Full Season Access
+    - listitem:
+      - img
+      - text: VIP Seating
+    - listitem:
+      - img
+      - text: Priority Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpywh004mk9vxjwtko9oc
+  - img
+  - text: Populaire
+  - img
+  - text: Cultural Festival Pass 2025 Tunis Cultural Productions VIP
+  - paragraph: Complete access to all 7 days of the Cultural Festival
+  - text: 89.99 DT Durée variable Jusqu'à 7 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 7 Festival Events
+    - listitem:
+      - img
+      - text: VIP Festival Experience
+    - listitem:
+      - img
+      - text: Exclusive Festival Merchandise
+    - listitem:
+      - img
+      - text: Priority Seating
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyv9004ak9vxy93nvdl1
+  - img
+  - text: Creative Workshop Series Pass 2025 Tunis Cultural Productions BASIC
+  - paragraph: Access to all 12 weekly creative workshops
+  - text: 149.99 DT Durée variable Jusqu'à 12 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 12 Weekly Workshops
+    - listitem:
+      - img
+      - text: Workshop Materials Included
+    - listitem:
+      - img
+      - text: Take-Home Projects
+    - listitem:
+      - img
+      - text: Community Access
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyv30048k9vxqp7xjjrp
+  - img
+  - text: Tech Conference Series Pass 2025 Tunis Cultural Productions PREMIUM
+  - paragraph: Access to all 4 quarterly technology conferences
+  - text: 299.99 DT Durée variable Jusqu'à 4 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 4 Tech Conferences
+    - listitem:
+      - img
+      - text: Workshop Materials
+    - listitem:
+      - img
+      - text: Networking Events
+    - listitem:
+      - img
+      - text: Digital Conference Materials
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyux0046k9vx3aamj3cv
+  - img
+  - text: Concert Series Pass 2025 Tunis Cultural Productions PREMIUM
+  - paragraph: Access to all 5 monthly concerts featuring different artists
+  - text: 199.99 DT Durée variable Jusqu'à 5 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 5 Monthly Concerts
+    - listitem:
+      - img
+      - text: Premium Seating
+    - listitem:
+      - img
+      - text: Meet & Greet Opportunities
+    - listitem:
+      - img
+      - text: Exclusive Backstage Access
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyur0044k9vxxjvktyj0
+  - img
+  - text: Populaire
+  - img
+  - text: Football Season Pass 2025 Tunis Sports Club VIP
+  - paragraph: Complete access to all 8 matches of the 2025 Football Championship
+  - text: 399.99 DT Durée variable Jusqu'à 8 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 8 Championship Matches
+    - listitem:
+      - img
+      - text: VIP Seating Priority
+    - listitem:
+      - img
+      - text: Exclusive Pre-match Events
+    - listitem:
+      - img
+      - text: Season Program & Merchandise
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qpyuf0042k9vxzj3plxhe
+  - img
+  - text: Basic Membership Tunis Sports Club BASIC
+  - paragraph: Standard membership with basic benefits
+  - text: 99.99 DT Durée variable Jusqu'à 20 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Event Access
+    - listitem:
+      - img
+      - text: Newsletter
+    - listitem:
+      - img
+      - text: Basic Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwub005q9bueyyrjgnhk
+  - img
+  - text: Populaire
+  - img
+  - text: VIP Membership Tunis Sports Club VIP
+  - paragraph: Exclusive VIP benefits and early access
+  - text: 299.99 DT Durée variable Jusqu'à 50 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Early Access
+    - listitem:
+      - img
+      - text: VIP Seating
+    - listitem:
+      - img
+      - text: Exclusive Events
+    - listitem:
+      - img
+      - text: Priority Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwu2005o9buequ114lan
+  - img
+  - text: TEST - Weekly Workshop Pass (7 days) Tunis Sports Club BASIC
+  - paragraph: Test plan for weekly workshop series - 7 days duration
+  - text: 19.99 DT Durée variable Jusqu'à 5 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Weekly Access
+    - listitem:
+      - img
+      - text: Workshop Materials
+    - listitem:
+      - img
+      - text: Basic Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwtw005m9bued8hjzmma
+  - img
+  - text: TEST - Quarterly Festival Pass (90 days) Tunis Sports Club PREMIUM
+  - paragraph: Test plan for quarterly festival access - 90 days duration
+  - text: 149.99 DT Durée variable Jusqu'à 25 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Quarterly Access
+    - listitem:
+      - img
+      - text: Premium Seating
+    - listitem:
+      - img
+      - text: Priority Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwtp005k9buesljgocqq
+  - img
+  - text: TEST - Monthly Concert Pass (30 days) Tunis Sports Club BASIC
+  - paragraph: Test plan for monthly concert series - 30 days duration
+  - text: 49.99 DT Durée variable Jusqu'à 10 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Monthly Access
+    - listitem:
+      - img
+      - text: General Seating
+    - listitem:
+      - img
+      - text: Basic Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwti005i9bueh8ml2x84
+  - img
+  - text: Populaire
+  - img
+  - text: TEST - Annual Football Pass (365 days) Tunis Sports Club VIP
+  - paragraph: Test plan for annual football season subscription - 365 days duration
+  - text: 299.99 DT Durée variable Jusqu'à 50 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: Full Season Access
+    - listitem:
+      - img
+      - text: VIP Seating
+    - listitem:
+      - img
+      - text: Priority Support
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwtb005g9bue2ekdkmqs
+  - img
+  - text: Populaire
+  - img
+  - text: Cultural Festival Pass 2025 Tunis Cultural Productions VIP
+  - paragraph: Complete access to all 7 days of the Cultural Festival
+  - text: 89.99 DT Durée variable Jusqu'à 7 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 7 Festival Events
+    - listitem:
+      - img
+      - text: VIP Festival Experience
+    - listitem:
+      - img
+      - text: Exclusive Festival Merchandise
+    - listitem:
+      - img
+      - text: Priority Seating
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgws300549buec37pzrj7
+  - img
+  - text: Creative Workshop Series Pass 2025 Tunis Cultural Productions BASIC
+  - paragraph: Access to all 12 weekly creative workshops
+  - text: 149.99 DT Durée variable Jusqu'à 12 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 12 Weekly Workshops
+    - listitem:
+      - img
+      - text: Workshop Materials Included
+    - listitem:
+      - img
+      - text: Take-Home Projects
+    - listitem:
+      - img
+      - text: Community Access
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwrx00529bueb4oosvaa
+  - img
+  - text: Tech Conference Series Pass 2025 Tunis Cultural Productions PREMIUM
+  - paragraph: Access to all 4 quarterly technology conferences
+  - text: 299.99 DT Durée variable Jusqu'à 4 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 4 Tech Conferences
+    - listitem:
+      - img
+      - text: Workshop Materials
+    - listitem:
+      - img
+      - text: Networking Events
+    - listitem:
+      - img
+      - text: Digital Conference Materials
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwrq00509buep2m9ofa3
+  - img
+  - text: Concert Series Pass 2025 Tunis Cultural Productions PREMIUM
+  - paragraph: Access to all 5 monthly concerts featuring different artists
+  - text: 199.99 DT Durée variable Jusqu'à 5 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 5 Monthly Concerts
+    - listitem:
+      - img
+      - text: Premium Seating
+    - listitem:
+      - img
+      - text: Meet & Greet Opportunities
+    - listitem:
+      - img
+      - text: Exclusive Backstage Access
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwri004y9bue5hm41txu
+  - img
+  - text: Populaire
+  - img
+  - text: Football Season Pass 2025 Tunis Sports Club VIP
+  - paragraph: Complete access to all 8 matches of the 2025 Football Championship
+  - text: 399.99 DT Durée variable Jusqu'à 8 événements
+  - heading "Avantages inclus:" [level=4]
+  - list:
+    - listitem:
+      - img
+      - text: All 8 Championship Matches
+    - listitem:
+      - img
+      - text: VIP Seating Priority
+    - listitem:
+      - img
+      - text: Exclusive Pre-match Events
+    - listitem:
+      - img
+      - text: Season Program & Merchandise
+    - listitem: +2 autres avantages
+  - button "S’abonner"
+  - link "Voir les détails":
+    - /url: /subscriptions/plans/cmd6qgwr7004w9buexsj4uxws
+  - heading "Questions fréquentes" [level=2]
+  - text: Comment fonctionne un abonnement ?
+  - paragraph: Un abonnement vous donne accès à un nombre défini d'événements pendant une période donnée, avec des avantages exclusifs selon le type d'abonnement choisi.
+  - text: Puis-je annuler mon abonnement ?
+  - paragraph: Oui, vous pouvez annuler votre abonnement à tout moment depuis votre espace personnel. Les conditions d'annulation varient selon le type d'abonnement.
+  - text: Que se passe-t-il si un événement est annulé ?
+  - paragraph: En cas d'annulation d'un événement, votre crédit d'événement est automatiquement restauré et peut être utilisé pour un autre événement.
+  - text: Les abonnements sont-ils transférables ?
+  - paragraph: Les abonnements sont personnels et non transférables. Cependant, certains plans permettent d'inviter des accompagnateurs selon les conditions spécifiques.
+- contentinfo:
+  - text: E Entrix
+  - paragraph: La plateforme de référence pour la gestion d'événements et la billetterie en Tunisie et au Maghreb.
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - heading "Liens rapides" [level=3]
+  - list:
+    - listitem:
+      - link "Événements":
+        - /url: /events
+    - listitem:
+      - link "Lieux":
+        - /url: /venues
+    - listitem:
+      - link "Organisateurs":
+        - /url: /organizers
+    - listitem:
+      - link "À propos":
+        - /url: /about
+  - heading "Support" [level=3]
+  - list:
+    - listitem:
+      - link "Centre d'aide":
+        - /url: /help
+    - listitem:
+      - link "Nous contacter":
+        - /url: /contact
+    - listitem:
+      - link "FAQ":
+        - /url: /faq
+    - listitem:
+      - link "Conditions d'utilisation":
+        - /url: /terms
+  - heading "Contact" [level=3]
+  - img
+  - text: contact@entrix.tn
+  - img
+  - text: +216 XX XXX XXX
+  - img
+  - text: Tunis, Tunisie
+  - paragraph: © 2025 Entrix. Tous droits réservés.
+  - link "Politique de confidentialité":
+    - /url: /privacy
+  - link "Conditions d'utilisation":
+    - /url: /terms
+- region "Notifications (F8)":
+  - list
+- alert
+```

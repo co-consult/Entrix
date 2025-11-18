@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrix - Éditeur de Cartographie</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            overflow: hidden;
+        }
+        
+        .editor-layout {
+            display: flex;
+            height: 100vh;
+        }
+        
+        /* Toolbar */
+        .toolbar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        
+        .toolbar-header {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: white;
+        }
+        
+        .toolbar-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .toolbar-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .toolbar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+        
+        .toolbar-section {
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .section-header {
+            padding: 16px 20px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            color: #475569;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .section-header:hover {
+            background: #f1f5f9;
+        }
+        
+        .section-content {
+            padding: 20px;
+        }
+        
+        .mapping-selector {
+            margin-bottom: 20px;
+        }
+        
+        .mapping-selector label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .mapping-selector select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+        }
+        
+        .tool-group {
+            margin-bottom: 24px;
+        }
+        
+        .tool-group-title {
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #374151;
+        }
+        
+        .tool-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 8px;
+        }
+        
+        .tool-btn:hover {
+            background: #f1f5f9;
+            border-color: #DC143C;
+        }
+        
+        .tool-btn.active {
+            background: #fef2f2;
+            border-color: #DC143C;
+            color: #DC143C;
+        }
+        
+        .tool-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        
+        .zone-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .zone-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .zone-item:hover {
+            background: #f1f5f9;
+            border-color: #DC143C;
+        }
+        
+        .zone-item.selected {
+            background: #fef2f2;
+            border-color: #DC143C;
+            color: #DC143C;
+        }
+        
+        .zone-info {
+            flex: 1;
+        }
+        
+        .zone-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .zone-details {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .zone-actions {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .zone-action-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: #e2e8f0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        
+        .zone-action-btn:hover {
+            background: #DC143C;
+            color: white;
+        }
+        
+        /* Canvas Area */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        .canvas-header {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .canvas-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .canvas-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #DC143C, #B91C3C);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(220, 20, 60, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+        
+        .canvas {
+            width: 100%;
+            height: 100%;
+            background: white;
+            cursor: crosshair;
+            position: relative;
+        }
+        
+        .canvas.drag-mode {
+            cursor: grab;
+        }
+        
+        .canvas.dragging {
+            cursor: grabbing;
+        }
+        
+        /* Zones sur le canvas */
+        .canvas-zone {
+            position: absolute;
+            border: 2px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        
+        .canvas-zone:hover {
+            border-color: #DC143C;
+            background: rgba(220, 20, 60, 0.1);
+            transform: scale(1.02);
+        }
+        
+        .canvas-zone.selected {
+            border-color: #DC143C;
+            background: rgba(220, 20, 60, 0.2);
+            box-shadow: 0 0 20px rgba(220, 20, 60, 0.3);
+        }
+        
+        .canvas-zone.tribune {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .canvas-zone.vip {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+        
+        .canvas-zone.pelouse {
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+        }
+        
+        .zone-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: 600;
+            font-size: 12px;
+            color: #1e293b;
+            pointer-events: none;
+            text-align: center;
+            line-height: 1.2;
+        }
+        
+        .zone-capacity {
+            font-size: 10px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+        
+        /* Access Points */
+        .access-point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #DC143C;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+        
+        .access-point:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 16px rgba(220, 20, 60, 0.4);
+        }
+        
+        .access-point.entrance {
+            background: #22c55e;
+        }
+        
+        .access-point.exit {
+            background: #ef4444;
+        }
+        
+        .access-point.vip {
+            background: #f59e0b;
+        }
+        
+        /* Properties Panel */
+        .properties-panel {
+            width: 320px;
+            background: white;
+            border-left: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .properties-header {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        
+        .properties-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .properties-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #DC143C;
+        }
+        
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+        
+        .color-picker {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .color-option {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .color-option.selected {
+            border-color: #1e293b;
+            transform: scale(1.1);
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            background: #1e293b;
+            color: white;
+            padding: 8px 20px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-info {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .zoom-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .zoom-btn {
+            width: 24px;
+            height: 24px;
+            background: #475569;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        
+        .zoom-btn:hover {
+            background: #64748b;
+        }
+        
+        /* Grid */
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.1;
+            background-image: 
+                linear-gradient(to right, #000 1px, transparent 1px),
+                linear-gradient(to bottom, #000 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        /* Context Menu */
+        .context-menu {
+            position: absolute;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 8px 0;
+            min-width: 150px;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .context-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .context-menu-item:hover {
+            background: #f8fafc;
+        }
+        
+        .context-menu-divider {
+            height: 1px;
+            background: #e2e8f0;
+            margin: 4px 0;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .properties-panel {
+                width: 280px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .toolbar {
+                width: 100%;
+                position: absolute;
+                z-index: 200;
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .toolbar.open {
+                transform: translateX(0);
+            }
+            
+            .properties-panel {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-layout">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-header">
+                <div class="toolbar-title">Éditeur de Cartographie</div>
+                <div class="toolbar-subtitle">Stade Olympique - Configuration Football</div>
+            </div>
+            
+            <div class="toolbar-content">
+                <!-- Mapping Selector -->
+                <div class="toolbar-section">
+                    <div class="section-header">
+                        Cartographie Active
+                        <span>🗺️</span>
+                    </div>
+                    <div class="section-content">
+                        <div class="mapping-selector">
+                            <label>Configuration</label>
+                            <select id="mappingSelect">
+                                <option value="football">Football Standard</option>
+                                <option value="concert">Concert</option>
+                                <option value="maintenance">Maintenance</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Drawing Tools -->
+                <div class="toolbar-section">
+                    <div class="section-header">
+                        Outils de Dessin
+                        <span>✏️</span>
+                    </div>
+                    <div class="section-content">
+                        <div class="tool-group">
+                            <button class="tool-btn active" id="selectTool">
+                                <span class="tool-icon">👆</span>
+                                <span>Sélectionner</span>
+                            </button>
+                            <button class="tool-btn" id="rectangleTool">
+                                <span class="tool-icon">⬜</span>
+                                <span>Rectangle</span>
+                            </button>
+                            <button class="tool-btn" id="circleTool">
+                                <span class="tool-icon">⭕</span>
+                                <span>Cercle</span>
+                            </button>
+                            <button class="tool-btn" id="polygonTool">
+                                <span class="tool-icon">📐</span>
+                                <span>Polygone</span>
+                            </button>
+                            <button class="tool-btn" id="accessPointTool">
+                                <span class="tool-icon">🚪</span>
+                                <span>Point d'Accès</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Zone List -->
+                <div class="toolbar-section">
+                    <div class="section-header">
+                        Zones Créées
+                        <span>📍</span>
+                    </div>
+                    <div class="section-content">
+                        <div class="zone-list">
+                            <div class="zone-item selected" data-zone="tribune-nord">
+                                <div class="zone-info">
+                                    <div class="zone-name">Tribune Nord</div>
+                                    <div class="zone-details">15,000 places • Tribune</div>
+                                </div>
+                                <div class="zone-actions">
+                                    <button class="zone-action-btn" title="Éditer">✏️</button>
+                                    <button class="zone-action-btn" title="Dupliquer">📋</button>
+                                    <button class="zone-action-btn" title="Supprimer">🗑️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="zone-item" data-zone="tribune-sud">
+                                <div class="zone-info">
+                                    <div class="zone-name">Tribune Sud</div>
+                                    <div class="zone-details">15,000 places • Tribune</div>
+                                </div>
+                                <div class="zone-actions">
+                                    <button class="zone-action-btn" title="Éditer">✏️</button>
+                                    <button class="zone-action-btn" title="Dupliquer">📋</button>
+                                    <button class="zone-action-btn" title="Supprimer">🗑️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="zone-item" data-zone="pelouse">
+                                <div class="zone-info">
+                                    <div class="zone-name">Pelouse</div>
+                                    <div class="zone-details">8,000 places • Debout</div>
+                                </div>
+                                <div class="zone-actions">
+                                    <button class="zone-action-btn" title="Éditer">✏️</button>
+                                    <button class="zone-action-btn" title="Dupliquer">📋</button>
+                                    <button class="zone-action-btn" title="Supprimer">🗑️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="zone-item" data-zone="vip">
+                                <div class="zone-info">
+                                    <div class="zone-name">Loges VIP</div>
+                                    <div class="zone-details">500 places • VIP</div>
+                                </div>
+                                <div class="zone-actions">
+                                    <button class="zone-action-btn" title="Éditer">✏️</button>
+                                    <button class="zone-action-btn" title="Dupliquer">📋</button>
+                                    <button class="zone-action-btn" title="Supprimer">🗑️</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Layers -->
+                <div class="toolbar-section">
+                    <div class="section-header">
+                        Calques
+                        <span>📑</span>
+                    </div>
+                    <div class="section-content">
+                        <div class="tool-group">
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <input type="checkbox" checked> Zones
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <input type="checkbox" checked> Points d'Accès
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <input type="checkbox" checked> Grille
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox"> Lignes de Guidage
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Canvas Area -->
+        <div class="canvas-area">
+            <div class="canvas-header">
+                <div class="canvas-title">Configuration Football - Stade Olympique</div>
+                <div class="canvas-actions">
+                    <button class="btn btn-secondary">
+                        <span>📤</span>
+                        Exporter
+                    </button>
+                    <button class="btn btn-secondary">
+                        <span>↩️</span>
+                        Annuler
+                    </button>
+                    <button class="btn btn-secondary">
+                        <span>↪️</span>
+                        Refaire
+                    </button>
+                    <button class="btn btn-primary">
+                        <span>💾</span>
+                        Sauvegarder
+                    </button>
+                </div>
+            </div>
+            
+            <div class="canvas-container">
+                <div class="canvas" id="mainCanvas">
+                    <div class="grid-overlay"></div>
+                    
+                    <!-- Zones existantes -->
+                    <div class="canvas-zone tribune selected" style="top: 50px; left: 100px; width: 600px; height: 120px;" data-zone="tribune-nord">
+                        <div class="zone-label">
+                            Tribune Nord
+                            <div class="zone-capacity">15,000 places</div>
+                        </div>
+                    </div>
+                    
+                    <div class="canvas-zone tribune" style="bottom: 50px; left: 100px; width: 600px; height: 120px;" data-zone="tribune-sud">
+                        <div class="zone-label">
+                            Tribune Sud
+                            <div class="zone-capacity">15,000 places</div>
+                        </div>
+                    </div>
+                    
+                    <div class="canvas-zone pelouse" style="top: 200px; left: 250px; width: 300px; height: 200px;" data-zone="pelouse">
+                        <div class="zone-label">
+                            Pelouse
+                            <div class="zone-capacity">8,000 places</div>
+                        </div>
+                    </div>
+                    
+                    <div class="canvas-zone vip" style="top: 80px; right: 80px; width: 200px; height: 80px;" data-zone="vip">
+                        <div class="zone-label">
+                            Loges VIP
+                            <div class="zone-capacity">500 places</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Points d'accès -->
+                    <div class="access-point entrance" style="top: 100px; left: 50px;" title="Portail A - Entrée Principale"></div>
+                    <div class="access-point entrance" style="bottom: 100px; left: 50px;" title="Portail B - Entrée Sud"></div>
+                    <div class="access-point vip" style="top: 120px; right: 50px;" title="Entrée VIP"></div>
+                    <div class="access-point exit" style="top: 300px; right: 200px;" title="Sortie Secours"></div>
+                </div>
+            </div>
+            
+            <div class="status-bar">
+                <div class="status-info">
+                    <span>Zones: 4</span>
+                    <span>Points d'accès: 4</span>
+                    <span>Capacité totale: 38,500</span>
+                </div>
+                <div class="zoom-controls">
+                    <button class="zoom-btn" onclick="zoomOut()">-</button>
+                    <span>100%</span>
+                    <button class="zoom-btn" onclick="zoomIn()">+</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Properties Panel -->
+        <div class="properties-panel">
+            <div class="properties-header">
+                <div class="properties-title">Propriétés - Tribune Nord</div>
+            </div>
+            
+            <div class="properties-content">
+                <div class="form-group">
+                    <label class="form-label">Nom de la zone</label>
+                    <input type="text" class="form-input" value="Tribune Nord">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Type de zone</label>
+                    <select class="form-select">
+                        <option value="tribune" selected>Tribune</option>
+                        <option value="pelouse">Pelouse</option>
+                        <option value="vip">VIP</option>
+                        <option value="staff">Staff</option>
+                        <option value="media">Média</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Catégorie</label>
+                    <select class="form-select">
+                        <option value="standard" selected>Standard</option>
+                        <option value="premium">Premium</option>
+                        <option value="vip">VIP</option>
+                        <option value="executive">Executive</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Capacité</label>
+                    <input type="number" class="form-input" value="15000">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Places assises</label>
+                    <select class="form-select">
+                        <option value="true" selected>Oui</option>
+                        <option value="false">Non (debout)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Position</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <input type="number" class="form-input" placeholder="X: 100" value="100">
+                        <input type="number" class="form-input" placeholder="Y: 50" value="50">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Dimensions</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <input type="number" class="form-input" placeholder="Largeur" value="600">
+                        <input type="number" class="form-input" placeholder="Hauteur" value="120">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Couleur</label>
+                    <div class="color-picker">
+                        <div class="color-option" style="background: #3b82f6;" title="Bleu" onclick="selectColor('#3b82f6')"></div>
+                        <div class="color-option selected" style="background: #10b981;" title="Vert" onclick="selectColor('#10b981')"></div>
+                        <div class="color-option" style="background: #f59e0b;" title="Orange" onclick="selectColor('#f59e0b')"></div>
+                        <div class="color-option" style="background: #ef4444;" title="Rouge" onclick="selectColor('#ef4444')"></div>
+                        <div class="color-option" style="background: #8b5cf6;" title="Violet" onclick="selectColor('#8b5cf6')"></div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Restrictions d'accès</label>
+                    <div style="margin-top: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <input type="checkbox"> Âge minimum (18+)
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <input type="checkbox"> Contrôle de sécurité renforcé
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" checked> Supporter uniquement
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Commodités</label>
+                    <div style="margin-top: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <input type="checkbox" checked> Buvette
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <input type="checkbox" checked> Toilettes
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox"> Boutique
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                    <button class="btn btn-primary" style="width: 100%; margin-bottom: 12px;">
+                        <span>💾</span>
+                        Sauvegarder les modifications
+                    </button>
+                    <button class="btn btn-secondary" style="width: 100%;">
+                        <span>🗑️</span>
+                        Supprimer la zone
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="duplicateZone()">📋 Dupliquer</div>
+        <div class="context-menu-item" onclick="editZone()">✏️ Éditer</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="bringToFront()">⬆️ Premier plan</div>
+        <div class="context-menu-item" onclick="sendToBack()">⬇️ Arrière plan</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="deleteZone()" style="color: #ef4444;">🗑️ Supprimer</div>
+    </div>
+    
+    <script>
+        // Variables globales
+        let currentTool = 'select';
+        let selectedZone = null;
+        let isDrawing = false;
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let zoomLevel = 1;
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeEditor();
+            setupEventListeners();
+        });
+        
+        function initializeEditor() {
+            // Sélectionner la première zone par défaut
+            selectZone(document.querySelector('.canvas-zone'));
+        }
+        
+        function setupEventListeners() {
+            // Tool buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    selectTool(this.id);
+                });
+            });
+            
+            // Canvas events
+            const canvas = document.getElementById('mainCanvas');
+            canvas.addEventListener('mousedown', handleCanvasMouseDown);
+            canvas.addEventListener('mousemove', handleCanvasMouseMove);
+            canvas.addEventListener('mouseup', handleCanvasMouseUp);
+            canvas.addEventListener('contextmenu', handleContextMenu);
+            
+            // Zone selection
+            document.querySelectorAll('.canvas-zone').forEach(zone => {
+                zone.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    selectZone(this);
+                });
+            });
+            
+            // Zone list items
+            document.querySelectorAll('.zone-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const zoneId = this.dataset.zone;
+                    const zone = document.querySelector(`[data-zone="${zoneId}"]`);
+                    selectZone(zone);
+                    highlightZoneInList(this);
+                });
+            });
+            
+            // Mapping selector
+            document.getElementById('mappingSelect').addEventListener('change', function() {
+                loadMapping(this.value);
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', handleKeyboard);
+            
+            // Window resize
+            window.addEventListener('resize', handleResize);
+        }
+        
+        function selectTool(toolId) {
+            // Remove active class from all tools
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Add active class to selected tool
+            document.getElementById(toolId).classList.add('active');
+            
+            // Update current tool
+            currentTool = toolId.replace('Tool', '');
+            
+            // Update cursor
+            const canvas = document.getElementById('mainCanvas');
+            switch(currentTool) {
+                case 'select':
+                    canvas.style.cursor = 'default';
+                    break;
+                case 'rectangle':
+                case 'circle':
+                case 'polygon':
+                    canvas.style.cursor = 'crosshair';
+                    break;
+                case 'accessPoint':
+                    canvas.style.cursor = 'copy';
+                    break;
+            }
+        }
+        
+        function selectZone(zone) {
+            // Remove selection from all zones
+            document.querySelectorAll('.canvas-zone').forEach(z => {
+                z.classList.remove('selected');
+            });
+            
+            // Select new zone
+            if (zone) {
+                zone.classList.add('selected');
+                selectedZone = zone;
+                updatePropertiesPanel(zone);
+            }
+        }
+        
+        function highlightZoneInList(item) {
+            document.querySelectorAll('.zone-item').forEach(i => {
+                i.classList.remove('selected');
+            });
+            item.classList.add('selected');
+        }
+        
+        function updatePropertiesPanel(zone) {
+            const zoneType = zone.dataset.zone;
+            const title = zone.querySelector('.zone-label').textContent.split('\n')[0];
+            
+            document.querySelector('.properties-title').textContent = `Propriétés - ${title}`;
+            
+            // Mettre à jour les champs selon la zone sélectionnée
+            // ... (logique de mise à jour des propriétés)
+        }
+        
+        function handleCanvasMouseDown(e) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            
+            if (currentTool === 'select') {
+                // Vérifier si on clique sur une zone
+                const clickedZone = e.target.closest('.canvas-zone');
+                if (clickedZone) {
+                    selectZone(clickedZone);
+                    isDragging = true;
+                } else {
+                    selectZone(null);
+                }
+            } else if (currentTool === 'rectangle') {
+                createRectangleZone(startX, startY);
+            } else if (currentTool === 'accessPoint') {
+                createAccessPoint(startX, startY);
+            }
+        }
+        
+        function handleCanvasMouseMove(e) {
+            if (!isDragging) return;
+            
+            const rect = e.currentTarget.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            if (selectedZone && currentTool === 'select') {
+                // Déplacer la zone sélectionnée
+                const deltaX = currentX - startX;
+                const deltaY = currentY - startY;
+                
+                selectedZone.style.left = (parseInt(selectedZone.style.left) + deltaX) + 'px';
+                selectedZone.style.top = (parseInt(selectedZone.style.top) + deltaY) + 'px';
+                
+                startX = currentX;
+                startY = currentY;
+            }
+        }
+        
+        function handleCanvasMouseUp(e) {
+            isDragging = false;
+        }
+        
+        function handleContextMenu(e) {
+            e.preventDefault();
+            
+            const clickedZone = e.target.closest('.canvas-zone');
+            if (clickedZone) {
+                selectZone(clickedZone);
+                showContextMenu(e.clientX, e.clientY);
+            }
+        }
+        
+        function showContextMenu(x, y) {
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            
+            // Hide menu when clicking elsewhere
+            setTimeout(() => {
+                document.addEventListener('click', hideContextMenu, { once: true });
+            }, 0);
+        }
+        
+        function hideContextMenu() {
+            document.getElementById('contextMenu').style.display = 'none';
+        }
+        
+        function createRectangleZone(x, y) {
+            const canvas = document.getElementById('mainCanvas');
+            const newZone = document.createElement('div');
+            newZone.className = 'canvas-zone tribune';
+            newZone.style.left = x + 'px';
+            newZone.style.top = y + 'px';
+            newZone.style.width = '200px';
+            newZone.style.height = '100px';
+            newZone.dataset.zone = 'zone-' + Date.now();
+            
+            newZone.innerHTML = `
+                <div class="zone-label">
+                    Nouvelle Zone
+                    <div class="zone-capacity">1,000 places</div>
+                </div>
+            `;
+            
+            newZone.addEventListener('click', function(e) {
+                e.stopPropagation();
+                selectZone(this);
+            });
+            
+            canvas.appendChild(newZone);
+            selectZone(newZone);
+            
+            // Ajouter à la liste des zones
+            addZoneToList(newZone);
+        }
+        
+        function createAccessPoint(x, y) {
+            const canvas = document.getElementById('mainCanvas');
+            const newAccessPoint = document.createElement('div');
+            newAccessPoint.className = 'access-point entrance';
+            newAccessPoint.style.left = (x - 10) + 'px';
+            newAccessPoint.style.top = (y - 10) + 'px';
+            newAccessPoint.title = 'Nouveau Point d\'Accès';
+            
+            canvas.appendChild(newAccessPoint);
+        }
+        
+        function addZoneToList(zone) {
+            const zoneList = document.querySelector('.zone-list');
+            const zoneName = zone.querySelector('.zone-label').textContent.split('\n')[0];
+            
+            const zoneItem = document.createElement('div');
+            zoneItem.className = 'zone-item';
+            zoneItem.dataset.zone = zone.dataset.zone;
+            zoneItem.innerHTML = `
+                <div class="zone-info">
+                    <div class="zone-name">${zoneName}</div>
+                    <div class="zone-details">1,000 places • Tribune</div>
+                </div>
+                <div class="zone-actions">
+                    <button class="zone-action-btn" title="Éditer">✏️</button>
+                    <button class="zone-action-btn" title="Dupliquer">📋</button>
+                    <button class="zone-action-btn" title="Supprimer">🗑️</button>
+                </div>
+            `;
+            
+            zoneItem.addEventListener('click', function() {
+                selectZone(zone);
+                highlightZoneInList(this);
+            });
+            
+            zoneList.appendChild(zoneItem);
+        }
+        
+        function handleKeyboard(e) {
+            switch(e.key) {
+                case 'Delete':
+                    if (selectedZone) {
+                        deleteZone();
+                    }
+                    break;
+                case 'Escape':
+                    selectTool('selectTool');
+                    hideContextMenu();
+                    break;
+                case 'v':
+                    if (e.ctrlKey && selectedZone) {
+                        duplicateZone();
+                    }
+                    break;
+            }
+        }
+        
+        function duplicateZone() {
+            if (!selectedZone) return;
+            
+            const newZone = selectedZone.cloneNode(true);
+            newZone.dataset.zone = 'zone-' + Date.now();
+            newZone.style.left = (parseInt(selectedZone.style.left) + 20) + 'px';
+            newZone.style.top = (parseInt(selectedZone.style.top) + 20) + 'px';
+            
+            document.getElementById('mainCanvas').appendChild(newZone);
+            addZoneToList(newZone);
+            selectZone(newZone);
+            hideContextMenu();
+        }
+        
+        function editZone() {
+            // Focus sur le panel de propriétés
+            const nameInput = document.querySelector('.properties-content input[type="text"]');
+            nameInput.focus();
+            nameInput.select();
+            hideContextMenu();
+        }
+        
+        function deleteZone() {
+            if (!selectedZone) return;
+            
+            if (confirm('Êtes-vous sûr de vouloir supprimer cette zone ?')) {
+                const zoneId = selectedZone.dataset.zone;
+                selectedZone.remove();
+                
+                // Supprimer de la liste
+                const listItem = document.querySelector(`.zone-item[data-zone="${zoneId}"]`);
+                if (listItem) {
+                    listItem.remove();
+                }
+                
+                selectedZone = null;
+                updatePropertiesPanel(null);
+            }
+            hideContextMenu();
+        }
+        
+        function bringToFront() {
+            if (selectedZone) {
+                selectedZone.style.zIndex = '100';
+            }
+            hideContextMenu();
+        }
+        
+        function sendToBack() {
+            if (selectedZone) {
+                selectedZone.style.zIndex = '1';
+            }
+            hideContextMenu();
+        }
+        
+        function selectColor(color) {
+            document.querySelectorAll('.color-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            event.target.classList.add('selected');
+            
+            if (selectedZone) {
+                selectedZone.style.borderColor = color;
+                selectedZone.style.backgroundColor = color + '20'; // 20% opacity
+            }
+        }
+        
+        function zoomIn() {
+            zoomLevel = Math.min(zoomLevel * 1.2, 3);
+            applyZoom();
+        }
+        
+        function zoomOut() {
+            zoomLevel = Math.max(zoomLevel / 1.2, 0.3);
+            applyZoom();
+        }
+        
+        function applyZoom() {
+            const canvas = document.getElementById('mainCanvas');
+            canvas.style.transform = `scale(${zoomLevel})`;
+            canvas.style.transformOrigin = 'top left';
+            
+            // Update zoom display
+            document.querySelector('.zoom-controls span').textContent = Math.round(zoomLevel * 100) + '%';
+        }
+        
+        function loadMapping(mappingType) {
+            // Simuler le chargement d'une cartographie différente
+            console.log('Chargement de la cartographie:', mappingType);
+            
+            // Mettre à jour le titre
+            const titles = {
+                'football': 'Configuration Football - Stade Olympique',
+                'concert': 'Configuration Concert - Stade Olympique',
+                'maintenance': 'Configuration Maintenance - Stade Olympique'
+            };
+            
+            document.querySelector('.canvas-title').textContent = titles[mappingType];
+        }
+        
+        function handleResize() {
+            // Ajuster l'interface selon la taille de l'écran
+            if (window.innerWidth < 768) {
+                document.querySelector('.toolbar').classList.remove('open');
+            }
+        }
+        
+        // Sauvegarde automatique
+        setInterval(() => {
+            console.log('Sauvegarde automatique...');
+            // Logique de sauvegarde
+        }, 30000); // Toutes les 30 secondes
+    </script>
+</body>
+</html>
+                

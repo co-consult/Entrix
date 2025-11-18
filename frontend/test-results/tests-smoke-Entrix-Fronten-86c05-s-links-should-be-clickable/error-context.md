@@ -1,0 +1,124 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "E Entrix":
+    - /url: /
+  - navigation:
+    - link "Accueil":
+      - /url: /
+    - link "Événements":
+      - /url: /events
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+    - link "Billets":
+      - /url: /tickets
+  - link "Se connecter":
+    - /url: /auth/login
+  - link "S'inscrire":
+    - /url: /auth/register
+- main:
+  - navigation:
+    - link "Abonnements":
+      - /url: /subscriptions/plans
+      - img
+      - text: Abonnements
+    - link "Billets":
+      - /url: /tickets
+      - img
+      - text: Billets
+  - heading "Actions rapides" [level=4]
+  - link "Découvrir des événements":
+    - /url: /events
+    - img
+    - text: Découvrir des événements
+  - link "Explorer les lieux":
+    - /url: /venues
+    - img
+    - text: Explorer les lieux
+  - heading "Mes Billets" [level=1]
+  - paragraph: Gérez vos billets d'événements
+  - button "Actualiser":
+    - img
+    - text: Actualiser
+  - img
+  - textbox "Rechercher des billets ou événements..."
+  - combobox: Tous les statuts
+  - text: Billets Valides
+  - img
+  - text: "0"
+  - paragraph: Prêts à utiliser
+  - text: Billets Utilisés
+  - img
+  - text: "0"
+  - paragraph: Événements passés
+  - text: Total Dépensé
+  - img
+  - text: 0755015075501507550150 DT
+  - paragraph: Tous les billets
+  - tablist:
+    - tab "Billets Valides (0)" [selected]
+    - tab "Utilisés (0)"
+    - tab "Expirés (0)"
+  - tabpanel "Billets Valides (0)":
+    - img
+    - heading "Aucun billet valide" [level=3]
+    - paragraph: Vous n'avez pas de billets valides pour le moment
+    - link "Découvrir des événements":
+      - /url: /events
+- contentinfo:
+  - text: E Entrix
+  - paragraph: La plateforme de référence pour la gestion d'événements et la billetterie en Tunisie et au Maghreb.
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - link:
+    - /url: "#"
+    - img
+  - heading "Liens rapides" [level=3]
+  - list:
+    - listitem:
+      - link "Événements":
+        - /url: /events
+    - listitem:
+      - link "Lieux":
+        - /url: /venues
+    - listitem:
+      - link "Organisateurs":
+        - /url: /organizers
+    - listitem:
+      - link "À propos":
+        - /url: /about
+  - heading "Support" [level=3]
+  - list:
+    - listitem:
+      - link "Centre d'aide":
+        - /url: /help
+    - listitem:
+      - link "Nous contacter":
+        - /url: /contact
+    - listitem:
+      - link "FAQ":
+        - /url: /faq
+    - listitem:
+      - link "Conditions d'utilisation":
+        - /url: /terms
+  - heading "Contact" [level=3]
+  - img
+  - text: contact@entrix.tn
+  - img
+  - text: +216 XX XXX XXX
+  - img
+  - text: Tunis, Tunisie
+  - paragraph: © 2025 Entrix. Tous droits réservés.
+  - link "Politique de confidentialité":
+    - /url: /privacy
+  - link "Conditions d'utilisation":
+    - /url: /terms
+- region "Notifications (F8)":
+  - list
+- alert
+```
