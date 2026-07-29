@@ -56,6 +56,9 @@ import { useSession } from "next-auth/react";
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ProtectedRoute } from "@/components/auth/protected-route";
+import { SeasonSelector } from "@/components/admin/SeasonSelector";
+import { useSeason } from "@/hooks/use-season";
+import { getSeasonLabel } from "@/lib/seasons";
 
 export default function SubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -78,6 +81,8 @@ export default function SubscriptionsPage() {
     paymentMethods: string[];
   }>({ plans: [], vendors: [], paymentMethods: [] });
   const { toast } = useToast();
+  const { season, setSeason } = useSeason();
+  const organizerId = config.organizer.getOrganizerId() || undefined;
   
   // Date range state
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
@@ -98,11 +103,16 @@ export default function SubscriptionsPage() {
   useEffect(() => {
     fetchSubscriptions();
     fetchStats();
-  }, [searchTerm, statusFilter, planFilter, vendorFilter, paymentMethodFilter, dateRange, page]);
+  }, [searchTerm, statusFilter, planFilter, vendorFilter, paymentMethodFilter, dateRange, page, season]);
+
+  useEffect(() => {
+    setPage(1);
+    setPlanFilter("all");
+  }, [season]);
 
   useEffect(() => {
     fetchFilterOptions();
-  }, []); // Fetch filter options only once on component mount
+  }, [season]);
 
   const fetchSubscriptions = async () => {
     setLoading(true);
@@ -119,6 +129,7 @@ export default function SubscriptionsPage() {
       if (planFilter !== "all") filters.planId = planFilter;
       if (vendorFilter !== "all") filters.vendorId = vendorFilter;
       if (paymentMethodFilter !== "all") filters.paymentMethod = paymentMethodFilter;
+      if (season) filters.season = season;
       
       // Validate and add date filters only if they are valid dates
       if (dateRange.start && !isNaN(new Date(dateRange.start).getTime())) {
@@ -185,8 +196,7 @@ export default function SubscriptionsPage() {
 
   const fetchFilterOptions = async () => {
     try {
-      // Use the dedicated filter options endpoint
-      const filterData = await subscriptionsApi.getFilterOptions();
+      const filterData = await subscriptionsApi.getFilterOptions({ season, organizerId });
       
       if (filterData && typeof filterData === 'object') {
         setFilterOptions({
@@ -210,6 +220,7 @@ export default function SubscriptionsPage() {
       if (planFilter !== "all") filters.planId = planFilter;
       if (vendorFilter !== "all") filters.vendorId = vendorFilter;
       if (paymentMethodFilter !== "all") filters.paymentMethod = paymentMethodFilter;
+      if (season) filters.season = season;
       
       // Validate and add date filters only if they are valid dates
       if (dateRange.start && !isNaN(new Date(dateRange.start).getTime())) {
@@ -281,6 +292,7 @@ export default function SubscriptionsPage() {
       if (planFilter !== "all") filters.planId = planFilter;
       if (vendorFilter !== "all") filters.vendorId = vendorFilter;
       if (paymentMethodFilter !== "all") filters.paymentMethod = paymentMethodFilter;
+      if (season) filters.season = season;
       
       // Validate and add date filters only if they are valid dates
       if (dateRange.start && !isNaN(new Date(dateRange.start).getTime())) {
@@ -628,6 +640,18 @@ export default function SubscriptionsPage() {
               </Button>
             </div>
           </PageHeader>
+
+          <div className="mb-6">
+            <SeasonSelector
+              season={season}
+              onSeasonChange={setSeason}
+              showManageLink
+              organizerId={organizerId}
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Affichage des abonnements — {getSeasonLabel(season)}
+            </p>
+          </div>
 
           {showPlanManagementModal && (
             <SubscriptionPlanManagementModal

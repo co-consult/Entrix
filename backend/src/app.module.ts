@@ -9,6 +9,7 @@ import { VenuesModule } from './modules/venues/venues.module';
 import { EventsModule } from './modules/events/events.module';
 import { AccessControlModule } from './modules/access-control/access-control.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { CssForeverIntegrationModule } from './modules/cssforever-integration/cssforever-integration.module';
 import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -28,6 +29,7 @@ import { AppController } from './app.controller';
     EventsModule,
     AccessControlModule,
     OrdersModule,
+    CssForeverIntegrationModule,
   ],
   controllers: [AppController],
   providers: [

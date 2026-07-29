@@ -7,13 +7,13 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ["css.cloud.ms2tech.fr", "localhost"],
+    domains: ["preprod.css.cloud.ms2tech.fr", "css.cloud.ms2tech.fr", "localhost"],
     unoptimized: true,
   },
   env: {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-    API_BASE_URL: process.env.API_BASE_URL || "https://css.cloud.ms2tech.fr/api/v1",
+    API_BASE_URL: process.env.API_BASE_URL || "https://preprod.css.cloud.ms2tech.fr/api/v1",
   },
   webpack: (config, { isServer }) => {
     // Exclude canvas module from bundling (Konva uses it only on server, not in browser)

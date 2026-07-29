@@ -6,11 +6,13 @@ import {
   BadRequestException,
   ConflictException
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 
 // Services partagés
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import { RedisService } from '../../../shared/redis/redis.service';
+import { CURRENT_SUBSCRIPTION_SEASON } from '../constants/seasons';
 
 /**
  * Service pour la gestion des plans d'abonnement disponibles
@@ -68,12 +70,64 @@ export class SubscriptionPlansService {
               { sale_end_date: null },
               { sale_end_date: { gte: new Date() } }
             ]
-          }
+          },
+          // Exclude plans explicitly closed for sales (previous seasons)
+          {
+            NOT: {
+              metadata: {
+                path: ['sales_closed'],
+                equals: true,
+              },
+            },
+          },
         ]
       };
 
       if (organizerId) {
         where.organizer_id = organizerId;
+      }
+
+      // Switch to current season only when its plans are actually open for sale
+      const now = new Date();
+      const currentSeasonInSale = await this.prisma.subscription_plans.count({
+        where: {
+          is_active: true,
+          metadata: {
+            path: ['season'],
+            equals: CURRENT_SUBSCRIPTION_SEASON,
+          },
+          AND: [
+            {
+              OR: [
+                { sale_start_date: null },
+                { sale_start_date: { lte: now } },
+              ],
+            },
+            {
+              OR: [
+                { sale_end_date: null },
+                { sale_end_date: { gte: now } },
+              ],
+            },
+            {
+              NOT: {
+                metadata: {
+                  path: ['sales_closed'],
+                  equals: true,
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      if (currentSeasonInSale > 0) {
+        where.AND.push({
+          metadata: {
+            path: ['season'],
+            equals: CURRENT_SUBSCRIPTION_SEASON,
+          },
+        });
       }
 
       // Debug: Log the where conditions
@@ -1131,4 +1185,212 @@ export class SubscriptionPlansService {
     
     return plan.is_active && saleStarted && saleNotEnded;
   }
+
+  /**
+   * List distinct seasons from plans for an organizer (newest first).
+   */
+  async listSeasonsForOrganizer(organizerId: string) {
+    const plans = await this.prisma.subscription_plans.findMany({
+      where: { organizer_id: organizerId },
+      select: { metadata: true, code: true },
+    });
+
+    const seasons = new Set<string>();
+    for (const plan of plans) {
+      const meta = plan.metadata as Record<string, unknown> | null;
+      if (typeof meta?.season === 'string' && meta.season) {
+        seasons.add(meta.season);
+        continue;
+      }
+      const match = plan.code?.match(/-(\d{4})$/);
+      if (match) {
+        const s = match[1];
+        seasons.add(`20${s.slice(0, 2)}-20${s.slice(2, 4)}`);
+      } else {
+        seasons.add('2025-2026');
+      }
+    }
+
+    return Array.from(seasons)
+      .sort((a, b) => b.localeCompare(a))
+      .map((id) => ({ id, label: seasonLabelFromId(id) }));
+  }
+
+  /**
+   * Clone all subscription plans from source season to target season.
+   */
+  async cloneSeasonPlans(sourceSeason: string, targetSeason: string, organizerId: string) {
+    if (!/^\d{4}-\d{4}$/.test(sourceSeason) || !/^\d{4}-\d{4}$/.test(targetSeason)) {
+      throw new BadRequestException('Format de saison invalide (attendu: AAAA-AAAA)');
+    }
+    if (sourceSeason === targetSeason) {
+      throw new BadRequestException('La saison source et cible doivent être différentes');
+    }
+
+    const suffix = seasonCodeSuffix(targetSeason);
+    const serialPrefix = targetSeason.split('-')[0].slice(2);
+    const targetLabel = seasonLabelFromId(targetSeason);
+
+    const existingTarget = await this.prisma.subscription_plans.findFirst({
+      where: {
+        organizer_id: organizerId,
+        metadata: { path: ['season'], equals: targetSeason },
+      },
+    });
+    if (existingTarget) {
+      throw new ConflictException(`La saison ${targetLabel} existe déjà (${existingTarget.code})`);
+    }
+
+    const sourcePlans = await this.prisma.subscription_plans.findMany({
+      where: {
+        organizer_id: organizerId,
+        code: { not: { endsWith: `-${suffix}` } },
+        OR: [
+          { metadata: { path: ['season'], equals: sourceSeason } },
+          ...(sourceSeason === '2025-2026'
+            ? [{ metadata: { path: ['season'], equals: null } }]
+            : []),
+        ],
+      },
+      orderBy: { code: 'asc' },
+      include: { subscription_plan_zones: true },
+    });
+
+    const filtered = sourcePlans.filter((p) => {
+      const meta = p.metadata as Record<string, unknown> | null;
+      const season = typeof meta?.season === 'string' ? meta.season : sourceSeason === '2025-2026' ? '2025-2026' : null;
+      return season === sourceSeason && !p.code.endsWith(`-${suffix}`);
+    });
+
+    if (filtered.length === 0) {
+      throw new NotFoundException(`Aucun plan trouvé pour la saison ${sourceSeason}`);
+    }
+
+    const [srcStart] = sourceSeason.split('-').map(Number);
+    const [tgtStart, tgtEnd] = targetSeason.split('-').map(Number);
+    const yearShift = tgtStart - srcStart;
+
+    const created: Array<{ id: string; code: string; name: string }> = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const plan of filtered) {
+        const baseCode = (plan.metadata as any)?.base_plan_code || plan.code.replace(/-\d{4}$/, '');
+        const newCode = `${baseCode}-${suffix}`;
+        const isVb = baseCode === 'GRADINS_VB' || baseCode === 'CHAISE_VB';
+
+        const shiftDate = (d: Date | null) => {
+          if (!d) return d;
+          const nd = new Date(d);
+          nd.setFullYear(nd.getFullYear() + yearShift);
+          return nd;
+        };
+
+        let validFrom = shiftDate(plan.valid_from);
+        let validUntil = shiftDate(plan.valid_until);
+        let saleStart = shiftDate(plan.sale_start_date);
+        let saleEnd = shiftDate(plan.sale_end_date);
+
+        if (isVb) {
+          validFrom = new Date(`${tgtStart}-11-13`);
+          validUntil = new Date(`${tgtEnd}-11-29`);
+          saleStart = new Date(`${tgtStart}-11-13`);
+          saleEnd = new Date(`${tgtEnd}-10-31`);
+        } else if (!validFrom || !validUntil) {
+          validFrom = new Date(`${tgtStart}-08-01`);
+          validUntil = new Date(`${tgtEnd}-06-30`);
+          saleStart = new Date(`${tgtStart}-07-01`);
+          saleEnd = new Date(`${tgtEnd}-06-30`);
+        }
+
+        const newId = randomUUID();
+        const metaBase =
+          plan.metadata && typeof plan.metadata === 'object' && !Array.isArray(plan.metadata)
+            ? (plan.metadata as Record<string, unknown>)
+            : {};
+
+        await tx.subscription_plans.create({
+          data: {
+            id: newId,
+            code: newCode,
+            name: `${plan.name.replace(/\s20\d{2}\/\d{4}$/, '')} ${tgtStart}/${tgtEnd}`.trim(),
+            description: plan.description,
+            type: plan.type,
+            price: plan.price,
+            currency: plan.currency,
+            max_subscribers: plan.max_subscribers,
+            current_subscribers: 0,
+            organizer_id: plan.organizer_id,
+            valid_from: validFrom!,
+            valid_until: validUntil!,
+            sale_start_date: saleStart,
+            sale_end_date: saleEnd,
+            transferable: plan.transferable,
+            max_transfers: plan.max_transfers,
+            auto_renew: plan.auto_renew,
+            includes_playoffs: plan.includes_playoffs,
+            priority_booking: plan.priority_booking,
+            benefits: plan.benefits as any,
+            restrictions: plan.restrictions as any,
+            metadata: {
+              ...metaBase,
+              season: targetSeason,
+              season_label: targetLabel,
+              serial_prefix: serialPrefix,
+              previous_plan_id: plan.id,
+              base_plan_code: baseCode,
+              cloned_from_plan_id: plan.id,
+              cloned_at: new Date().toISOString(),
+            },
+            is_active: true,
+          },
+        });
+
+        await tx.subscription_plans.update({
+          where: { id: plan.id },
+          data: {
+            metadata: {
+              ...(metaBase as object),
+              successor_plan_id: newId,
+            },
+          },
+        });
+
+        if (plan.subscription_plan_zones.length > 0) {
+          await tx.subscription_plan_zones.createMany({
+            data: plan.subscription_plan_zones.map((spz) => ({
+              id: randomUUID(),
+              subscription_plan_id: newId,
+              zone_id: spz.zone_id,
+              is_included: spz.is_included,
+              price_override: spz.price_override,
+              priority_level: spz.priority_level,
+              metadata: spz.metadata as any,
+            })),
+          });
+        }
+
+        created.push({ id: newId, code: newCode, name: `${plan.name}` });
+      }
+    });
+
+    await this.redis.delCache(`${this.CACHE_PREFIX}available:${organizerId}`);
+    await this.redis.delCache(`${this.CACHE_PREFIX}all-organizer:${organizerId}`);
+
+    return {
+      sourceSeason,
+      targetSeason,
+      createdCount: created.length,
+      plans: created,
+    };
+  }
+}
+
+function seasonCodeSuffix(seasonId: string): string {
+  const [start, end] = seasonId.split('-');
+  return `${start.slice(2)}${end.slice(2)}`;
+}
+
+function seasonLabelFromId(seasonId: string): string {
+  const [start, end] = seasonId.split('-');
+  return `Saison ${start}/${end}`;
 }

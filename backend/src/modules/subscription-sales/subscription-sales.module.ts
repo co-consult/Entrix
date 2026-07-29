@@ -17,6 +17,8 @@ import { SubscriptionSalesService } from './services/subscription-sales.service'
 import { SubscriptionPlansService } from './services/subscription-plans.service';
 import { ZonesAndSeatsService } from './services/zones-and-seats.service';
 import { SalesFlowService } from './services/sales-flow.service';
+import { SeasonOperationsService } from './services/season-operations.service';
+import { SeasonQRMigrationService } from './services/season-qr-migration.service';
 
 /**
  * Module de Vente d'Abonnements Entrix V3.0 - Grade A+
@@ -48,6 +50,8 @@ import { SalesFlowService } from './services/sales-flow.service';
     SubscriptionPlansService,
     ZonesAndSeatsService,
     SalesFlowService,
+    SeasonOperationsService,
+    SeasonQRMigrationService,
   ],
 
   exports: [
@@ -56,6 +60,8 @@ import { SalesFlowService } from './services/sales-flow.service';
     SubscriptionPlansService,
     ZonesAndSeatsService,
     SalesFlowService,
+    SeasonOperationsService,
+    SeasonQRMigrationService,
   ],
 })
 export class SubscriptionSalesModule {}

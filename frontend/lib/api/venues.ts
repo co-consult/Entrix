@@ -2,6 +2,22 @@
 
 import { apiClient } from '../api-client';
 
+/** Extract a human-readable message from an axios/API error */
+export function getVenueApiErrorMessage(error: any, fallback = 'Une erreur est survenue'): string {
+  const data = error?.response?.data;
+  if (typeof data?.message === 'string') return data.message;
+  if (Array.isArray(data?.message)) return data.message.join(', ');
+  if (typeof data?.error === 'string' && data.error !== 'Forbidden') return data.error;
+  const status = error?.response?.status;
+  if (status === 403) {
+    return typeof data?.message === 'string'
+      ? data.message
+      : 'Action non autorisée. Vérifiez vos droits ou les dépendances (événements, zones…).';
+  }
+  if (error?.message && !error.message.includes('Request failed with status code')) return error.message;
+  return fallback;
+}
+
 export interface Venue {
   id: string;
   name: string;
@@ -130,7 +146,7 @@ export const venuesApi = {
       throw new Error('Invalid response format');
     } catch (error: any) {
       console.error('Error creating venue:', error);
-      throw error;
+      throw new Error(getVenueApiErrorMessage(error, 'Impossible de créer le lieu'));
     }
   },
 
@@ -153,7 +169,7 @@ export const venuesApi = {
       throw new Error('Invalid response format');
     } catch (error: any) {
       console.error(`Error updating venue ${id}:`, error);
-      throw error;
+      throw new Error(getVenueApiErrorMessage(error, 'Impossible de mettre à jour le lieu'));
     }
   },
 

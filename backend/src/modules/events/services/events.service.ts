@@ -10,6 +10,9 @@ export class EventsService {
   // Default venue and mapping for football events
   private static readonly DEFAULT_FOOTBALL_VENUE_ID = 'bc43d5e2-9a2f-46df-9021-4f6b6e74b79a';
   private static readonly DEFAULT_FOOTBALL_MAPPING_ID = '9f33b2cb-4742-4527-aa38-5f49a969f85d';
+  // Default venue and mapping for basketball/volleyball events
+  private static readonly DEFAULT_BASKETBALL_VOLLEYBALL_VENUE_ID = '6ab09470-8ee8-42ed-b4fe-f976f54f2ab1';
+  private static readonly DEFAULT_BASKETBALL_VOLLEYBALL_MAPPING_ID = '56496292-1fe9-46b0-8fef-befeeba7e4a6';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -31,50 +34,72 @@ export class EventsService {
       let effectiveVenueId = createEventDto.venueId;
       let effectiveMappingId = createEventDto.mappingId;
       
-      // If venue or mapping not provided, check if we need to auto-assign for football events
-      if (!effectiveVenueId || !effectiveMappingId) {
-        const categoryId = createEventDto.category;
-        if (categoryId) {
-          // Check if this is a football category
-          const isFootballCategory = await this.isFootballCategory(categoryId);
-          if (isFootballCategory) {
-            // Auto-assign default football venue and mapping if not provided
-            if (!effectiveVenueId) {
-              effectiveVenueId = EventsService.DEFAULT_FOOTBALL_VENUE_ID;
-              this.logger.info(`Auto-assigning default football venue: ${effectiveVenueId}`);
-            }
-            if (!effectiveMappingId) {
-              effectiveMappingId = EventsService.DEFAULT_FOOTBALL_MAPPING_ID;
-              this.logger.info(`Auto-assigning default football mapping: ${effectiveMappingId}`);
+      // Auto-assign venue and mapping for specific sport categories
+      const categoryId = createEventDto.category;
+      if (categoryId) {
+        // Check if this is a football category
+        const isFootballCategory = await this.isFootballCategory(categoryId);
+        if (isFootballCategory) {
+          // Auto-assign default football venue and mapping if not provided
+          if (!effectiveVenueId) {
+            effectiveVenueId = EventsService.DEFAULT_FOOTBALL_VENUE_ID;
+          }
+          if (!effectiveMappingId) {
+            effectiveMappingId = EventsService.DEFAULT_FOOTBALL_MAPPING_ID;
+          }
+          if (!effectiveVenueId || !effectiveMappingId) {
+            this.logger.info(`Auto-assigning default football venue: ${effectiveVenueId} and mapping: ${effectiveMappingId}`);
+          }
+        } else {
+          // Check if this is a basketball or volleyball category
+          const isBasketballOrVolleyballCategory = await this.isBasketballOrVolleyballCategory(categoryId);
+          this.logger.info(`Category ${categoryId} is basketball/volleyball: ${isBasketballOrVolleyballCategory}, venue: ${effectiveVenueId}, mapping: ${effectiveMappingId}`);
+          if (isBasketballOrVolleyballCategory) {
+            // If venue matches the default basketball/volleyball venue, auto-assign the mapping
+            if (effectiveVenueId === EventsService.DEFAULT_BASKETBALL_VOLLEYBALL_VENUE_ID && !effectiveMappingId) {
+              effectiveMappingId = EventsService.DEFAULT_BASKETBALL_VOLLEYBALL_MAPPING_ID;
+              this.logger.info(`Auto-assigning default basketball/volleyball mapping: ${effectiveMappingId} for venue: ${effectiveVenueId}`);
+            } else if (!effectiveVenueId && !effectiveMappingId) {
+              // Auto-assign both if neither is provided
+              effectiveVenueId = EventsService.DEFAULT_BASKETBALL_VOLLEYBALL_VENUE_ID;
+              effectiveMappingId = EventsService.DEFAULT_BASKETBALL_VOLLEYBALL_MAPPING_ID;
+              this.logger.info(`Auto-assigning default basketball/volleyball venue: ${effectiveVenueId} and mapping: ${effectiveMappingId}`);
+            } else if (effectiveVenueId && !effectiveMappingId) {
+              // If any venue is selected for basketball/volleyball but no mapping, use the default mapping
+              effectiveMappingId = EventsService.DEFAULT_BASKETBALL_VOLLEYBALL_MAPPING_ID;
+              this.logger.info(`Auto-assigning default basketball/volleyball mapping: ${effectiveMappingId} for selected venue: ${effectiveVenueId}`);
             }
           }
         }
       }
       
+      // Build the data object - use foreign keys directly, not relation syntax
+      const eventData: any = {
+        code: this.generateEventCode(createEventDto.name),
+        name: createEventDto.name,
+        description: createEventDto.description,
+        organizer_id: effectiveOrganizerId,
+        // Use provided venueId or auto-assigned one, otherwise null
+        venue_id: effectiveVenueId || null,
+        // Use provided mappingId or auto-assigned one, otherwise null
+        mapping_id: effectiveMappingId || null,
+        // Use category_id directly (foreign key)
+        category_id: createEventDto.category || null,
+        scheduled_start: new Date(createEventDto.scheduledStart),
+        scheduled_end: new Date(createEventDto.scheduledEnd),
+        sales_start: createEventDto.ticketSalesStart ? new Date(createEventDto.ticketSalesStart) : null,
+        sales_end: createEventDto.ticketSalesEnd ? new Date(createEventDto.ticketSalesEnd) : null,
+        max_capacity: createEventDto.capacityTotal,
+        current_capacity: 0,
+        status: 'DRAFT',
+        visibility: 'PUBLIC',
+        created_by: creatorUserId,
+        tags: createEventDto.tags || [],
+        metadata: createEventDto.metadata || {},
+      };
+
       const event = await this.prisma.events.create({
-        data: {
-          code: this.generateEventCode(createEventDto.name),
-          name: createEventDto.name,
-          description: createEventDto.description,
-          organizer_id: effectiveOrganizerId,
-          // Use provided venueId or auto-assigned one, otherwise null
-          venue_id: effectiveVenueId || null,
-          // Use provided mappingId or auto-assigned one, otherwise null
-          mapping_id: effectiveMappingId || null,
-          // Map category from DTO (can be ID or code)
-          category_id: createEventDto.category || null,
-          scheduled_start: new Date(createEventDto.scheduledStart),
-          scheduled_end: new Date(createEventDto.scheduledEnd),
-          sales_start: createEventDto.ticketSalesStart ? new Date(createEventDto.ticketSalesStart) : null,
-          sales_end: createEventDto.ticketSalesEnd ? new Date(createEventDto.ticketSalesEnd) : null,
-          max_capacity: createEventDto.capacityTotal,
-          current_capacity: 0,
-          status: 'DRAFT',
-          visibility: 'PUBLIC',
-          created_by: creatorUserId,
-          tags: createEventDto.tags || [],
-          metadata: createEventDto.metadata || {},
-        },
+        data: eventData,
         include: {
           venues: true,
           organizers: true,
@@ -91,7 +116,7 @@ export class EventsService {
       const code: string | undefined = error?.code;
 
       // Postgres RAISE EXCEPTION (surfaced as P0001 via Prisma)
-      if (code === 'P0001' || rawMessage.includes('exceeds venue mapping capacity')) {
+      if (code === 'P0001' || rawMessage.includes('exceeds venue mapping capacity') || rawMessage.includes('exceeds venue capacity')) {
         throw new BadRequestException('La capacité de l\'événement dépasse la capacité du lieu sélectionné. Veuillez réduire la capacité ou choisir un autre lieu.');
       }
 
@@ -249,11 +274,11 @@ export class EventsService {
       if (updateEventDto.name) updateData.name = updateEventDto.name;
       if (updateEventDto.description) updateData.description = updateEventDto.description;
       
-      // Handle venue and mapping - apply auto-assignment for football if not provided
+      // Handle venue and mapping - apply auto-assignment for sport categories if not provided
       let effectiveVenueId = updateEventDto.venueId;
       let effectiveMappingId = updateEventDto.mappingId;
       
-      // If venue or mapping not provided, check if we need to auto-assign for football events
+      // Auto-assign venue and mapping for specific sport categories if missing
       if (!effectiveVenueId || !effectiveMappingId) {
         const categoryId = updateEventDto.category || event.category_id;
         if (categoryId) {
@@ -267,6 +292,20 @@ export class EventsService {
             if (!effectiveMappingId) {
               effectiveMappingId = EventsService.DEFAULT_FOOTBALL_MAPPING_ID;
               this.logger.info(`Auto-assigning default football mapping during update: ${effectiveMappingId}`);
+            }
+          } else {
+            // Check if this is a basketball or volleyball category
+            const isBasketballOrVolleyballCategory = await this.isBasketballOrVolleyballCategory(categoryId);
+            if (isBasketballOrVolleyballCategory) {
+              // Auto-assign default basketball/volleyball venue and mapping if not provided
+              if (!effectiveVenueId) {
+                effectiveVenueId = EventsService.DEFAULT_BASKETBALL_VOLLEYBALL_VENUE_ID;
+                this.logger.info(`Auto-assigning default basketball/volleyball venue during update: ${effectiveVenueId}`);
+              }
+              if (!effectiveMappingId) {
+                effectiveMappingId = EventsService.DEFAULT_BASKETBALL_VOLLEYBALL_MAPPING_ID;
+                this.logger.info(`Auto-assigning default basketball/volleyball mapping during update: ${effectiveMappingId}`);
+              }
             }
           }
         }
@@ -537,6 +576,47 @@ export class EventsService {
     }
   }
 
+  /**
+   * Check if a category ID or code represents a basketball or volleyball category
+   */
+  private async isBasketballOrVolleyballCategory(categoryIdOrCode: string): Promise<boolean> {
+    try {
+      // Try to find the category by ID first, then by code
+      const category = await this.prisma.event_categories.findFirst({
+        where: {
+          OR: [
+            { id: categoryIdOrCode },
+            { code: categoryIdOrCode },
+          ],
+        },
+        select: {
+          code: true,
+          name: true,
+        },
+      });
+
+      if (!category) {
+        return false;
+      }
+
+      // Check if it's a basketball or volleyball category by code or name
+      const codeLower = category.code?.toLowerCase() || '';
+      const nameLower = category.name?.toLowerCase() || '';
+      
+      return codeLower.includes('basket') || 
+             codeLower.includes('basketball') ||
+             codeLower.includes('volley') ||
+             codeLower.includes('volleyball') ||
+             nameLower.includes('basket') || 
+             nameLower.includes('basketball') ||
+             nameLower.includes('volley') ||
+             nameLower.includes('volleyball');
+    } catch (error) {
+      this.logger.warn(`Error checking if category is basketball/volleyball: ${error}`);
+      return false;
+    }
+  }
+
   private generateEventCode(name: string): string {
     return name
       .toLowerCase()
@@ -634,6 +714,7 @@ export class EventsService {
       categoryColorSecondary: category?.color_secondary || undefined,
       subcategory: undefined,
       venueId: event.venue_id,
+      mappingId: event.mapping_id || undefined,
       venueName: event.venues?.name || '',
       scheduledStart: event.scheduled_start.toISOString(),
       scheduledEnd: event.scheduled_end.toISOString(),

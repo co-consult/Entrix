@@ -34,6 +34,7 @@ import {
   Plus,
   Star,
   QrCode,
+  CalendarRange,
   ClipboardList,
   Armchair,
 } from "lucide-react"
@@ -47,6 +48,7 @@ import {
 import { useSession } from "next-auth/react"
 import { useState } from "react"
 import SubscriptionSalesModal from "@/components/admin/SubscriptionSalesModal"
+import { EventTicketSalesModal } from "@/components/admin/EventTicketSalesModal"
 import { UserCreationModal } from "@/components/admin/user-creation-modal"
 import { useToast } from "@/hooks/use-toast"
 
@@ -66,6 +68,7 @@ export function Sidebar({ type }: SidebarProps) {
   const { data: session } = useSession();
   const [openMenus, setOpenMenus] = useState<{ [key: string]: boolean }>({});
   const [showSalesModal, setShowSalesModal] = useState(false);
+  const [showTicketSalesModal, setShowTicketSalesModal] = useState(false);
   const [showUserCreationModal, setShowUserCreationModal] = useState(false);
   const { toast } = useToast();
 
@@ -83,6 +86,7 @@ export function Sidebar({ type }: SidebarProps) {
     "Organisateurs": UserCheck,
     "Demandes de contact": MessageSquare,
     "Événements": Calendar,
+    "Ventes billets": Ticket,
     "Lieux": Building,
     "Venues": Building,
     "Mappings": Map,
@@ -95,6 +99,7 @@ export function Sidebar({ type }: SidebarProps) {
     "Générateur de codes": Wrench,
     "Générateur de QR Codes": Database,
     "Plans d'abonnement": CreditCard,
+    "Saisons": CalendarRange,
     "Abonnements": Crown,
     "QR Codes": Database,
   };
@@ -209,6 +214,10 @@ export function Sidebar({ type }: SidebarProps) {
           href: "/admin/events",
         },
         {
+          name: "Ventes billets",
+          href: "/admin/ticket-sales",
+        },
+        {
           name: "Lieux",
           href: "/admin/venues",
         },
@@ -289,6 +298,10 @@ export function Sidebar({ type }: SidebarProps) {
       name: "Abonnements",
       icon: Ticket,
       children: [
+        {
+          name: "Saisons",
+          href: "/admin/subscriptions/seasons",
+        },
         {
           name: "Plans d'abonnement",
           href: "/admin/subscriptions/plans",
@@ -482,7 +495,15 @@ export function Sidebar({ type }: SidebarProps) {
                 onClick={() => setShowSalesModal(true)}
               >
                 <ShoppingCart className="mr-2 h-4 w-4" />
-                Vente d'abonnement
+                Vente d&apos;abonnement
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start"
+                onClick={() => setShowTicketSalesModal(true)}
+              >
+                <Ticket className="mr-2 h-4 w-4" />
+                Vente de billets
               </Button>
               <Button 
                 variant="ghost" 
@@ -509,6 +530,19 @@ export function Sidebar({ type }: SidebarProps) {
               variant: "default"
             });
           }} 
+        />
+      )}
+
+      {showTicketSalesModal && (
+        <EventTicketSalesModal
+          open={showTicketSalesModal}
+          onOpenChange={setShowTicketSalesModal}
+          onSuccess={() => {
+            toast({
+              title: "Vente enregistrée",
+              description: "La vente de billets a été enregistrée avec succès",
+            });
+          }}
         />
       )}
 

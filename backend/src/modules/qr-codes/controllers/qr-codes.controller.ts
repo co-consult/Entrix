@@ -32,6 +32,7 @@ import {
 import { CreateQRCodeDto } from '../dto/qr-codes/create-qr-code.dto';
 import { UpdateQRCodeDto } from '../dto/qr-codes/update-qr-code.dto';
 import { QRCodeSearchDto } from '../dto/qr-codes/qr-code-search.dto';
+import { QRCodeStatsFilterDto } from '../dto/qr-codes/qr-code-stats-filter.dto';
 import { CreatePhysicalQRCodeDto } from '../dto/qr-codes/create-physical-qr-code.dto';
 
 // Services
@@ -113,6 +114,7 @@ export class QRCodesController {
       assignedTo: searchDto.assigned_to,
       seatNumber: searchDto.seat_number,
       subscriptionPlanId: searchDto.subscription_plan_id,
+      season: searchDto.season,
       createdAfter: searchDto.created_after ? new Date(searchDto.created_after) : undefined,
       createdBefore: searchDto.created_before ? new Date(searchDto.created_before) : undefined,
       assignedAfter: searchDto.assigned_after ? new Date(searchDto.assigned_after) : undefined,
@@ -152,7 +154,12 @@ export class QRCodesController {
     status: 200,
     description: 'Statistiques des QR codes',
   })
-  async getQRCodeStats(@Query() filters?: QRCodeFilters): Promise<StandardResponse<QRCodeStats>> {
+  async getQRCodeStats(@Query() filterDto: QRCodeStatsFilterDto): Promise<StandardResponse<QRCodeStats>> {
+    const filters: QRCodeFilters = {
+      status: filterDto.status,
+      subscriptionPlanId: filterDto.subscription_plan_id || filterDto.subscriptionPlanId,
+      season: filterDto.season,
+    };
     const stats = await this.qrCodesService.getStats(filters);
 
     return {
@@ -180,6 +187,7 @@ export class QRCodesController {
       assignedTo: searchDto.assigned_to,
       seatNumber: searchDto.seat_number,
       subscriptionPlanId: searchDto.subscription_plan_id,
+      season: searchDto.season,
       createdAfter: searchDto.created_after ? new Date(searchDto.created_after) : undefined,
       createdBefore: searchDto.created_before ? new Date(searchDto.created_before) : undefined,
       assignedAfter: searchDto.assigned_after ? new Date(searchDto.assigned_after) : undefined,

@@ -18,21 +18,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { venuesApi } from "@/lib/api/venues"
+import Link from "next/link"
 import { Textarea } from "@/components/ui/textarea"
 import { useSession } from "next-auth/react";
 
 const VENUE_STATUS = {
   ACTIVE: "Actif",
   INACTIVE: "Inactif",
-  MAINTENANCE: "Maintenance",
-  CLOSED: "Fermé"
 }
 
 const STATUS_COLORS = {
   ACTIVE: "bg-green-100 text-green-800",
   INACTIVE: "bg-gray-100 text-gray-800",
-  MAINTENANCE: "bg-yellow-100 text-yellow-800",
-  CLOSED: "bg-red-100 text-red-800"
 }
 
 export default function AdminVenuesPage() {
@@ -51,27 +48,20 @@ export default function AdminVenuesPage() {
   const [venueStats, setVenueStats] = useState<any>(null)
   const [showStatsModal, setShowStatsModal] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
-  const [showAddVenueModal, setShowAddVenueModal] = useState(false);
-  const [addVenueLoading, setAddVenueLoading] = useState(false);
-  const [addVenueError, setAddVenueError] = useState<string | null>(null);
-  const [newVenue, setNewVenue] = useState({
-    name: '',
-    address: '',
-    city: '',
-    capacity: '',
-    status: 'ACTIVE',
-  });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [venueToDelete, setVenueToDelete] = useState<any | null>(null);
   const [showVenueModal, setShowVenueModal] = useState(false);
   const [editingVenue, setEditingVenue] = useState(false);
   const [venueLoading, setVenueLoading] = useState(false);
-  const [form, setForm] = useState({
+  const defaultForm = () => ({
     name: '',
     description: '',
     address: '',
     city: '',
-    country: '',
-    max_capacity: 0,
+    country: 'TN',
+    max_capacity: 1000,
   });
+  const [form, setForm] = useState(defaultForm());
 
   const { data: session, status } = useSession();
 
@@ -95,7 +85,7 @@ export default function AdminVenuesPage() {
       }
       // Only add status filter if it's not "all"
       if (statusFilter !== "all") {
-        params.status = statusFilter
+        params.status = statusFilter === "ACTIVE" ? "active" : statusFilter === "INACTIVE" ? "inactive" : statusFilter.toLowerCase()
       }
       
       console.log('Fetching venues with params:', params)
@@ -170,23 +160,27 @@ export default function AdminVenuesPage() {
     }
   }
 
-  const handleDelete = async (venue: any) => {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer le lieu "${venue.name}" ?`)) return
-    
+  const handleDelete = (venue: any) => {
+    setVenueToDelete(venue)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!venueToDelete) return
     setActionLoading(true)
     try {
-      await venuesApi.delete(venue.id)
-      
+      await venuesApi.delete(venueToDelete.id)
       toast({
         title: "Lieu supprimé",
-        description: "Le lieu a été supprimé avec succès"
+        description: `Le lieu "${venueToDelete.name}" a été supprimé avec succès`
       })
-      
+      setShowDeleteModal(false)
+      setVenueToDelete(null)
       fetchVenues()
     } catch (err: any) {
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer le lieu",
+        description: getVenueApiErrorMessage(err, "Impossible de supprimer le lieu"),
         variant: "destructive"
       })
     } finally {
@@ -204,47 +198,18 @@ export default function AdminVenuesPage() {
     return new Date(dateString).toLocaleDateString('fr-FR')
   }
 
-  // Add Venue handler
-  const handleAddVenue = async () => {
-    setAddVenueLoading(true);
-    setAddVenueError(null);
-    try {
-      if (!newVenue.name || !newVenue.address || !newVenue.city || !newVenue.capacity) {
-        setAddVenueError('Tous les champs sont obligatoires.');
-        setAddVenueLoading(false);
-        return;
-      }
-      // Generate slug from name
-      const slug = newVenue.name.toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-      
-      await venuesApi.create({
-        name: newVenue.name,
-        slug: slug,
-        address: newVenue.address,
-        city: newVenue.city,
-        max_capacity: parseInt(newVenue.capacity) || 0,
-        country: 'TN',
-      });
-      toast({
-        title: 'Lieu créé',
-        description: `Le lieu "${newVenue.name}" a été créé avec succès.`,
-      });
-      setShowAddVenueModal(false);
-      setNewVenue({ name: '', address: '', city: '', capacity: '', status: 'ACTIVE' });
-      fetchVenues();
-    } catch (err: any) {
-      setAddVenueError(err?.message || 'Erreur lors de la création du lieu.');
-    } finally {
-      setAddVenueLoading(false);
-    }
+  const openCreateModal = () => {
+    setEditingVenue(false);
+    setForm(defaultForm());
+    setShowVenueModal(true);
   };
 
   const handleSaveVenue = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.max_capacity < 1) {
+      toast({ title: 'Erreur', description: 'La capacité maximale doit être au moins 1.', variant: 'destructive' });
+      return;
+    }
     setVenueLoading(true);
     try {
       // Generate slug from name if not provided
@@ -271,21 +236,20 @@ export default function AdminVenuesPage() {
           description: `Le lieu "${form.name}" a été mis à jour avec succès.`,
         });
       } else {
-        await venuesApi.create(venueData);
+        const created = await venuesApi.create(venueData);
         toast({
           title: 'Lieu créé',
-          description: `Le lieu "${form.name}" a été créé avec succès.`,
+          description: `Le lieu "${form.name}" a été créé. Continuez la configuration.`,
         });
+        setShowVenueModal(false);
+        setForm(defaultForm());
+        if (created.data?.id) {
+          window.location.href = `/admin/venues/${created.data.id}/setup?step=2`;
+          return;
+        }
       }
       setShowVenueModal(false);
-      setForm({
-        name: '',
-        description: '',
-        address: '',
-        city: '',
-        country: '',
-        max_capacity: 0,
-      });
+      setForm(defaultForm());
       fetchVenues();
     } catch (err: any) {
       toast({
@@ -307,7 +271,12 @@ export default function AdminVenuesPage() {
             title="Lieux"
             description="Gérez les lieux d'événements, leurs configurations et leurs cartographies."
           >
-            <Button className="ml-auto" variant="default" onClick={() => { setEditingVenue(false); setShowVenueModal(true); }}>
+            <Button className="ml-auto" variant="outline" asChild>
+              <Link href="/admin/venues/setup">
+                <Settings className="mr-2 h-4 w-4" /> Configurer un lieu
+              </Link>
+            </Button>
+            <Button variant="default" onClick={openCreateModal}>
               <Plus className="mr-2 h-4 w-4" /> Ajouter Lieu
             </Button>
           </PageHeader>
@@ -335,8 +304,6 @@ export default function AdminVenuesPage() {
                 <option value="all">Tous les statuts</option>
                 <option value="ACTIVE">Actif</option>
                 <option value="INACTIVE">Inactif</option>
-                <option value="MAINTENANCE">Maintenance</option>
-                <option value="CLOSED">Fermé</option>
               </select>
             </div>
 
@@ -348,7 +315,7 @@ export default function AdminVenuesPage() {
                   <Building2 className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{venues.length}</div>
+                  <div className="text-2xl font-bold">{totalCount}</div>
                   <p className="text-xs text-muted-foreground">Lieux</p>
                 </CardContent>
               </Card>
@@ -368,27 +335,27 @@ export default function AdminVenuesPage() {
               
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">En maintenance</CardTitle>
-                  <Settings className="h-4 w-4 text-yellow-600" />
+                  <CardTitle className="text-sm font-medium">Inactifs</CardTitle>
+                  <MapPin className="h-4 w-4 text-gray-500" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {venues.filter(v => v.status === "MAINTENANCE").length}
+                    {venues.filter(v => v.status === "INACTIVE" || v.is_active === false).length}
                   </div>
-                  <p className="text-xs text-muted-foreground">En maintenance</p>
+                  <p className="text-xs text-muted-foreground">Sur cette page</p>
                 </CardContent>
               </Card>
               
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Fermés</CardTitle>
-                  <MapPin className="h-4 w-4 text-red-600" />
+                  <CardTitle className="text-sm font-medium">Capacité totale</CardTitle>
+                  <Users className="h-4 w-4 text-blue-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {venues.filter(v => v.status === "CLOSED").length}
+                    {venues.reduce((sum, v) => sum + (v.max_capacity || v.capacity || 0), 0).toLocaleString()}
                   </div>
-                  <p className="text-xs text-muted-foreground">Lieux fermés</p>
+                  <p className="text-xs text-muted-foreground">places (page courante)</p>
                 </CardContent>
               </Card>
             </div>
@@ -505,7 +472,7 @@ export default function AdminVenuesPage() {
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-48" align="end">
+                        <PopoverContent className="w-56 z-50" align="end" sideOffset={4} collisionPadding={8}>
                           <div className="space-y-1">
                             <Button
                               size="sm"
@@ -536,6 +503,17 @@ export default function AdminVenuesPage() {
                             >
                               <Edit className="mr-2 h-4 w-4" />
                               Modifier
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="w-full justify-start"
+                              asChild
+                            >
+                              <Link href={`/admin/venues/${venue.id}/setup`}>
+                                <Settings className="mr-2 h-4 w-4" />
+                                Continuer configuration
+                              </Link>
                             </Button>
                             <Button
                               size="sm"
@@ -928,6 +906,30 @@ export default function AdminVenuesPage() {
               <Button type="submit" disabled={venueLoading}>{venueLoading ? "Enregistrement..." : "Enregistrer"}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={(open) => { setShowDeleteModal(open); if (!open) setVenueToDelete(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Supprimer le lieu
+            </DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer le lieu <span className="font-semibold">&quot;{venueToDelete?.name}&quot;</span> ? Cette action est irréversible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowDeleteModal(false); setVenueToDelete(null); }} disabled={actionLoading}>
+              Annuler
+            </Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmDelete} disabled={actionLoading}>
+              {actionLoading ? <LoadingSpinner size="sm" className="mr-2" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Supprimer
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

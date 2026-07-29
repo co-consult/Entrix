@@ -58,10 +58,11 @@ export const subscriptionsApi = {
     return response && typeof response === 'object' && 'data' in response ? response.data : response;
   },
   
-  getFilterOptions: async () => {
-    // Use the main API client's getFilterOptions method
-    const response = await apiClient.getFilterOptions();
-    // The backend returns { success: true, data: {...}, message: string }
+  getFilterOptions: async (params?: { season?: string; organizerId?: string }) => {
+    const response = await apiClient.getFilterOptions({
+      ...(params?.season ? { season: params.season } : {}),
+      ...(params?.organizerId ? { organizerId: params.organizerId } : {}),
+    });
     return response && typeof response === 'object' && 'data' in response ? response.data : response;
   },
   getSubscription: async (id: string): Promise<ApiResponse<Subscription>> => {

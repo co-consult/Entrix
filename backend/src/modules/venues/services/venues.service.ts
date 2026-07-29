@@ -11,7 +11,6 @@ import {
   NotFoundException, 
   BadRequestException,
   ConflictException,
-  ForbiddenException
 } from '@nestjs/common';
 
 // Services partagés
@@ -301,23 +300,21 @@ export class VenuesService {
     try {
       const venue = await this.prisma.venues.findUnique({
         where: { id },
-        include: {
-          events: {
-            where: {
-              status: {
-                in: ['DRAFT', 'PUBLISHED', 'CONFIRMED', 'LIVE'],
-              },
-            },
-          },
-        },
       });
 
       if (!venue) {
-        throw new NotFoundException('Venue not found');
+        throw new NotFoundException('Lieu introuvable');
       }
 
-      if (venue.events.length > 0) {
-        throw new ForbiddenException('Cannot delete venue with active events');
+      const linkedEvents = await this.prisma.events.count({
+        where: { venue_id: id },
+      });
+
+      if (linkedEvents > 0) {
+        throw new BadRequestException(
+          `Impossible de supprimer ce lieu : ${linkedEvents} événement(s) y sont encore associés. ` +
+            `Supprimez ou réassignez d'abord ces événements depuis la page Événements.`,
+        );
       }
 
       await this.prisma.venues.delete({
@@ -326,7 +323,7 @@ export class VenuesService {
 
       return { success: true };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       this.logger.error(`Error deleting venue ${id}: ${error.message}`, error);

@@ -32,10 +32,10 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          // Call your backend API for authentication
-          // Use API_BASE_URL for server-side (Docker internal), NEXT_PUBLIC_API_URL for client-side
-          const apiUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
-          console.log('[AUTH] Using API URL:', apiUrl, 'API_BASE_URL:', process.env.API_BASE_URL, 'NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+          const apiUrl =
+            process.env.API_BASE_URL ||
+            process.env.NEXT_PUBLIC_API_URL ||
+            'http://backend:3000/api/v1';
           const response = await fetch(`${apiUrl}/auth/login`, {
             method: "POST",
             headers: {
@@ -47,32 +47,39 @@ export const authOptions: NextAuthOptions = {
             }),
           })
 
+          const data = await response.json().catch(() => null)
+
           if (!response.ok) {
-            // Try to extract backend error message
-            const error = await response.json().catch(() => null)
-            throw new Error(error?.message || "Login failed")
+            const message = Array.isArray(data?.message)
+              ? data.message.join(', ')
+              : data?.message || "Identifiants invalides"
+            throw new Error(message)
           }
 
-          const data = await response.json()
+          if (data?.mfaRequired || data?.data?.mfaRequired) {
+            throw new Error("Authentification à deux facteurs requise. Contactez l'administrateur.")
+          }
 
-          // Updated: Parse backend response structure
           if (data.success && data.data && data.data.tokens && data.data.user) {
+            const u = data.data.user
+            const firstName = u.firstName || u.first_name || ''
+            const lastName = u.lastName || u.last_name || ''
             return {
-              id: data.data.user.id,
-              email: data.data.user.email,
-              name: `${data.data.user.firstName} ${data.data.user.lastName}`,
-              firstName: data.data.user.firstName,
-              lastName: data.data.user.lastName,
-              roles: data.data.user.roles || [],
+              id: u.id,
+              email: u.email,
+              name: `${firstName} ${lastName}`.trim() || u.email,
+              firstName,
+              lastName,
+              roles: u.roles || [],
               access_token: data.data.tokens.accessToken,
               refresh_token: data.data.tokens.refreshToken,
             } as any
           }
 
-          return null
+          throw new Error(data?.message || "Réponse de connexion invalide")
         } catch (error) {
           console.error("Auth error:", error)
-          return null
+          throw error
         }
       },
     }),

@@ -159,6 +159,17 @@ export class MappingsService {
         throw new ConflictException(`Mapping with code ${data.code} already exists in this venue`);
       }
 
+      // A mapping's effective capacity cannot exceed the venue's physical capacity
+      if (
+        typeof venue.max_capacity === 'number' &&
+        typeof data.effective_capacity === 'number' &&
+        data.effective_capacity > venue.max_capacity
+      ) {
+        throw new BadRequestException(
+          `La capacité effective (${data.effective_capacity}) ne peut pas dépasser la capacité du lieu (${venue.max_capacity}).`,
+        );
+      }
+
       // Create the mapping
       const mapping = await this.prisma.venue_mappings.create({
         data: {
@@ -248,6 +259,23 @@ export class MappingsService {
 
         if (codeExists) {
           throw new ConflictException(`Mapping with code ${data.code} already exists in this venue`);
+        }
+      }
+
+      // A mapping's effective capacity cannot exceed the venue's physical capacity
+      if (data.effective_capacity !== undefined) {
+        const venue = await this.prisma.venues.findUnique({
+          where: { id: existingMapping.venue_id },
+          select: { max_capacity: true },
+        });
+        if (
+          venue &&
+          typeof venue.max_capacity === 'number' &&
+          data.effective_capacity > venue.max_capacity
+        ) {
+          throw new BadRequestException(
+            `La capacité effective (${data.effective_capacity}) ne peut pas dépasser la capacité du lieu (${venue.max_capacity}).`,
+          );
         }
       }
 

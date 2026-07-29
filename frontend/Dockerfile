@@ -14,6 +14,13 @@ RUN npm ci --legacy-peer-deps && npm cache clean --force
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
+
+# Bake public env vars at build time (Next.js requirement)
+ARG NEXT_PUBLIC_API_URL=https://preprod.css.cloud.ms2tech.fr/api/v1
+ARG NEXT_PUBLIC_APP_URL=https://preprod.css.cloud.ms2tech.fr
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 

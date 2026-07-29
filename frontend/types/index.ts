@@ -475,6 +475,7 @@ export enum QRCodeStatus {
   AVAILABLE = 'AVAILABLE',
   ASSIGNED = 'ASSIGNED',
   RESERVED = 'RESERVED',
+  DISABLED = 'DISABLED',
   USED = 'USED',
   EXPIRED = 'EXPIRED',
   DAMAGED = 'DAMAGED',
@@ -529,6 +530,8 @@ export interface QRCodeFilters {
   subscriptionId?: string;
   assignedTo?: string;
   seatNumber?: string;
+  subscriptionPlanId?: string;
+  season?: string;
   createdAfter?: Date;
   createdBefore?: Date;
   assignedAfter?: Date;
@@ -539,6 +542,8 @@ export interface QRCodeStats {
   totalQRCodes: number;
   availableQRCodes: number;
   assignedQRCodes: number;
+  reservedQRCodes?: number;
+  disabledQRCodes?: number;
   usedQRCodes: number;
   expiredQRCodes: number;
   damagedQRCodes: number;

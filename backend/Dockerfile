@@ -18,7 +18,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Generate Prisma client
-RUN npx prisma generate
+RUN PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 npx prisma generate
 
 # Build the application
 RUN npm run build

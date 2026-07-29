@@ -167,12 +167,57 @@ export default function AdminEventsPage() {
     fetchEventCategories()
   }, [searchTerm, statusFilter, categoryFilter, page])
 
-  // Auto-detect venue and mapping when category is selected (works for both create and edit)
+  // Fetch all venues when modal opens for manual selection
   useEffect(() => {
-    if (form.category) {
-      fetchMappingsForCategory(form.category)
+    if (showAddEventModal) {
+      fetchAllVenues()
     }
-  }, [form.category])
+  }, [showAddEventModal])
+
+  // Fetch mappings when venue is selected
+  useEffect(() => {
+    if (!form.venueId) {
+      setAvailableMappings([])
+      return
+    }
+    const loadMappings = async () => {
+      setLoadingMappings(true)
+      try {
+        const response = await mappingsApi.getAll(form.venueId)
+        if (response.success) {
+          setAvailableMappings(response.data || [])
+        } else {
+          setAvailableMappings([])
+        }
+      } catch (err) {
+        console.error('Error fetching mappings:', err)
+        setAvailableMappings([])
+      } finally {
+        setLoadingMappings(false)
+      }
+    }
+    loadMappings()
+  }, [form.venueId])
+
+  const fetchAllVenues = async () => {
+    try {
+      const response = await venuesApi.getAll({ limit: 1000 })
+      if (response.success && Array.isArray(response.data)) {
+        setAvailableVenues(response.data)
+      } else if (Array.isArray(response)) {
+        setAvailableVenues(response)
+      } else if (response.data && Array.isArray(response.data)) {
+        setAvailableVenues(response.data)
+      }
+    } catch (err: any) {
+      console.error('Error fetching venues:', err)
+      toast({
+        title: "Avertissement",
+        description: "Impossible de charger les lieux",
+        variant: "default"
+      })
+    }
+  }
 
   const fetchEventCategories = async () => {
     setLoadingCategories(true)
@@ -197,125 +242,6 @@ export default function AdminEventsPage() {
     }
   }
 
-  const fetchMappingsForCategory = async (categoryId: string) => {
-    setLoadingMappings(true)
-    try {
-      // Fetch all mappings
-      const mappingsResponse = await mappingsApi.getAll()
-      if (mappingsResponse.success && Array.isArray(mappingsResponse.data)) {
-        // Filter mappings that include this category
-        const matchingMappings = mappingsResponse.data.filter((mapping: any) => 
-          mapping.event_categories && 
-          Array.isArray(mapping.event_categories) && 
-          mapping.event_categories.includes(categoryId)
-        )
-        
-        setAvailableMappings(matchingMappings)
-        
-        // If we have matching mappings, auto-select the first one
-        if (matchingMappings.length > 0) {
-          const firstMapping = matchingMappings[0]
-          setForm(prev => ({
-            ...prev,
-            mappingId: firstMapping.id,
-            venueId: firstMapping.venue_id
-          }))
-          
-          // Optionally fetch venue details for display
-          if (firstMapping.venue_id) {
-            try {
-              const venueResponse = await venuesApi.getById(firstMapping.venue_id)
-              if (venueResponse.success && venueResponse.data) {
-                setAvailableVenues([venueResponse.data])
-              }
-            } catch (err) {
-              console.error('Error fetching venue:', err)
-            }
-          }
-        } else {
-          // No matching mappings found by category filtering
-          // Try to find mappings by known IDs for specific categories (fallback for when category ID not in mapping array)
-          const isFootballCategory = await checkIfFootballCategory(categoryId)
-          let fallbackMapping: any = null
-          
-          if (isFootballCategory) {
-            // Try to find the football mapping by its known ID
-            const defaultFootballMappingId = '9f33b2cb-4742-4527-aa38-5f49a969f85d'
-            fallbackMapping = mappingsResponse.data.find((m: any) => m.id === defaultFootballMappingId)
-            
-            if (fallbackMapping) {
-              // Found the mapping by ID - use it (same behavior as basketball/volleyball)
-              setAvailableMappings([fallbackMapping])
-              setForm(prev => ({
-                ...prev,
-                mappingId: fallbackMapping.id,
-                venueId: fallbackMapping.venue_id
-              }))
-              
-              // Fetch venue details for display
-              if (fallbackMapping.venue_id) {
-                try {
-                  const venueResponse = await venuesApi.getById(fallbackMapping.venue_id)
-                  if (venueResponse.success && venueResponse.data) {
-                    setAvailableVenues([venueResponse.data])
-                  }
-                } catch (err) {
-                  console.error('Error fetching football venue:', err)
-                }
-              }
-            } else {
-              // Mapping not found - clear form (backend will auto-assign)
-          setForm(prev => ({
-            ...prev,
-            mappingId: '',
-            venueId: ''
-          }))
-          setAvailableMappings([])
-          setAvailableVenues([])
-            }
-          } else {
-            // No matching mappings found and not a known category with fallback
-            setForm(prev => ({
-              ...prev,
-              mappingId: '',
-              venueId: ''
-            }))
-            setAvailableMappings([])
-            setAvailableVenues([])
-          }
-        }
-      }
-    } catch (err: any) {
-      console.error('Error fetching mappings for category:', err)
-      toast({
-        title: "Avertissement",
-        description: "Impossible de charger les mappings pour cette catégorie",
-        variant: "default"
-      })
-    } finally {
-      setLoadingMappings(false)
-    }
-  }
-
-  // Helper function to check if a category is a football category
-  const checkIfFootballCategory = async (categoryId: string): Promise<boolean> => {
-    try {
-      // Find the category in the loaded categories
-      const category = eventCategories.find((cat: any) => cat.id === categoryId)
-      if (category) {
-        const codeLower = (category.code || '').toLowerCase()
-        const nameLower = (category.name || '').toLowerCase()
-        return codeLower.includes('foot') || 
-               codeLower.includes('football') || 
-               nameLower.includes('foot') || 
-               nameLower.includes('football')
-      }
-      return false
-    } catch (err) {
-      console.error('Error checking if category is football:', err)
-      return false
-    }
-  }
 
   const fetchEvents = async () => {
     setLoading(true)
@@ -547,6 +473,20 @@ export default function AdminEventsPage() {
     setFormError(null)
     if (!form.name.trim() || !form.scheduledStart || !form.scheduledEnd) {
       setFormError("Veuillez remplir tous les champs obligatoires.")
+      return
+    }
+    if (form.venueId && !form.mappingId) {
+      setFormError("Veuillez sélectionner une cartographie pour ce lieu.")
+      return
+    }
+    // Sports categories auto-assign a default venue/mapping on the backend.
+    // Any other category (concert, spectacle, …) requires an explicit venue + mapping
+    // because events.venue_id / mapping_id are NOT NULL in the database.
+    const AUTO_ASSIGN_SPORT_CODES = ['foot-match', 'basket-match', 'volley-match']
+    const selectedCategory = eventCategories.find((c: any) => c.id === form.category)
+    const isAutoAssignedSport = !!selectedCategory && AUTO_ASSIGN_SPORT_CODES.includes(selectedCategory.code)
+    if (!isAutoAssignedSport && (!form.venueId || !form.mappingId)) {
+      setFormError("Veuillez sélectionner un lieu et une cartographie pour cet événement.")
       return
     }
     
@@ -1223,10 +1163,8 @@ export default function AdminEventsPage() {
                       id="event-category" 
                       value={form.category}
                       onChange={e => {
-                        // Clear venue and mapping when category changes to allow re-detection
-                        setForm(f => ({ ...f, category: e.target.value, venueId: '', mappingId: '' }))
-                        setAvailableVenues([])
-                        setAvailableMappings([])
+                        // Clear mapping when category changes, but keep venue selection manual
+                        setForm(f => ({ ...f, category: e.target.value, mappingId: '' }))
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                       required
@@ -1267,14 +1205,47 @@ export default function AdminEventsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="event-venue" className="block mb-1 font-medium">Lieu</label>
-                    <Input 
-                      id="event-venue" 
-                      value={availableVenues.find(v => v.id === form.venueId)?.name || form.venueId || 'Sélection automatique...'} 
-                      disabled 
-                      className="bg-gray-50"
-                    />
+                    <select
+                      id="event-venue"
+                      value={form.venueId}
+                      onChange={e => {
+                        setForm(f => ({ ...f, venueId: e.target.value, mappingId: '' }))
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    >
+                      <option value="">Sélectionner un lieu</option>
+                      {availableVenues.map((venue) => (
+                        <option key={venue.id} value={venue.id}>
+                          {venue.name}
+                        </option>
+                      ))}
+                    </select>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {loadingMappings ? 'Recherche du lieu approprié...' : form.venueId ? 'Lieu détecté automatiquement' : 'Sélectionnez une catégorie pour détecter le lieu'}
+                      Sélectionnez un lieu pour cet événement
+                    </p>
+                  </div>
+                  <div>
+                    <label htmlFor="event-mapping" className="block mb-1 font-medium">
+                      Cartographie {form.venueId ? '*' : ''}
+                    </label>
+                    <select
+                      id="event-mapping"
+                      value={form.mappingId}
+                      onChange={e => setForm(f => ({ ...f, mappingId: e.target.value }))}
+                      disabled={!form.venueId || loadingMappings}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50"
+                    >
+                      <option value="">
+                        {loadingMappings ? 'Chargement...' : form.venueId ? 'Sélectionner une cartographie' : 'Choisir un lieu d\'abord'}
+                      </option>
+                      {availableMappings.map((mapping) => (
+                        <option key={mapping.id} value={mapping.id}>
+                          {mapping.name} ({mapping.code})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Configuration des zones pour cet événement
                     </p>
                   </div>
                   <div>
@@ -1283,13 +1254,6 @@ export default function AdminEventsPage() {
                     <p className="text-xs text-muted-foreground mt-1">Laissez vide pour utiliser la capacité du lieu</p>
                   </div>
                 </div>
-                {form.mappingId && (
-                  <div className="mt-2 p-2 bg-blue-50 rounded-md">
-                    <p className="text-xs text-blue-700">
-                      ✓ Mapping détecté: {availableMappings.find(m => m.id === form.mappingId)?.name || form.mappingId}
-                    </p>
-                  </div>
-                )}
               </CardContent>
             </Card>
 

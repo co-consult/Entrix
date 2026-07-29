@@ -3,7 +3,7 @@
 export const config = {
   // API Configuration
   api: {
-    baseUrl: process.env.NEXT_PUBLIC_API_URL || 'https://css.cloud.ms2tech.fr/api/v1',
+    baseUrl: process.env.NEXT_PUBLIC_API_URL || 'https://preprod.css.cloud.ms2tech.fr/api/v1',
   },
   
   // Organizer Configuration

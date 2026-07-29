@@ -3,7 +3,8 @@
 // Force dynamic rendering to avoid static generation issues
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { qrCodesApi } from "@/lib/api/qr-codes";
 import { Sidebar } from "@/components/layout/sidebar";
 import { PageHeader } from "@/components/ui/page-header";
@@ -60,14 +61,23 @@ import { useToast } from "@/hooks/use-toast";
 import { QRCodeType, QRCodeStatus } from "@/types";
 import type { QRCode, QRCodeStats, SubscriptionPlan } from "@/types";
 import { subscriptionsApi } from "@/lib/api/subscriptions";
+import { SeasonSelector } from "@/components/admin/SeasonSelector";
+import { useSeason } from "@/hooks/use-season";
+import { filterPlansBySeason } from "@/lib/seasons";
+import { config } from "@/lib/config";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import EventTicketsAdminPanel from "@/components/admin/EventTicketsAdminPanel";
 
 
 
-export default function QRCodesPage() {
+function QRCodesPageContent() {
+  const searchParams = useSearchParams();
+  const initialMode = searchParams.get("mode") === "event" ? "event" : "season";
+  const initialEventId = searchParams.get("eventId") || undefined;
+  const [adminMode, setAdminMode] = useState<"season" | "event">(initialMode);
   const [qrCodes, setQRCodes] = useState<QRCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +93,7 @@ export default function QRCodesPage() {
   const [syncSeatsLoading, setSyncSeatsLoading] = useState(false);
   const [itemsPerPage] = useState(20);
   const { toast } = useToast();
+  const { season, setSeason, ready: seasonReady } = useSeason();
   
   // Subscription plans state
   const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
@@ -148,18 +159,31 @@ export default function QRCodesPage() {
 
   // Build filters object for both QR codes and stats
   const buildFilters = () => {
-    const filters: any = {};
+    const filters: Record<string, string> = {};
     if (statusFilter !== "all") filters.status = statusFilter;
-    if (subscriptionPlanFilter !== "all") filters.subscriptionPlanId = subscriptionPlanFilter;
+    if (subscriptionPlanFilter !== "all") {
+      filters.subscription_plan_id = subscriptionPlanFilter;
+    }
+    if (season) filters.season = season;
     return filters;
   };
 
   useEffect(() => {
+    if (!seasonReady) return;
+    setPage(1);
+  }, [searchTerm, statusFilter, subscriptionPlanFilter, sortOrder, season, seasonReady]);
+
+  useEffect(() => {
+    if (!seasonReady) return;
     fetchQRCodes();
     fetchStats();
     fetchSubscriptionPlans();
-    // Note: Selection persists across page/filter changes
-  }, [searchTerm, statusFilter, subscriptionPlanFilter, page, sortOrder]);
+  }, [searchTerm, statusFilter, subscriptionPlanFilter, page, sortOrder, season, seasonReady]);
+
+  useEffect(() => {
+    setSubscriptionPlanFilter("all");
+    setCreateForm((prev) => ({ ...prev, subscription_plan_id: "" }));
+  }, [season]);
 
   // Listen for subscription plan changes from other pages
   useEffect(() => {
@@ -339,6 +363,7 @@ export default function QRCodesPage() {
       if (searchTerm) params.query = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
       if (subscriptionPlanFilter !== "all") params.subscription_plan_id = subscriptionPlanFilter;
+      if (season) params.season = season;
       
       // Add sorting parameters - backend will sort all records, not just current page
       params.sort_by = 'created_at';
@@ -375,10 +400,13 @@ export default function QRCodesPage() {
   const fetchSubscriptionPlans = async () => {
     setLoadingPlans(true);
     try {
-      const response = await subscriptionsApi.getSubscriptionPlans();
-      setSubscriptionPlans(response.data || []);
+      const organizerId = config.organizer.getOrganizerId();
+      const response = await subscriptionsApi.getAllPlansByOrganizer(organizerId);
+      const allPlans = Array.isArray(response.data) ? response.data : [];
+      setSubscriptionPlans(filterPlansBySeason(allPlans, season) as SubscriptionPlan[]);
     } catch (err: any) {
       console.error("Error fetching subscription plans:", err);
+      setSubscriptionPlans([]);
     } finally {
       setLoadingPlans(false);
     }
@@ -467,6 +495,7 @@ export default function QRCodesPage() {
       if (searchTerm) params.query = searchTerm;
       if (statusFilter !== "all") params.status = statusFilter;
       if (subscriptionPlanFilter !== "all") params.subscription_plan_id = subscriptionPlanFilter;
+      if (season) params.season = season;
       
       const response = await qrCodesApi.exportAll(params);
       
@@ -609,6 +638,10 @@ export default function QRCodesPage() {
       toast({ title: "Erreur", description: "Veuillez spécifier un nombre valide", variant: "destructive" });
       return;
     }
+    if (count > 1000) {
+      toast({ title: "Erreur", description: "Maximum 1000 QR codes par création en masse", variant: "destructive" });
+      return;
+    }
 
     setPreviewLoading(true);
     try {
@@ -673,6 +706,10 @@ export default function QRCodesPage() {
       toast({ title: "Erreur", description: "Veuillez spécifier un nombre valide pour la création en masse", variant: "destructive" });
       return;
     }
+    if (createForm.mode === "BULK" && createForm.count > 1000) {
+      toast({ title: "Erreur", description: "Maximum 1000 QR codes par création en masse", variant: "destructive" });
+      return;
+    }
 
     setCreateLoading(true);
     try {
@@ -707,7 +744,7 @@ export default function QRCodesPage() {
         setCreatedQRCodeIds(createdIds);
         
         const message = createForm.mode === "BULK" 
-          ? `${response.data?.created?.length || createForm.count} QR code(s) créé(s) avec succès${response.data?.errors?.length > 0 ? `. ${response.data.errors.length} erreur(s) survenues.` : ''}`
+          ? `${response.data?.created?.length || createForm.count} QR code(s) créé(s) avec succès`
           : "QR code créé avec succès";
         
         toast({ title: "Succès", description: message });
@@ -773,11 +810,12 @@ export default function QRCodesPage() {
 
 
 
-  const getStatusBadge = (status: QRCodeStatus) => {
-    const statusConfig = {
+  const getStatusBadge = (status: QRCodeStatus | string) => {
+    const statusConfig: Record<string, { label: string; color: string }> = {
       [QRCodeStatus.AVAILABLE]: { label: "Disponible", color: "bg-green-100 text-green-800" },
       [QRCodeStatus.ASSIGNED]: { label: "Assigné", color: "bg-blue-100 text-blue-800" },
       [QRCodeStatus.RESERVED]: { label: "Réservé", color: "bg-yellow-100 text-yellow-800" },
+      [QRCodeStatus.DISABLED]: { label: "Archivé", color: "bg-slate-100 text-slate-700" },
       [QRCodeStatus.USED]: { label: "Utilisé", color: "bg-gray-100 text-gray-800" },
       [QRCodeStatus.EXPIRED]: { label: "Expiré", color: "bg-red-100 text-red-800" },
       [QRCodeStatus.DAMAGED]: { label: "Endommagé", color: "bg-orange-100 text-orange-800" },
@@ -792,18 +830,22 @@ export default function QRCodesPage() {
     return <Badge className={config.color}>{config.label}</Badge>;
   };
 
-  const getTypeBadge = (type: QRCodeType, qrCode?: QRCode) => {
-    const typeConfig = {
+  const getTypeBadge = (type: QRCodeType | string, qrCode?: QRCode) => {
+    const typeConfig: Record<string, { label: string; icon: typeof QrCode; color: string }> = {
       [QRCodeType.SEAT]: { label: "Siège", icon: MapPin, color: "bg-purple-100 text-purple-800" },
       [QRCodeType.ENTRY]: { label: "Entrée", icon: Hash, color: "bg-blue-100 text-blue-800" },
       [QRCodeType.VIP]: { label: "VIP", icon: Crown, color: "bg-yellow-100 text-yellow-800" },
       [QRCodeType.STAFF]: { label: "Staff", icon: User, color: "bg-green-100 text-green-800" },
       [QRCodeType.GENERAL]: { label: "Général", icon: QrCode, color: "bg-gray-100 text-gray-800" },
+      STANDARD: { label: "Carte", icon: QrCode, color: "bg-indigo-100 text-indigo-800" },
     };
 
-    const config = typeConfig[type];
+    const zoneLabel = qrCode?.metadata?.zone_name || qrCode?.metadata?.zone;
+    const config = typeConfig[type] || (zoneLabel
+      ? { label: String(zoneLabel), icon: Building, color: "bg-gray-100 text-gray-800" }
+      : null);
     if (!config) {
-      return <Badge className="bg-gray-100 text-gray-800">Inconnu</Badge>;
+      return <Badge className="bg-gray-100 text-gray-800">Carte</Badge>;
     }
     
     const Icon = config.icon;
@@ -1025,9 +1067,37 @@ export default function QRCodesPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="px-8 w-full">
           <PageHeader
-            title="QR Codes Physiques"
-            description="Gérez les QR codes physiques, leurs assignations et leurs utilisations."
+            title="QR Codes & Billets"
+            description="Gérez les QR codes d'abonnements saison ou les billets par événement."
           />
+
+          <div className="flex gap-2 mb-6">
+            <Button
+              variant={adminMode === "season" ? "default" : "outline"}
+              onClick={() => setAdminMode("season")}
+            >
+              Abonnements
+            </Button>
+            <Button
+              variant={adminMode === "event" ? "default" : "outline"}
+              onClick={() => setAdminMode("event")}
+            >
+              Billets événement
+            </Button>
+          </div>
+
+          {adminMode === "event" ? (
+            <EventTicketsAdminPanel initialEventId={initialEventId} />
+          ) : (
+          <>
+          <div className="mb-6">
+            <SeasonSelector
+              season={season}
+              onSeasonChange={setSeason}
+              showManageLink
+              organizerId={config.organizer.getOrganizerId() || undefined}
+            />
+          </div>
 
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -1159,6 +1229,7 @@ export default function QRCodesPage() {
                 <option value={QRCodeStatus.AVAILABLE}>Disponible</option>
                 <option value={QRCodeStatus.ASSIGNED}>Assigné</option>
                 <option value={QRCodeStatus.RESERVED}>Réservé</option>
+                <option value={QRCodeStatus.DISABLED}>Archivé</option>
                 <option value={QRCodeStatus.USED}>Utilisé</option>
                 <option value={QRCodeStatus.EXPIRED}>Expiré</option>
                 <option value={QRCodeStatus.DAMAGED}>Endommagé</option>
@@ -1178,6 +1249,10 @@ export default function QRCodesPage() {
                 }}
               >
                 <option value="all">Tous les abonnements</option>
+                {loadingPlans && <option value="" disabled>Chargement...</option>}
+                {!loadingPlans && subscriptionPlans.length === 0 && (
+                  <option value="" disabled>Aucun plan pour cette saison</option>
+                )}
                 {subscriptionPlans.map((plan) => (
                   <option key={plan.id} value={plan.id}>
                     {plan.name}
@@ -1680,8 +1755,6 @@ export default function QRCodesPage() {
               )}
             </div>
           )}
-        </div>
-      </div>
 
       {/* Reset QR Code Modal */}
       <Dialog open={showResetModal} onOpenChange={setShowResetModal}>
@@ -1751,14 +1824,22 @@ export default function QRCodesPage() {
                 }}
               >
                 <option value="">Sélectionner un plan d'abonnement</option>
-                {subscriptionPlans.map((plan) => (
+                {!loadingPlans && subscriptionPlans.length === 0 && (
+                  <option value="" disabled>Aucun plan pour {season.replace('-', '/')}</option>
+                )}
+                {subscriptionPlans
+                  .filter((plan) => plan.is_active !== false)
+                  .map((plan) => (
                   <option key={plan.id} value={plan.id}>
-                    {plan.name} {plan.code ? `(${plan.code})` : ''}
+                    {plan.name} {(plan as any).code ? `(${(plan as any).code})` : ''}
                   </option>
                 ))}
               </select>
               {loadingPlans && (
                 <p className="mt-1 text-xs text-gray-500">Chargement des plans...</p>
+              )}
+              {!loadingPlans && subscriptionPlans.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600">Aucun plan pour la saison sélectionnée.</p>
               )}
             </div>
 
@@ -2669,8 +2750,18 @@ export default function QRCodesPage() {
         </DialogContent>
       </Dialog>
 
+          </>
+          )}
+        </div>
       </div>
+    </div>
   );
 }
 
- 
+export default function QRCodesPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><LoadingSpinner size="lg" /></div>}>
+      <QRCodesPageContent />
+    </Suspense>
+  );
+} 

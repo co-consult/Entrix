@@ -1,6 +1,8 @@
 // src/modules/qr-codes/services/qr-codes.service.ts
 
+import { randomBytes } from 'crypto';
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { LoggerService } from '../../../shared/logger/logger.service';
 import {
@@ -43,10 +45,12 @@ export class QRCodesService {
         throw new ConflictException('Un QR code avec ce code existe déjà');
       }
 
+      const onboardingKey = await this.generateUniqueOnboardingKey();
+
       const qrCode = await this.prisma.physical_qr_codes.create({
         data: {
           qr_code: data.code,
-          onboarding_key: this.generateOnboardingKey(),
+          onboarding_key: onboardingKey,
           serial_number: this.generateSerialNumber(),
           card_type: data.type,
           status: 'AVAILABLE',
@@ -913,7 +917,8 @@ export class QRCodesService {
         totalQRCodes,
         availableQRCodes,
         assignedQRCodes,
-        usedQRCodes: disabledQRCodes,
+        disabledQRCodes,
+        usedQRCodes: 0,
         expiredQRCodes: 0,
         damagedQRCodes: 0,
         lostQRCodes: 0,
@@ -969,6 +974,228 @@ export class QRCodesService {
   }
 
   /**
+   * Shared validation and context for manual physical QR creation.
+   */
+  private async loadPlanForPhysicalQRCreation(subscriptionPlanId: string) {
+    const plan = await this.prisma.subscription_plans.findUnique({
+      where: { id: subscriptionPlanId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        is_active: true,
+        max_subscribers: true,
+        metadata: true,
+        organizer_id: true,
+      },
+    });
+
+    if (!plan) {
+      throw new NotFoundException('Subscription plan not found');
+    }
+
+    return plan;
+  }
+
+  private resolveSerialPrefixFromPlan(metadata: unknown): string | null {
+    const meta = metadata as Record<string, unknown> | null;
+    const prefix = meta?.serial_prefix;
+    return typeof prefix === 'string' && prefix.length > 0 ? prefix : null;
+  }
+
+  private formatSerialNumber(sequence: number, seasonPrefix: string | null): string {
+    const padded = sequence.toString().padStart(4, '0');
+    return seasonPrefix ? `${seasonPrefix}${padded}` : padded;
+  }
+
+  private parseSerialSequence(serial: string | null | undefined, seasonPrefix: string | null): number {
+    if (!serial) return 0;
+    const numericPart =
+      seasonPrefix && serial.startsWith(seasonPrefix)
+        ? serial.slice(seasonPrefix.length)
+        : serial;
+    const num = parseInt(numericPart, 10);
+    return Number.isNaN(num) ? 0 : num;
+  }
+
+  private async getMaxSerialForSuffix(
+    suffixType: string,
+    seasonPrefix: string | null,
+    client: PrismaService | Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const codes = await client.physical_qr_codes.findMany({
+      where: { qr_code: { startsWith: `NTRX:CSS:${suffixType}:` } },
+      select: { serial_number: true },
+    });
+
+    let maxSerial = 0;
+    for (const row of codes) {
+      const num = this.parseSerialSequence(row.serial_number, seasonPrefix);
+      if (num > maxSerial) {
+        maxSerial = num;
+      }
+    }
+    return maxSerial;
+  }
+
+  private buildSerialNumberRange(
+    startSequence: number,
+    count: number,
+    seasonPrefix: string | null,
+  ): string[] {
+    return Array.from({ length: count }, (_, i) =>
+      this.formatSerialNumber(startSequence + i, seasonPrefix),
+    );
+  }
+
+  private async assertPlanAllowsPhysicalQRCreation(
+    subscriptionPlanId: string,
+    count: number,
+    options?: {
+      suffixType?: string;
+      seatRow?: string;
+      seatStartNumber?: number;
+      porte?: number;
+    },
+  ) {
+    const plan = await this.loadPlanForPhysicalQRCreation(subscriptionPlanId);
+
+    if (!plan.is_active) {
+      throw new BadRequestException('Le plan d\'abonnement n\'est pas actif');
+    }
+
+    if (options?.suffixType && !['SUB', 'SUBVB'].includes(options.suffixType)) {
+      throw new BadRequestException('Le suffixe doit être SUB ou SUBVB');
+    }
+
+    if (options?.porte !== undefined && (options.porte < 1 || options.porte > 4)) {
+      throw new BadRequestException('Le numéro de porte doit être entre 1 et 4');
+    }
+
+    const statusCounts = await this.prisma.physical_qr_codes.groupBy({
+      by: ['status'],
+      where: { subscription_plan_id: subscriptionPlanId },
+      _count: { id: true },
+    });
+
+    const totalQr = statusCounts.reduce((sum, row) => sum + row._count.id, 0);
+    const disabledCount =
+      statusCounts.find((row) => row.status === 'DISABLED')?._count.id ?? 0;
+
+    if (totalQr > 0 && disabledCount === totalQr) {
+      throw new BadRequestException(
+        'Impossible d\'ajouter des QR sur un plan dont toutes les cartes sont archivées (saison clôturée).',
+      );
+    }
+
+    const activeQrCount = await this.prisma.physical_qr_codes.count({
+      where: {
+        subscription_plan_id: subscriptionPlanId,
+        status: { not: 'DISABLED' },
+      },
+    });
+
+    if (plan.max_subscribers && activeQrCount + count > plan.max_subscribers) {
+      throw new BadRequestException(
+        `Capacité dépassée: ${activeQrCount} carte(s) active(s), max ${plan.max_subscribers}, demande +${count}.`,
+      );
+    }
+
+    if (options?.seatRow) {
+      const row = options.seatRow.trim().toUpperCase();
+      if (!/^[A-Z]$/.test(row)) {
+        throw new BadRequestException('La rangée de siège doit être une lettre unique (A-Z)');
+      }
+
+      const start = options.seatStartNumber ?? 1;
+      if (start < 1) {
+        throw new BadRequestException('Le numéro de siège de départ doit être au moins 1');
+      }
+
+      const seatLabels = Array.from({ length: count }, (_, i) => `${row}${start + i}`);
+      const duplicatesInBatch = new Set<string>();
+      for (const seat of seatLabels) {
+        if (duplicatesInBatch.has(seat)) {
+          throw new BadRequestException(`Siège en double dans la demande: ${seat}`);
+        }
+        duplicatesInBatch.add(seat);
+      }
+
+      const conflicting = await this.prisma.physical_qr_codes.findMany({
+        where: {
+          subscription_plan_id: subscriptionPlanId,
+          status: { not: 'DISABLED' },
+          OR: seatLabels.map((seat) => ({
+            metadata: { path: ['seat'], equals: seat },
+          })),
+        },
+        select: { metadata: true },
+        take: 5,
+      });
+
+      if (conflicting.length > 0) {
+        const seats = conflicting
+          .map((qr) => (qr.metadata as Record<string, unknown> | null)?.seat)
+          .filter(Boolean)
+          .join(', ');
+        throw new ConflictException(
+          `Siège(s) déjà attribué(s) sur ce plan: ${seats}`,
+        );
+      }
+    }
+
+    return plan;
+  }
+
+  private async reserveUniqueOnboardingKey(
+    usedInBatch: Set<string>,
+    client: PrismaService | Prisma.TransactionClient = this.prisma,
+  ): Promise<string> {
+    for (let attempts = 0; attempts < 100; attempts++) {
+      const key = this.generateOnboardingKey();
+      if (usedInBatch.has(key)) {
+        continue;
+      }
+
+      const exists = await client.physical_qr_codes.findUnique({
+        where: { onboarding_key: key },
+        select: { id: true },
+      });
+
+      if (!exists) {
+        usedInBatch.add(key);
+        return key;
+      }
+    }
+
+    throw new ConflictException('Impossible de générer une clé PIN unique');
+  }
+
+  private async reserveUniqueQRCodeSuffix(
+    usedInBatch: Set<string>,
+    client: PrismaService | Prisma.TransactionClient = this.prisma,
+  ): Promise<string> {
+    for (let attempts = 0; attempts < 100; attempts++) {
+      const suffix = this.generateRandomAlphanumeric(6);
+      if (usedInBatch.has(suffix)) {
+        continue;
+      }
+
+      const exists = await client.physical_qr_codes.findFirst({
+        where: { qr_code: { endsWith: suffix } },
+        select: { id: true },
+      });
+
+      if (!exists) {
+        usedInBatch.add(suffix);
+        return suffix;
+      }
+    }
+
+    throw new ConflictException('Impossible de générer un code QR unique');
+  }
+
+  /**
    * Create a single physical QR code for a subscription plan
    */
   async createPhysicalQRCode(
@@ -990,19 +1217,8 @@ export class QRCodesService {
     });
 
     try {
-      // Verify subscription plan exists
-        const plan = await this.prisma.subscription_plans.findUnique({
-        where: { id: subscriptionPlanId },
-        select: { id: true, code: true, is_active: true },
-        });
-
-        if (!plan) {
-        throw new NotFoundException('Subscription plan not found');
-      }
-
-      if (!plan.is_active) {
-        throw new BadRequestException('Subscription plan is not active');
-      }
+      const plan = await this.assertPlanAllowsPhysicalQRCreation(subscriptionPlanId, 1, options);
+      const seasonPrefix = this.resolveSerialPrefixFromPlan(plan.metadata);
       
       // Generate unique values
       const zone = options?.zoneId || await this.mapSubscriptionPlanToZone(plan.code, subscriptionPlanId);
@@ -1011,13 +1227,11 @@ export class QRCodesService {
       const zoneIdFromCode = await this.getZoneIdFromCode(zone);
       const suffixType = options?.suffixType || await this.determineSuffixType(subscriptionPlanId, options?.suffixType, zoneIdFromCode || undefined);
       
-      const qrCode = await this.generateQRCodeString(
-        subscriptionPlanId,
-        zone,
-        suffixType,
-      );
-      const onboardingKey = await this.generateUniqueOnboardingKey();
-      const serialNumber = await this.getNextSerialNumber(suffixType);
+      const last6Chars = await this.reserveUniqueQRCodeSuffix(new Set());
+      const qrCode = `NTRX:CSS:${suffixType}:${zone}:${last6Chars}`;
+      const onboardingKey = await this.reserveUniqueOnboardingKey(new Set());
+      const maxSerial = await this.getMaxSerialForSuffix(suffixType, seasonPrefix);
+      const serialNumber = this.formatSerialNumber(maxSerial + 1, seasonPrefix);
 
       // Detect porte and card batch from existing QR codes (only if not provided)
       const detectedPorte = options?.porte ? `Porte${options.porte}` : await this.detectPorteFromExistingQRCodes(subscriptionPlanId);
@@ -1133,211 +1347,123 @@ export class QRCodesService {
     });
 
     try {
-      // Verify subscription plan exists
-      const plan = await this.prisma.subscription_plans.findUnique({
-        where: { id: subscriptionPlanId },
-        select: { id: true, code: true, is_active: true },
-      });
-
-      if (!plan) {
-        throw new NotFoundException('Subscription plan not found');
-      }
-
-      if (!plan.is_active) {
-        throw new BadRequestException('Subscription plan is not active');
-      }
+      const plan = await this.assertPlanAllowsPhysicalQRCreation(subscriptionPlanId, count, options);
+      const seasonPrefix = this.resolveSerialPrefixFromPlan(plan.metadata);
 
       if (count < 1 || count > 1000) {
         throw new BadRequestException('Count must be between 1 and 1000');
       }
 
       const created: QRCode[] = [];
-      const errors: Array<{ index: number; error: string }> = [];
 
-      // Use transaction for bulk creation
+      // Use transaction for bulk creation (all-or-nothing)
       await this.prisma.$transaction(async (tx) => {
-        // Determine zone and suffix first (needed for serial number calculation)
         const zone = options?.zoneId || await this.mapSubscriptionPlanToZone(plan.code, subscriptionPlanId);
-        
-        // Get zone ID from zone code to determine suffix type
         const zoneIdFromCode = await this.getZoneIdFromCode(zone);
-        const suffix = options?.suffixType || await this.determineSuffixType(subscriptionPlanId, options?.suffixType, zoneIdFromCode || undefined);
+        const suffix =
+          options?.suffixType ||
+          (await this.determineSuffixType(
+            subscriptionPlanId,
+            options?.suffixType,
+            zoneIdFromCode || undefined,
+          ));
 
-        // Get the starting serial number for this suffix type (GLOBALLY, not per subscription plan)
-        const allQRCodes = await tx.physical_qr_codes.findMany({
-          select: { qr_code: true, serial_number: true },
-      });
+        const maxSerial = await this.getMaxSerialForSuffix(suffix, seasonPrefix, tx);
+        const serialNumbers = this.buildSerialNumberRange(maxSerial + 1, count, seasonPrefix);
 
-        // Filter by suffix type (globally across all subscription plans)
-        const filteredSerials = allQRCodes
-          .filter(qr => {
-            const match = qr.qr_code.match(/NTRX:CSS:([^:]+):/);
-            return match && match[1] === suffix;
-          })
-          .map(qr => qr.serial_number);
+        const detectedPorte = options?.porte
+          ? `Porte${options.porte}`
+          : await this.detectPorteFromExistingQRCodes(subscriptionPlanId);
+        const detectedCardBatch =
+          options?.cardBatch || (await this.detectCardBatchFromExistingQRCodes(subscriptionPlanId));
 
-        let currentSerial = 0;
-        if (filteredSerials.length > 0) {
-          for (const serial of filteredSerials) {
-            if (serial) {
-              const num = parseInt(serial, 10);
-              if (!isNaN(num) && num > currentSerial) {
-                currentSerial = num;
-        }
-            }
-          }
-        }
-
-        // Detect porte and card batch once for all codes (porte only if not provided)
-        const detectedPorte = options?.porte ? `Porte${options.porte}` : await this.detectPorteFromExistingQRCodes(subscriptionPlanId);
-        const detectedCardBatch = options?.cardBatch || await this.detectCardBatchFromExistingQRCodes(subscriptionPlanId);
-        
-        // Get zone name from zone code
-        const zoneInfo = await this.prisma.venue_zones.findFirst({
+        const zoneInfo = await tx.venue_zones.findFirst({
           where: { code: zone },
           select: { name: true },
         });
         const zoneName = zoneInfo?.name || zone;
-        
-        // Prepare metadata template
-        const metadataTemplate: any = {};
+
+        const metadataTemplate: Record<string, unknown> = { zone: zoneName };
         if (detectedPorte) {
           metadataTemplate.entry_gate = detectedPorte;
         }
-        
-        // Store zone name in metadata (matching existing QR code structure)
-        metadataTemplate.zone = zoneName;
-        
-        // Handle seat row if provided
+
         let currentSeatNumber = options?.seatStartNumber || 1;
+        const zoneIdForSeats = options?.seatRow ? await this.getZoneIdFromCode(zone) : null;
+        const usedPins = new Set<string>();
+        const usedQrSuffixes = new Set<string>();
 
-        // Generate all QR codes in batch
         for (let i = 0; i < count; i++) {
-          try {
-            currentSerial++;
-            // Format as 4-digit numeric string
-            const serialNumber = currentSerial.toString().padStart(4, '0');
+          const serialNumber = serialNumbers[i];
+          const last6Chars = await this.reserveUniqueQRCodeSuffix(usedQrSuffixes, tx);
+          const qrCode = `NTRX:CSS:${suffix}:${zone}:${last6Chars}`;
+          const onboardingKey = await this.reserveUniqueOnboardingKey(usedPins, tx);
 
-            // Generate unique last 6 chars
-            let last6Chars: string;
-          let attempts = 0;
-          do {
-              last6Chars = this.generateRandomAlphanumeric(6);
-              const exists = await tx.physical_qr_codes.findFirst({
-                where: { qr_code: { endsWith: last6Chars } },
+          const qrMetadata: Record<string, unknown> = { ...metadataTemplate };
+
+          if (options?.seatRow) {
+            const seatLabel = `${options.seatRow.toUpperCase()}${currentSeatNumber}`;
+            qrMetadata.seat = seatLabel;
+
+            if (zoneIdForSeats) {
+              const existingSeat = await tx.seats.findFirst({
+                where: {
+                  zone_id: zoneIdForSeats,
+                  seat_number: seatLabel,
+                  row_number: options.seatRow.toUpperCase(),
+                },
                 select: { id: true },
               });
-              if (!exists) break;
-            attempts++;
-            if (attempts > 100) {
-                throw new Error('Failed to generate unique QR code suffix');
-            }
-            } while (true);
 
-            const qrCode = `NTRX:CSS:${suffix}:${zone}:${last6Chars}`;
-
-            // Generate unique onboarding key
-            let onboardingKey: string;
-            attempts = 0;
-            do {
-              const part1 = this.generateRandomAlphanumeric(4);
-              const part2 = this.generateRandomAlphanumeric(4);
-              onboardingKey = `${part1}-${part2}`;
-              const exists = await tx.physical_qr_codes.findUnique({
-                where: { onboarding_key: onboardingKey },
-                select: { id: true },
-              });
-              if (!exists) break;
-              attempts++;
-              if (attempts > 100) {
-                throw new Error('Failed to generate unique onboarding key');
-            }
-            } while (true);
-
-              // Prepare metadata for this QR code
-              const qrMetadata: any = { ...metadataTemplate };
-              let seatRecordId: string | null = null;
-              
-              if (options?.seatRow) {
-                // Store seat in the same format as existing QR codes: "A1" (only seat, not seat_row/seat_number)
-                const seatLabel = `${options.seatRow}${currentSeatNumber}`;
-                qrMetadata.seat = seatLabel;
-
-                // Get zone ID from zone code to create seat record
-                const zoneIdFromCode = await this.getZoneIdFromCode(zone);
-                if (zoneIdFromCode) {
-                  // Check if seat already exists (seat_number should be full identifier like "A1")
-                  const existingSeat = await tx.seats.findFirst({
-                    where: {
-                      zone_id: zoneIdFromCode,
-                      seat_number: seatLabel, // Full identifier like "A1"
-                      row_number: options.seatRow,
-                    },
-                    select: { id: true },
-                  });
-
-                  if (existingSeat) {
-                    seatRecordId = existingSeat.id;
-                    this.logger.debug(`Using existing seat record: ${seatRecordId} for ${seatLabel}`);
-                  } else {
-                    // Create new seat record (seat_number should be full identifier like "A1")
-                    const newSeat = await tx.seats.create({
-                      data: {
-                        zone_id: zoneIdFromCode,
-                        seat_number: seatLabel, // Full identifier like "A1"
-                        row_number: options.seatRow,
-                        seat_type: 'STANDARD',
-                        status: 'AVAILABLE',
-                        price_modifier: 1.0,
-                        features: [],
-                        is_accessible: false,
-                      },
-                    });
-                    seatRecordId = newSeat.id;
-                    this.logger.debug(`Created new seat record: ${seatRecordId} for ${seatLabel}`);
-                  }
-                }
-                
-                currentSeatNumber++;
+              if (!existingSeat) {
+                await tx.seats.create({
+                  data: {
+                    zone_id: zoneIdForSeats,
+                    seat_number: seatLabel,
+                    row_number: options.seatRow.toUpperCase(),
+                    seat_type: 'STANDARD',
+                    status: 'AVAILABLE',
+                    price_modifier: 1.0,
+                    features: [],
+                    is_accessible: false,
+                  },
+                });
               }
-            
-            // Create QR code
-            const createdQR = await tx.physical_qr_codes.create({
-              data: {
-            qr_code: qrCode,
-            onboarding_key: onboardingKey,
-                serial_number: serialNumber,
-                subscription_plan_id: subscriptionPlanId,
-                card_type: options?.cardType || 'STANDARD',
-                card_batch: detectedCardBatch,
-            status: 'AVAILABLE',
-                assigned_by: options?.assignedBy,
-                printed_at: new Date(), // Set printed_at to creation time
-                metadata: Object.keys(qrMetadata).length > 0 ? qrMetadata : undefined,
+            }
+
+            currentSeatNumber++;
+          }
+
+          const createdQR = await tx.physical_qr_codes.create({
+            data: {
+              qr_code: qrCode,
+              onboarding_key: onboardingKey,
+              serial_number: serialNumber,
+              subscription_plan_id: subscriptionPlanId,
+              card_type: options?.cardType || 'STANDARD',
+              card_batch: detectedCardBatch,
+              status: 'AVAILABLE',
+              assigned_by: options?.assignedBy,
+              printed_at: new Date(),
+              metadata:
+                Object.keys(qrMetadata).length > 0
+                  ? (qrMetadata as Prisma.InputJsonValue)
+                  : undefined,
             },
           });
 
-            created.push(this.mapToQRCode(createdQR));
-        } catch (error) {
-            errors.push({
-              index: i,
-              error: error.message || 'Unknown error',
-            });
-          }
+          created.push(this.mapToQRCode(createdQR));
         }
       }, {
-        timeout: 60000, // 60 second timeout for large batches
+        timeout: 120000,
       });
-
-      // Note: max_subscribers is no longer automatically incremented when creating QR codes
-      // The max_subscribers should be set manually by the admin when creating/editing the plan
 
       this.logger.endOperation(operationId, 'success', true, undefined, {
         created: created.length,
-        errors: errors.length,
+        errors: 0,
       });
 
-      return { created, errors };
+      return { created, errors: [] };
     } catch (error) {
       this.logger.endOperation(operationId, 'error', error.message);
       throw error;
@@ -1369,14 +1495,12 @@ export class QRCodesService {
     serialNumberRange: { start: string; end: string };
     estimatedCapacity: { max_before: number; max_after: number };
   }> {
-    const plan = await this.prisma.subscription_plans.findUnique({
-      where: { id: subscriptionPlanId },
-      select: { id: true, name: true, code: true, max_subscribers: true },
-    });
-
-    if (!plan) {
-      throw new NotFoundException('Subscription plan not found');
+    if (count < 1 || count > 1000) {
+      throw new BadRequestException('Count must be between 1 and 1000');
     }
+
+    const plan = await this.assertPlanAllowsPhysicalQRCreation(subscriptionPlanId, count, options);
+    const seasonPrefix = this.resolveSerialPrefixFromPlan(plan.metadata);
 
     // Determine zone and suffix
     const zone = options?.zoneId || await this.mapSubscriptionPlanToZone(plan.code, subscriptionPlanId);
@@ -1385,35 +1509,17 @@ export class QRCodesService {
     const zoneIdFromCode = await this.getZoneIdFromCode(zone);
     const suffix = options?.suffixType || await this.determineSuffixType(subscriptionPlanId, options?.suffixType, zoneIdFromCode || undefined);
 
-    // Get the last serial number GLOBALLY for this suffix type (not per subscription plan)
-    const allQRCodes = await this.prisma.physical_qr_codes.findMany({
-      select: { qr_code: true, serial_number: true },
+    const maxSerial = await this.getMaxSerialForSuffix(suffix, seasonPrefix);
+    const serialNumbers = this.buildSerialNumberRange(maxSerial + 1, count, seasonPrefix);
+    const startSerialStr = serialNumbers[0];
+    const endSerialStr = serialNumbers[serialNumbers.length - 1];
+
+    const activeQrCount = await this.prisma.physical_qr_codes.count({
+      where: {
+        subscription_plan_id: subscriptionPlanId,
+        status: { not: 'DISABLED' },
+      },
     });
-
-    // Filter by suffix type (globally across all subscription plans)
-    const filteredSerials = allQRCodes
-      .filter(qr => {
-        const match = qr.qr_code.match(/NTRX:CSS:([^:]+):/);
-        return match && match[1] === suffix;
-      })
-      .map(qr => qr.serial_number);
-
-    let startSerial = 1;
-    if (filteredSerials.length > 0) {
-    let maxSerial = 0;
-      for (const serial of filteredSerials) {
-        if (serial) {
-          const num = parseInt(serial, 10);
-      if (!isNaN(num) && num > maxSerial) {
-        maxSerial = num;
-      }
-    }
-      }
-      startSerial = maxSerial + 1;
-    }
-
-    const startSerialStr = startSerial.toString().padStart(4, '0');
-    const endSerialStr = (startSerial + count - 1).toString().padStart(4, '0');
 
     return {
       subscriptionPlan: {
@@ -1430,8 +1536,8 @@ export class QRCodesService {
         end: endSerialStr,
       },
       estimatedCapacity: {
-        max_before: plan.max_subscribers || 0,
-        max_after: plan.max_subscribers || 0, // max_subscribers is no longer auto-incremented
+        max_before: plan.max_subscribers || activeQrCount,
+        max_after: plan.max_subscribers || activeQrCount + count,
       },
     };
   }
@@ -1554,10 +1660,16 @@ export class QRCodesService {
 
 
 
-    // Handle subscription_plan_id filter
     if (filters?.subscriptionPlanId) {
       // QR codes assigned to a specific subscription plan
       where.subscription_plan_id = filters.subscriptionPlanId;
+    } else if (filters?.season) {
+      where.subscription_plans = {
+        metadata: {
+          path: ['season'],
+          equals: filters.season,
+        },
+      };
     }
 
     if (filters?.createdAfter) where.created_at = { gte: new Date(filters.createdAfter) };
@@ -1596,93 +1708,28 @@ export class QRCodesService {
    * Generate a globally unique onboarding key
    */
   private async generateUniqueOnboardingKey(): Promise<string> {
-    let attempts = 0;
-    const maxAttempts = 100;
-    
-    while (attempts < maxAttempts) {
-      const part1 = this.generateRandomAlphanumeric(4);
-      const part2 = this.generateRandomAlphanumeric(4);
-      const key = `${part1}-${part2}`;
-      
-      const exists = await this.prisma.physical_qr_codes.findUnique({
-        where: { onboarding_key: key },
-        select: { id: true },
-      });
-      
-      if (!exists) {
-        return key;
-      }
-      attempts++;
-    }
-    
-    throw new Error('Failed to generate unique onboarding key after multiple attempts');
+    return this.reserveUniqueOnboardingKey(new Set());
   }
 
   /**
    * Generate a globally unique last 6 characters for QR code
    */
   private async generateUniqueQRCodeSuffix(): Promise<string> {
-    let attempts = 0;
-    const maxAttempts = 100;
-    
-    while (attempts < maxAttempts) {
-      const suffix = this.generateRandomAlphanumeric(6);
-      // Check if any QR code ends with this suffix
-      const exists = await this.prisma.physical_qr_codes.findFirst({
-        where: {
-          qr_code: {
-            endsWith: suffix,
-          },
-        },
-        select: { id: true },
-      });
-      
-      if (!exists) {
-        return suffix;
-      }
-      attempts++;
-    }
-    
-    throw new Error('Failed to generate unique QR code suffix after multiple attempts');
+    return this.reserveUniqueQRCodeSuffix(new Set());
   }
 
   /**
-   * Get next serial number globally per suffix type (SUB or SUBVB)
-   * Serial numbers are numeric strings, 4 characters, unique globally per suffix type (not per subscription plan)
+   * Get next serial number globally per suffix type (SUB or SUBVB).
+   * Season 2026/2027+ uses 26xxxx (6 digits); legacy season used 4 digits.
    */
-  private async getNextSerialNumber(suffixType: string): Promise<string> {
-    // Get ALL QR codes (not filtered by subscription plan) and filter by suffix type
-    const allQRCodes = await this.prisma.physical_qr_codes.findMany({
-      select: { qr_code: true, serial_number: true },
-    });
-
-    // Filter QR codes by suffix type (SUB or SUBVB) - GLOBALLY across all subscription plans
-    const filteredSerials = allQRCodes
-      .filter(qr => {
-        const match = qr.qr_code.match(/NTRX:CSS:([^:]+):/);
-        return match && match[1] === suffixType;
-      })
-      .map(qr => qr.serial_number);
-
-    if (!filteredSerials || filteredSerials.length === 0) {
-      return '0001';
-    }
-
-    // Find the maximum numeric value for this suffix type (globally)
-    let maxSerial = 0;
-    for (const serial of filteredSerials) {
-      if (serial) {
-        const num = parseInt(serial, 10);
-        if (!isNaN(num) && num > maxSerial) {
-          maxSerial = num;
-        }
-      }
-    }
-    
-    const nextSerial = maxSerial + 1;
-    
-    // Format as 4-digit string (numeric)
-    return nextSerial.toString().padStart(4, '0');
+  private async getNextSerialNumber(suffixType: string, seasonPrefix?: string): Promise<string> {
+    const prefix = seasonPrefix ?? '26';
+    const useSeasonPrefix = prefix.length > 0;
+    const maxSerial = await this.getMaxSerialForSuffix(
+      suffixType,
+      useSeasonPrefix ? prefix : null,
+    );
+    return this.formatSerialNumber(maxSerial + 1, useSeasonPrefix ? prefix : null);
   }
 
   /**
@@ -2245,9 +2292,10 @@ export class QRCodesService {
    */
   private generateRandomAlphanumeric(length: number): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const bytes = randomBytes(length);
     let result = '';
     for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(bytes[i] % chars.length);
     }
     return result;
   }

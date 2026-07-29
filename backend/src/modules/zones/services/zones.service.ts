@@ -260,6 +260,63 @@ export class ZonesService {
   /**
    * Create a new zone
    */
+  /**
+   * Ensure that adding/updating a zone with `newCapacity` does not make the sum
+   * of all zone capacities in the mapping exceed the allowed limit. The limit is
+   * the mapping's effective capacity, bounded by the venue's max capacity.
+   * `excludeZoneId` is used on update to ignore the zone being modified.
+   */
+  private async assertZoneCapacityWithinLimit(
+    mappingId: string,
+    newCapacity: number,
+    excludeZoneId?: string,
+  ): Promise<void> {
+    const mapping = await this.prisma.venue_mappings.findUnique({
+      where: { id: mappingId },
+      select: {
+        effective_capacity: true,
+        venues_venue_mappings_venue_idTovenues: {
+          select: { max_capacity: true },
+        },
+      },
+    });
+
+    if (!mapping) {
+      return; // Existence is validated by callers; nothing to enforce here.
+    }
+
+    const venueMax = mapping.venues_venue_mappings_venue_idTovenues?.max_capacity ?? null;
+    const effective = mapping.effective_capacity ?? null;
+
+    // The hard ceiling is the smallest defined capacity in the hierarchy.
+    const candidates = [effective, venueMax].filter(
+      (c): c is number => typeof c === 'number' && c > 0,
+    );
+    if (candidates.length === 0) {
+      return; // No defined limit to enforce.
+    }
+    const limit = Math.min(...candidates);
+
+    const aggregate = await this.prisma.venue_zones.aggregate({
+      where: {
+        mapping_id: mappingId,
+        ...(excludeZoneId ? { id: { not: excludeZoneId } } : {}),
+      },
+      _sum: { capacity: true },
+    });
+
+    const currentSum = aggregate._sum.capacity ?? 0;
+    const projected = currentSum + (newCapacity ?? 0);
+
+    if (projected > limit) {
+      const remaining = Math.max(0, limit - currentSum);
+      throw new BadRequestException(
+        `La capacité totale des zones (${projected}) dépasse la capacité autorisée (${limit}). ` +
+          `Capacité restante disponible : ${remaining}.`,
+      );
+    }
+  }
+
   async createZone(data: CreateZoneDto): Promise<ZoneDto> {
     const operationId = this.logger.startOperation('createZone', { name: data.name, code: data.code });
 
@@ -299,6 +356,10 @@ export class ZonesService {
           throw new BadRequestException('Parent zone must belong to the same mapping');
         }
       }
+
+      // Enforce capacity hierarchy: sum of zone capacities must not exceed the
+      // mapping's effective capacity (which itself is bounded by the venue capacity).
+      await this.assertZoneCapacityWithinLimit(data.mapping_id, data.capacity);
 
       // Create the zone
       const zone = await this.prisma.venue_zones.create({
@@ -441,6 +502,12 @@ export class ZonesService {
           });
           currentParent = parent?.parent_zone_id || null;
         }
+      }
+
+      // Enforce capacity hierarchy when capacity or mapping changes
+      if (data.capacity !== undefined || (data.mapping_id && data.mapping_id !== existingZone.mapping_id)) {
+        const newCapacity = data.capacity ?? existingZone.capacity;
+        await this.assertZoneCapacityWithinLimit(targetMappingId, newCapacity, id);
       }
 
       // Update the zone

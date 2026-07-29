@@ -33,12 +33,15 @@ import SubscriptionPlanCreateModal from "@/components/admin/SubscriptionPlanCrea
 import SubscriptionPlanDetailsModal from "@/components/admin/SubscriptionPlanDetailsModal";
 import { DataTable } from "@/components/ui/data-table"
 import apiClient from "@/lib/api"
-import { subscriptionPlansApi } from "@/lib/api/subscription-plans"
+import { subscriptionPlansApi, seasonOperationsApi } from "@/lib/api/subscription-plans"
 import { venuesApi } from "@/lib/api/venues"
 import { zonesApi } from "@/lib/api/zones"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { SeasonSelector } from "@/components/admin/SeasonSelector";
+import { useSeason } from "@/hooks/use-season";
+import { filterPlansBySeason, getPlanSeason } from "@/lib/seasons";
 
 export default function AdminSubscriptionPlansPage() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -76,7 +79,11 @@ export default function AdminSubscriptionPlansPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const { toast } = useToast();
   const { data: session } = useSession();
+  const { season, setSeason } = useSeason();
+  const [discoveredSeasons, setDiscoveredSeasons] = useState<string[]>([]);
   const isAdmin = session?.user?.role === "ADMIN";
+  const resolvedOrganizerId =
+    organizerFilter !== "all" ? organizerFilter : config.organizer.getOrganizerId() || "";
   
   const [stats, setStats] = useState({
     total: 0,
@@ -92,7 +99,7 @@ export default function AdminSubscriptionPlansPage() {
     fetchOrganizers();
     fetchVenues();
     fetchZones();
-  }, [searchTerm, organizerFilter, statusFilter, typeFilter, venueFilter]);
+  }, [searchTerm, organizerFilter, statusFilter, typeFilter, venueFilter, season]);
 
   // Save preferences to localStorage when they change
   useEffect(() => {
@@ -182,9 +189,10 @@ export default function AdminSubscriptionPlansPage() {
       
       // Always update allPlans first with fresh data
       setAllPlans([...plansData]);
+      setDiscoveredSeasons([...new Set(plansData.map((plan: SubscriptionPlan) => getPlanSeason(plan)))]);
       
       // Apply additional filters
-      let filteredPlans = [...plansData];
+      let filteredPlans = filterPlansBySeason(plansData, season);
       
       if (searchTerm) {
         filteredPlans = filteredPlans.filter((plan: any) => 
@@ -244,11 +252,12 @@ export default function AdminSubscriptionPlansPage() {
         setPlans([...filteredPlans]);
       }
       
-      // Compute stats with better data handling
-      const total = plansData.length;
-      const active = plansData.filter((p: any) => p.isActive).length;
-      const inactive = plansData.filter((p: any) => !p.isActive).length;
-      const onSale = plansData.filter((p: any) => p.isCurrentlyOnSale).length;
+      // Compute stats for selected season
+      const seasonPlans = filterPlansBySeason(plansData, season);
+      const total = seasonPlans.length;
+      const active = seasonPlans.filter((p: any) => p.isActive).length;
+      const inactive = seasonPlans.filter((p: any) => !p.isActive).length;
+      const onSale = seasonPlans.filter((p: any) => p.isCurrentlyOnSale).length;
       
       console.log("📊 Stats calculated:", {
         total,
@@ -265,13 +274,13 @@ export default function AdminSubscriptionPlansPage() {
         } : null
       });
       
-      setStats({
+      setStats((prev) => ({
+        ...prev,
         total,
         active,
         inactive,
         onSale,
-        totalRevenue: 0, // Will be updated by fetchStats
-      });
+      }));
     } catch (error) {
       console.error("Error fetching plans:", error);
       toast({ 
@@ -286,21 +295,18 @@ export default function AdminSubscriptionPlansPage() {
 
   const fetchStats = async () => {
     try {
-      // Use the same stats API as the subscriptions page
       const organizerId = organizerFilter !== "all" ? organizerFilter : config.organizer.getOrganizerId();
-      const statsData = await apiClient.getSubscriptionsStats({ organizerId });
-      
-      console.log("📊 Stats data from API:", statsData);
-      
-      if (statsData && typeof statsData === 'object' && 'total_revenue' in statsData) {
-        setStats(prevStats => ({
-          ...prevStats,
-          totalRevenue: Number(statsData.total_revenue) || 0,
-        }));
-      }
+      if (!organizerId) return;
+
+      const summaryRes = await seasonOperationsApi.getSummary(organizerId, season);
+      const totalRevenue = summaryRes.data?.totalRevenue ?? 0;
+
+      setStats((prevStats) => ({
+        ...prevStats,
+        totalRevenue,
+      }));
     } catch (error) {
       console.error("Error fetching stats:", error);
-      // Don't show error toast for stats as it's not critical
     }
   };
 
@@ -412,8 +418,18 @@ export default function AdminSubscriptionPlansPage() {
               Créer un Plan
             </Button>
           </PageHeader>
+
+          <div className="mb-6">
+            <SeasonSelector
+              season={season}
+              onSeasonChange={setSeason}
+              extraSeasons={discoveredSeasons}
+              showManageLink={isAdmin}
+              organizerId={resolvedOrganizerId || undefined}
+            />
+          </div>
           
-          <div className="flex-1 overflow-auto pt-6 pb-6">
+          <div className="flex-1 overflow-auto pt-2 pb-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <Card>
@@ -469,8 +485,9 @@ export default function AdminSubscriptionPlansPage() {
                 <div className="flex items-center space-x-2">
                   <CustomCurrencyIcon className="h-4 w-4 text-green-600" />
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Revenus</p>
+                    <p className="text-sm font-medium text-gray-600">Revenus encaissés</p>
                     <p className="text-2xl font-bold">{formatPrice(stats.totalRevenue)}</p>
+                    <p className="text-[10px] text-muted-foreground">Somme des paiements réels (saison)</p>
                   </div>
                 </div>
               </CardContent>
@@ -674,6 +691,7 @@ export default function AdminSubscriptionPlansPage() {
       {showCreateModal && (
         <SubscriptionPlanCreateModal
           organizers={organizers}
+          defaultSeason={season}
           onClose={() => {
             setShowCreateModal(false);
             setSelectedPlan(null);
@@ -774,6 +792,7 @@ export default function AdminSubscriptionPlansPage() {
           </DialogContent>
         </Dialog>
       )}
+
     </div>
   );
 } 

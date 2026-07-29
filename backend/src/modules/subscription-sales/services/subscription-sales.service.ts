@@ -621,11 +621,16 @@ export class SubscriptionSalesService implements ISubscriptionSalesService {
     });
 
     // Créer le profil avec fan_id
+    await this.profilesService.create({
+      userId: user.id,
+      language: 'fr',
+      country: 'TN',
+    });
+
     if (customerInfo.fanId) {
-      await this.profilesService.create({
-        userId: user.id,
-        language: 'fr',
-        country: 'TN',
+      await this.prisma.user_profiles.update({
+        where: { user_id: user.id },
+        data: { fan_id: customerInfo.fanId },
       });
     }
 
@@ -727,7 +732,12 @@ export class SubscriptionSalesService implements ISubscriptionSalesService {
         status: 'CONFIRMED',
         total_amount: totalAmount,
         currency: saleData.currency,
-        purchase_channel: saleData.saleChannel === 'PHYSICAL' ? 'COUNTER' : 'WEB',
+        purchase_channel:
+          saleData.saleChannel === 'PHYSICAL'
+            ? 'COUNTER'
+            : saleData.saleChannel === 'PARTNER'
+              ? 'PARTNER'
+              : 'WEB',
         guest_name: saleData.customerInfo ? 
           `${saleData.customerInfo.firstName} ${saleData.customerInfo.lastName}` : 
           'Client Anonyme',
@@ -1733,6 +1743,7 @@ export class SubscriptionSalesService implements ISubscriptionSalesService {
     userId?: string;
     organizerId?: string;
     planId?: string;
+    season?: string;
     status?: string;
     vendorId?: string;
     paymentMethod?: string;
@@ -1746,7 +1757,7 @@ export class SubscriptionSalesService implements ISubscriptionSalesService {
 
     if (filters.userId) where.user_id = filters.userId;
     if (filters.organizerId) where.organizer_id = filters.organizerId;
-    if (filters.planId) where.plan_id = filters.planId;
+    await this.applySeasonAndPlanFilter(where, filters.season, filters.organizerId, filters.planId);
     if (filters.status) where.status = filters.status;
     
     // Add date range filters
@@ -1934,6 +1945,7 @@ export class SubscriptionSalesService implements ISubscriptionSalesService {
     userId?: string;
     organizerId?: string;
     planId?: string;
+    season?: string;
     status?: string;
     vendorId?: string;
     paymentMethod?: string;
@@ -1944,7 +1956,7 @@ export class SubscriptionSalesService implements ISubscriptionSalesService {
 
     if (filters.userId) where.user_id = filters.userId;
     if (filters.organizerId) where.organizer_id = filters.organizerId;
-    if (filters.planId) where.plan_id = filters.planId;
+    await this.applySeasonAndPlanFilter(where, filters.season, filters.organizerId, filters.planId);
     if (filters.status) where.status = filters.status;
     
     // Add date filters
@@ -2041,15 +2053,23 @@ export class SubscriptionSalesService implements ISubscriptionSalesService {
     }
   }
 
-  async getFilterOptions() {
+  async getFilterOptions(season?: string, organizerId?: string) {
     try {
-      // Get all subscriptions to extract unique filter options
+      let subscriptionWhere: any = {};
+
+      if (season) {
+        const planIds = await this.resolvePlanIdsForSeason(season, organizerId);
+        subscriptionWhere = { plan_id: planIds.length ? { in: planIds } : { in: [] } };
+      }
+
       const subscriptions = await this.prisma.subscriptions.findMany({
+        where: subscriptionWhere,
         select: {
           subscription_plans: {
             select: {
               id: true,
               name: true,
+              metadata: true,
             },
           },
           metadata: true,
@@ -2057,69 +2077,126 @@ export class SubscriptionSalesService implements ISubscriptionSalesService {
         orderBy: { created_at: 'desc' },
       });
 
+      let plansSource = subscriptions;
+      if (season) {
+        const seasonPlans = await this.prisma.subscription_plans.findMany({
+          where: {
+            ...(organizerId ? { organizer_id: organizerId } : {}),
+            metadata: { path: ['season'], equals: season },
+          },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        });
+        const plansMap = new Map<string, string>();
+        for (const p of seasonPlans) {
+          plansMap.set(p.id, p.name);
+        }
+        for (const sub of subscriptions) {
+          if (sub.subscription_plans?.id && sub.subscription_plans?.name) {
+            plansMap.set(sub.subscription_plans.id, sub.subscription_plans.name);
+          }
+        }
+        return this.buildFilterOptionsFromData(subscriptions, plansMap);
+      }
+
       // Extract unique plans
-      const plansMap = new Map();
-      subscriptions.forEach(subscription => {
+      const plansMap = new Map<string, string>();
+      plansSource.forEach((subscription) => {
         if (subscription.subscription_plans?.id && subscription.subscription_plans?.name) {
           plansMap.set(subscription.subscription_plans.id, subscription.subscription_plans.name);
         }
       });
 
-      // Extract unique payment methods
-      const paymentMethodsSet = new Set<string>();
-      subscriptions.forEach(subscription => {
-        if (subscription.metadata && typeof subscription.metadata === 'object') {
-          const metadata = subscription.metadata as any;
-          if (metadata.paymentMethod) {
-            paymentMethodsSet.add(metadata.paymentMethod);
-          }
-        }
-      });
-
-      // Extract unique seller IDs from metadata
-      const sellerIds = new Set<string>();
-      subscriptions.forEach(subscription => {
-        if (subscription.metadata && typeof subscription.metadata === 'object') {
-          const metadata = subscription.metadata as any;
-          const sellerId = metadata.sellerId || metadata.seller_id;
-          if (sellerId) {
-            sellerIds.add(sellerId);
-          }
-        }
-      });
-
-      // Fetch seller information
-      const sellers = sellerIds.size > 0 ? await this.prisma.users.findMany({
-        where: { id: { in: Array.from(sellerIds) } },
-        select: {
-          id: true,
-          first_name: true,
-          last_name: true,
-          email: true,
-        },
-      }) : [];
-
-      // Create vendors array
-      const vendors = sellers.map(seller => {
-        const fullName = `${seller.first_name || ''} ${seller.last_name || ''}`.trim();
-        return {
-          id: seller.id,
-          name: fullName || seller.email,
-          first_name: seller.first_name,
-          last_name: seller.last_name,
-          email: seller.email,
-        };
-      });
-
-      return {
-        plans: Array.from(plansMap.entries()).map(([id, name]) => ({ id, name })),
-        vendors,
-        paymentMethods: Array.from(paymentMethodsSet)
-      };
+      return this.buildFilterOptionsFromData(subscriptions, plansMap);
     } catch (error) {
       this.logger.error('Error fetching filter options:', error);
       throw error;
     }
+  }
+
+  private async resolvePlanIdsForSeason(season: string, organizerId?: string): Promise<string[]> {
+    const plans = await this.prisma.subscription_plans.findMany({
+      where: {
+        ...(organizerId ? { organizer_id: organizerId } : {}),
+        metadata: { path: ['season'], equals: season },
+      },
+      select: { id: true },
+    });
+    return plans.map((p) => p.id);
+  }
+
+  private async applySeasonAndPlanFilter(
+    where: Record<string, unknown>,
+    season?: string,
+    organizerId?: string,
+    planId?: string,
+  ): Promise<void> {
+    if (season) {
+      const planIds = await this.resolvePlanIdsForSeason(season, organizerId);
+      if (planId) {
+        where.plan_id = planIds.includes(planId) ? planId : { in: [] };
+      } else {
+        where.plan_id = planIds.length > 0 ? { in: planIds } : { in: [] };
+      }
+      return;
+    }
+    if (planId) {
+      where.plan_id = planId;
+    }
+  }
+
+  private async buildFilterOptionsFromData(
+    subscriptions: Array<{
+      metadata?: unknown;
+      subscription_plans?: { id: string; name: string } | null;
+    }>,
+    plansMap: Map<string, string>,
+  ) {
+    const paymentMethodsSet = new Set<string>();
+    subscriptions.forEach((subscription) => {
+      if (subscription.metadata && typeof subscription.metadata === 'object') {
+        const metadata = subscription.metadata as Record<string, unknown>;
+        if (typeof metadata.paymentMethod === 'string') {
+          paymentMethodsSet.add(metadata.paymentMethod);
+        }
+      }
+    });
+
+    const sellerIds = new Set<string>();
+    subscriptions.forEach((subscription) => {
+      if (subscription.metadata && typeof subscription.metadata === 'object') {
+        const metadata = subscription.metadata as Record<string, unknown>;
+        const sellerId = metadata.sellerId || metadata.seller_id;
+        if (typeof sellerId === 'string') {
+          sellerIds.add(sellerId);
+        }
+      }
+    });
+
+    const sellers =
+      sellerIds.size > 0
+        ? await this.prisma.users.findMany({
+            where: { id: { in: Array.from(sellerIds) } },
+            select: { id: true, first_name: true, last_name: true, email: true },
+          })
+        : [];
+
+    const vendors = sellers.map((seller) => {
+      const fullName = `${seller.first_name || ''} ${seller.last_name || ''}`.trim();
+      return {
+        id: seller.id,
+        name: fullName || seller.email,
+        first_name: seller.first_name,
+        last_name: seller.last_name,
+        email: seller.email,
+      };
+    });
+
+    return {
+      plans: Array.from(plansMap.entries()).map(([id, name]) => ({ id, name })),
+      vendors,
+      paymentMethods: Array.from(paymentMethodsSet),
+    };
   }
 
   /**

@@ -106,6 +106,13 @@ export default function SubscriptionPlanManagementModal({
     if (!plan.isActive) {
       return <Badge variant="secondary" className="bg-gray-100 text-gray-800">Inactif</Badge>;
     }
+    
+    // Check if plan is sold out
+    if (plan.maxSubscribers && plan.maxSubscribers > 0 && 
+        plan.activeSubscriptions >= plan.maxSubscribers) {
+      return <Badge className="bg-red-100 text-red-800">Complet</Badge>;
+    }
+    
     if (plan.isCurrentlyOnSale) {
       return <Badge className="bg-green-100 text-green-800">En vente</Badge>;
     }

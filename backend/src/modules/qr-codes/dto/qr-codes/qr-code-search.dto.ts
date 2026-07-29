@@ -155,4 +155,12 @@ export class QRCodeSearchDto {
   @IsOptional()
   @IsString({ message: 'Le filtre de plan d\'abonnement doit être une chaîne de caractères' })
   subscription_plan_id?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filtrer par saison (ex: 2026-2027)',
+    example: '2026-2027',
+  })
+  @IsOptional()
+  @IsString()
+  season?: string;
 } 

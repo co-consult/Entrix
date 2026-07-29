@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +45,8 @@ export default function AdminZonesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [venueFilter, setVenueFilter] = useState<string>("all");
+  const [mappingFilter, setMappingFilter] = useState<string>("all");
+  const [allMappings, setAllMappings] = useState<Mapping[]>([]);
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -79,7 +81,26 @@ export default function AdminZonesPage() {
   useEffect(() => {
     fetchVenues();
     fetchZonesWithSeats();
+    fetchAllMappings();
   }, []);
+
+  const fetchAllMappings = async (venueId?: string) => {
+    try {
+      const response = await mappingsApi.getAll(
+        venueId && venueId !== "all" ? venueId : undefined,
+      );
+      if (response.success) {
+        setAllMappings(response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching mappings:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllMappings(venueFilter);
+    setMappingFilter("all");
+  }, [venueFilter]);
 
   const fetchZonesWithSeats = async () => {
     try {
@@ -452,6 +473,9 @@ export default function AdminZonesPage() {
   };
 
   const filteredZones = zones.filter(zone => {
+    if (mappingFilter !== "all" && zone.mapping_id !== mappingFilter) {
+      return false;
+    }
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       return (
@@ -461,6 +485,37 @@ export default function AdminZonesPage() {
     }
     return true;
   });
+
+  const venueLookup = useMemo(() => {
+    const map = new Map<string, Venue>();
+    venues.forEach((v) => map.set(v.id, v));
+    return map;
+  }, [venues]);
+
+  const mappingLookup = useMemo(() => {
+    const map = new Map<string, Mapping>();
+    allMappings.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [allMappings]);
+
+  const groupedZones = useMemo(() => {
+    const groups = new Map<string, Zone[]>();
+    for (const zone of filteredZones) {
+      const key = zone.mapping_id || "unknown";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(zone);
+    }
+    return Array.from(groups.entries()).sort(([aId], [bId]) => {
+      const nameA = mappingLookup.get(aId)?.name || aId;
+      const nameB = mappingLookup.get(bId)?.name || bId;
+      return nameA.localeCompare(nameB, "fr");
+    });
+  }, [filteredZones, mappingLookup]);
+
+  const availableMappingsForFilter = useMemo(() => {
+    if (venueFilter === "all") return allMappings;
+    return allMappings.filter((m) => m.venue_id === venueFilter);
+  }, [allMappings, venueFilter]);
 
   const stats = {
     total: zones.length,
@@ -563,6 +618,22 @@ export default function AdminZonesPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select value={mappingFilter} onValueChange={setMappingFilter}>
+                    <SelectTrigger className="w-full md:w-[220px]">
+                      <SelectValue placeholder="Cartographie" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Toutes les cartographies</SelectItem>
+                      {availableMappingsForFilter.map((mapping) => {
+                        const venue = venueLookup.get(mapping.venue_id);
+                        return (
+                          <SelectItem key={mapping.id} value={mapping.id}>
+                            {mapping.name}{venue ? ` · ${venue.name}` : ""}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
@@ -579,8 +650,29 @@ export default function AdminZonesPage() {
               description="Commencez par créer votre première zone"
             />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredZones.map((zone) => (
+            <div className="space-y-8">
+              {groupedZones.map(([mappingId, mappingZones]) => {
+                const mapping = mappingLookup.get(mappingId);
+                const venue = mapping ? venueLookup.get(mapping.venue_id) : undefined;
+                return (
+                  <section key={mappingId}>
+                    <div className="flex flex-wrap items-center gap-2 mb-4 pb-3 border-b">
+                      <MapPin className="h-5 w-5 text-primary shrink-0" />
+                      <h2 className="text-lg font-semibold">
+                        {mapping?.name || "Cartographie inconnue"}
+                      </h2>
+                      {mapping?.code && (
+                        <Badge variant="outline">{mapping.code}</Badge>
+                      )}
+                      {venue && (
+                        <span className="text-sm text-muted-foreground">{venue.name}</span>
+                      )}
+                      <Badge variant="secondary" className="ml-auto">
+                        {mappingZones.length} zone{mappingZones.length > 1 ? "s" : ""}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {mappingZones.map((zone) => (
                 <Card key={zone.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex items-start justify-between">
@@ -679,7 +771,11 @@ export default function AdminZonesPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           )}
           </div>

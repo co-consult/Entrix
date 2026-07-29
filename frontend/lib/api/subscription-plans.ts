@@ -97,5 +97,156 @@ export const subscriptionPlansApi = {
     })
     return response.data
   },
+
+  listSeasons: async (organizerId: string): Promise<any> => {
+    const response = await apiClient.get(`/subscription-sales/organizers/${organizerId}/seasons`)
+    return response.data
+  },
+
+  cloneSeason: async (data: CloneSeasonData): Promise<any> => {
+    const response = await apiClient.post('/subscription-sales/seasons/clone', data)
+    return response.data
+  },
 }
+
+export interface CloneSeasonData {
+  sourceSeason: string;
+  targetSeason: string;
+  organizerId?: string;
+}
+
+export type SeasonStatus =
+  | 'none'
+  | 'draft_plans'
+  | 'qrs_ready'
+  | 'qrs_in_use'
+  | 'sales_active'
+  | 'archived';
+
+export type SeasonAction = 'generate_qr' | 'rollback' | 'cancel_draft' | 'activate' | 'clone';
+
+export interface SeasonPlanBreakdown {
+  planId: string;
+  planCode: string;
+  planName: string;
+  qrTotal: number;
+  qrAvailable: number;
+  qrAssigned: number;
+  qrDisabled: number;
+  archivedSourceCount: number;
+  subscriptionCount: number;
+}
+
+export interface SeasonSummary {
+  seasonId: string;
+  label: string;
+  status: SeasonStatus;
+  planCount: number;
+  qrCount: number;
+  qrAvailableCount?: number;
+  assignedQrCount: number;
+  soldQrCount?: number;
+  disabledSourceQrCount: number;
+  subscriptionCount: number;
+  totalRevenue?: number;
+  salesClosedPlanCount: number;
+  plansOnSaleCount: number;
+  sourceSeasonId?: string;
+  serialPrefix?: string | null;
+  plans: SeasonPlanBreakdown[];
+}
+
+export interface SeasonListItem {
+  id: string;
+  label: string;
+  status?: SeasonStatus;
+  planCount?: number;
+  qrCount?: number;
+  assignedQrCount?: number;
+}
+
+export interface SeasonPreflightResult {
+  action: SeasonAction;
+  allowed: boolean;
+  blockers: string[];
+  warnings: string[];
+  counts: Record<string, number>;
+  sourceSeason?: string;
+  targetSeason: string;
+}
+
+export const seasonOperationsApi = {
+  listSeasons: async (organizerId: string): Promise<{ success: boolean; data: SeasonListItem[] }> => {
+    const response = await apiClient.get(`/subscription-sales/organizers/${organizerId}/seasons`);
+    return response.data;
+  },
+
+  getSummary: async (
+    organizerId: string,
+    seasonId: string,
+  ): Promise<{ success: boolean; data: SeasonSummary }> => {
+    const response = await apiClient.get(
+      `/subscription-sales/organizers/${organizerId}/seasons/${seasonId}/summary`,
+    );
+    return response.data;
+  },
+
+  preflight: async (
+    organizerId: string,
+    targetSeason: string,
+    action: SeasonAction,
+    sourceSeason?: string,
+  ): Promise<{ success: boolean; data: SeasonPreflightResult }> => {
+    const response = await apiClient.get(
+      `/subscription-sales/organizers/${organizerId}/seasons/${targetSeason}/preflight`,
+      { params: { action, sourceSeason } },
+    );
+    return response.data;
+  },
+
+  generateQRs: async (
+    organizerId: string,
+    targetSeason: string,
+    body: { sourceSeason: string; archiveSource?: boolean; dryRun?: boolean },
+  ): Promise<any> => {
+    const response = await apiClient.post(
+      `/subscription-sales/organizers/${organizerId}/seasons/${targetSeason}/generate-qrs`,
+      body,
+      { timeout: 600000 },
+    );
+    return response.data;
+  },
+
+  activateSales: async (
+    organizerId: string,
+    targetSeason: string,
+    body: { sourceSeason: string },
+  ): Promise<any> => {
+    const response = await apiClient.post(
+      `/subscription-sales/organizers/${organizerId}/seasons/${targetSeason}/activate-sales`,
+      body,
+    );
+    return response.data;
+  },
+
+  rollbackMigration: async (
+    organizerId: string,
+    targetSeason: string,
+    body: { sourceSeason: string },
+  ): Promise<any> => {
+    const response = await apiClient.post(
+      `/subscription-sales/organizers/${organizerId}/seasons/${targetSeason}/rollback-migration`,
+      body,
+      { timeout: 600000 },
+    );
+    return response.data;
+  },
+
+  cancelDraft: async (organizerId: string, targetSeason: string): Promise<any> => {
+    const response = await apiClient.delete(
+      `/subscription-sales/organizers/${organizerId}/seasons/${targetSeason}/draft`,
+    );
+    return response.data;
+  },
+};
 

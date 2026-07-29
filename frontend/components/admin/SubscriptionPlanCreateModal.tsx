@@ -18,12 +18,16 @@ import { useSession } from "next-auth/react";
 import { subscriptionPlansApi } from "@/lib/api/subscription-plans";
 import { zonesApi } from "@/lib/api/zones";
 import { venuesApi } from "@/lib/api/venues";
+import { eventsApi } from "@/lib/api/events";
+import { SeasonSelector } from "@/components/admin/SeasonSelector";
+import { DEFAULT_SUBSCRIPTION_SEASON } from "@/lib/seasons";
 import { config } from "@/lib/config";
 import type { SubscriptionPlan } from "@/types";
 
 interface SubscriptionPlanCreateModalProps {
   organizers: any[];
   plan?: SubscriptionPlan | null;
+  defaultSeason?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -31,10 +35,16 @@ interface SubscriptionPlanCreateModalProps {
 export default function SubscriptionPlanCreateModal({
   organizers,
   plan,
+  defaultSeason = DEFAULT_SUBSCRIPTION_SEASON,
   onClose,
   onSuccess
 }: SubscriptionPlanCreateModalProps) {
   const isEditMode = !!plan;
+  const [planScope, setPlanScope] = useState<"season" | "event">("season");
+  const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
+  const [availableEvents, setAvailableEvents] = useState<Array<{ id: string; name: string; scheduled_start?: string }>>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [selectedSeason, setSelectedSeason] = useState(defaultSeason);
   const [loading, setLoading] = useState(false);
   const [zones, setZones] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [loadingZones, setLoadingZones] = useState(false);
@@ -139,6 +149,22 @@ export default function SubscriptionPlanCreateModal({
   }, [selectedVenueId]);
 
   useEffect(() => {
+    if (planScope !== "event") return;
+    const loadEvents = async () => {
+      setLoadingEvents(true);
+      try {
+        const res = await eventsApi.getEvents(1, 100, {}, true);
+        setAvailableEvents(res.events || []);
+      } catch {
+        setAvailableEvents([]);
+      } finally {
+        setLoadingEvents(false);
+      }
+    };
+    loadEvents();
+  }, [planScope]);
+
+  useEffect(() => {
     if (plan) {
       // Populate form with existing plan data for edit mode
       setFormData({
@@ -232,10 +258,26 @@ export default function SubscriptionPlanCreateModal({
   const handleSubmit = async () => {
     // For new plans, validate all required fields
     if (!isEditMode) {
-    if (!formData.organizer_id || !formData.name || formData.price <= 0) {
+    if (!formData.organizer_id || !formData.name || !formData.code?.trim() || formData.price <= 0) {
       toast({
         title: "Erreur de validation",
-        description: "Veuillez remplir tous les champs obligatoires",
+        description: "Nom, code et prix sont obligatoires",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (!formData.valid_from || !formData.valid_until) {
+      toast({
+        title: "Erreur de validation",
+        description: "Les dates de validité sont obligatoires",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (planScope === "event" && selectedEventIds.length === 0) {
+      toast({
+        title: "Erreur de validation",
+        description: "Sélectionnez au moins un événement pour un plan événementiel",
         variant: "destructive"
       });
       return;
@@ -339,18 +381,25 @@ export default function SubscriptionPlanCreateModal({
       }));
 
       // Add metadata
+      const planType = planScope === "season" ? "SEASON" : "PARTIAL";
+      const metadata: Record<string, unknown> = {
+        ...formData.metadata,
+        createdBy: session?.user?.id || session?.user?.email || 'unknown',
+        createdAt: new Date().toISOString(),
+        createdVia: 'admin_panel',
+      };
+      if (planScope === "season") {
+        metadata.season = selectedSeason;
+      }
+
       const dataWithMetadata = {
         ...dataToSend,
-        type: "SEASON", // Always SEASON
+        type: planType,
         zones: zonesData.length > 0 ? zonesData : undefined,
+        events: planScope === "event" ? selectedEventIds.map((event_id) => ({ event_id, is_included: true })) : undefined,
         benefits: Object.keys(benefitsObj).length > 0 ? benefitsObj : undefined,
         restrictions: Object.keys(restrictionsObj).length > 0 ? restrictionsObj : undefined,
-        metadata: {
-          ...formData.metadata,
-          createdBy: session?.user?.id || session?.user?.email || 'unknown',
-          createdAt: new Date().toISOString(),
-          createdVia: 'admin_panel'
-        }
+        metadata,
       };
 
         // Create new plan - don't send is_active or current_subscribers
@@ -405,6 +454,51 @@ export default function SubscriptionPlanCreateModal({
         </DialogHeader>
 
         <div className="space-y-6">
+          {!isEditMode && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Portée du plan</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-3">
+                  <Button type="button" variant={planScope === "season" ? "default" : "outline"} onClick={() => { setPlanScope("season"); handleInputChange("type", "SEASON"); }}>
+                    Saison (abonnements)
+                  </Button>
+                  <Button type="button" variant={planScope === "event" ? "default" : "outline"} onClick={() => { setPlanScope("event"); handleInputChange("type", "PARTIAL"); }}>
+                    Événement ponctuel
+                  </Button>
+                </div>
+                {planScope === "season" && (
+                  <SeasonSelector season={selectedSeason} onSeasonChange={setSelectedSeason} />
+                )}
+                {planScope === "event" && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                    {loadingEvents ? (
+                      <LoadingSpinner size="sm" />
+                    ) : availableEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Aucun événement disponible</p>
+                    ) : (
+                      availableEvents.map((ev) => (
+                        <label key={ev.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedEventIds.includes(ev.id)}
+                            onChange={(e) => {
+                              setSelectedEventIds((prev) =>
+                                e.target.checked ? [...prev, ev.id] : prev.filter((id) => id !== ev.id)
+                              );
+                            }}
+                          />
+                          {ev.name}
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Basic Information */}
           <Card>
             <CardHeader>
@@ -443,7 +537,7 @@ export default function SubscriptionPlanCreateModal({
                 </div>
 
                 <div>
-                  <Label htmlFor="code">Code du Plan</Label>
+                  <Label htmlFor="code">Code du Plan *</Label>
                   <Input
                     id="code"
                     value={formData.code}

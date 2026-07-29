@@ -6,4 +6,13 @@ export class AppController {
   getHello(): string {
     return 'Hello Entrix';
   }
+
+  @Get('health')
+  getHealth() {
+    return {
+      status: 'ok',
+      service: 'entrix-backend',
+      timestamp: new Date().toISOString(),
+    };
+  }
 }

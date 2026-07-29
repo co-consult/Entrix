@@ -7,7 +7,8 @@ type CreateEventForm = {
   description?: string;
   type: string;
   category: string;
-  venueId: string;
+  venueId?: string;
+  mappingId?: string;
   scheduledStart: string;
   scheduledEnd: string;
   capacityTotal?: number;

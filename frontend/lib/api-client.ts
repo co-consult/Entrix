@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 import { signOut } from 'next-auth/react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://css.cloud.ms2tech.fr/api/v1"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://preprod.css.cloud.ms2tech.fr/api/v1"
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

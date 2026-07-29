@@ -18,13 +18,16 @@ const FUNCTIONAL_ADMIN_PAGES = [
   "/admin/events",
   "/admin/subscriptions",
   "/admin/subscriptions/plans",
+  "/admin/subscriptions/seasons",
   "/admin/orders",
   "/admin/access-control",
   "/admin/development",
   "/admin/venues",
+  "/admin/venues/setup",
   "/admin/mappings",
   "/admin/zones",
   "/admin/qr-codes",
+  "/admin/ticket-sales",
   "/admin/seats",
 ]
 

@@ -8,7 +8,7 @@ class ApiClient {
                          typeof window !== 'undefined' && window.location.hostname === 'localhost'
     this.baseURL = isDevelopment 
       ? "http://localhost:3000/api/v1"
-      : (process.env.NEXT_PUBLIC_API_URL || "https://css.cloud.ms2tech.fr/api/v1")
+      : (process.env.NEXT_PUBLIC_API_URL || "https://preprod.css.cloud.ms2tech.fr/api/v1")
     
     console.log('API Client initialized with baseURL:', this.baseURL)
   }
@@ -670,9 +670,9 @@ class ApiClient {
     return this.request(`/subscription-sales/stats/subscriptions?${params}`)
   }
 
-  async getFilterOptions() {
+  async getFilterOptions(filters: Record<string, string> = {}) {
     const timestamp = Date.now();
-    const params = new URLSearchParams({ _t: timestamp.toString() });
+    const params = new URLSearchParams({ _t: timestamp.toString(), ...filters });
     return this.request(`/subscription-sales/filter-options?${params}`)
   }
 

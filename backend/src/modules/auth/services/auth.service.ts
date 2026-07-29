@@ -198,7 +198,7 @@ async login(loginData: ILoginRequest, context?: {
     // 7. Formater réponse selon ILoginResult
     const loginResult: ILoginResult = {
       success: true,
-      user: this.mapDbUserToProfile(user),
+      user,
       tokens: sessionResult.tokens,
       session: {
         sessionId: sessionResult.session.id,

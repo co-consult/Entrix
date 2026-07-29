@@ -324,6 +324,9 @@ export class EventResponseDto {
   @ApiProperty({ description: 'Venue ID' })
   venueId: string;
 
+  @ApiPropertyOptional({ description: 'Venue mapping ID' })
+  mappingId?: string;
+
   @ApiProperty({ description: 'Venue name' })
   venueName: string;
 

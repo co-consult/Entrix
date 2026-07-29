@@ -14,6 +14,7 @@ export enum SaleMode {
 export enum SaleChannel {
   PHYSICAL = 'PHYSICAL',         // Vente au comptoir
   FRONTEND = 'FRONTEND',         // Vente depuis frontend client
+  PARTNER = 'PARTNER',           // Intégration partenaire (CSSForever, etc.)
 }
 
 // Méthode de paiement

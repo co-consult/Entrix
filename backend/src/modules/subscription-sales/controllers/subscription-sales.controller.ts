@@ -31,12 +31,19 @@ import { SubscriptionSalesService } from '../services/subscription-sales.service
 import { SubscriptionPlansService } from '../services/subscription-plans.service';
 import { ZonesAndSeatsService } from '../services/zones-and-seats.service';
 import { SalesFlowService } from '../services/sales-flow.service';
+import { SeasonOperationsService } from '../services/season-operations.service';
+import { SeasonQRMigrationService } from '../services/season-qr-migration.service';
 
 // DTOs
 import { CreateSubscriptionSaleDto } from '../dto/create-subscription-sale.dto';
 import { ConvertAnonymousSubscriptionDto } from '../dto/convert-anonymous-subscription.dto';
 import { CreateSubscriptionPlanDto } from '../dto/create-subscription-plan.dto';
 import { UpdateSubscriptionPlanDto } from '../dto/update-subscription-plan.dto';
+import { CloneSeasonDto } from '../dto/clone-season.dto';
+import { GenerateSeasonQRsDto } from '../dto/generate-season-qrs.dto';
+import { ActivateSeasonDto } from '../dto/activate-season.dto';
+import { RollbackSeasonDto } from '../dto/rollback-season.dto';
+import type { SeasonAction } from '../interfaces/season-operations.interface';
 import { 
   SubscriptionSaleResponseDto, 
   ConversionResponseDto,
@@ -81,6 +88,8 @@ export class SubscriptionSalesController {
     private readonly subscriptionPlansService: SubscriptionPlansService,
     private readonly zonesAndSeatsService: ZonesAndSeatsService,
     private readonly salesFlowService: SalesFlowService,
+    private readonly seasonOperationsService: SeasonOperationsService,
+    private readonly seasonQRMigrationService: SeasonQRMigrationService,
   ) {}
 
   // ============================================================================
@@ -632,6 +641,7 @@ export class SubscriptionSalesController {
     @Query('vendorId') vendorId?: string,
     @Query('paymentMethod') paymentMethod?: string,
     @Query('query') query?: string,
+    @Query('season') season?: string,
     @Query('createdAfter') createdAfter?: string,
     @Query('createdBefore') createdBefore?: string,
     @Query('page') pageParam?: string,
@@ -652,6 +662,7 @@ export class SubscriptionSalesController {
       vendorId,
       paymentMethod,
       query,
+      season,
       createdAfter,
       createdBefore,
       page: validPage,
@@ -678,8 +689,11 @@ export class SubscriptionSalesController {
     status: 200,
     description: 'Options de filtrage récupérées avec succès',
   })
-  async getFilterOptions() {
-    const result = await this.subscriptionSalesService.getFilterOptions();
+  async getFilterOptions(
+    @Query('season') season?: string,
+    @Query('organizerId') organizerId?: string,
+  ) {
+    const result = await this.subscriptionSalesService.getFilterOptions(season, organizerId);
 
     return {
       success: true,
@@ -734,6 +748,7 @@ export class SubscriptionSalesController {
     @Query('status') status?: string,
     @Query('vendorId') vendorId?: string,
     @Query('paymentMethod') paymentMethod?: string,
+    @Query('season') season?: string,
     @Query('createdAfter') createdAfter?: string,
     @Query('createdBefore') createdBefore?: string,
   ) {
@@ -744,6 +759,7 @@ export class SubscriptionSalesController {
       status,
       vendorId,
       paymentMethod,
+      season,
       createdAfter,
       createdBefore,
     });
@@ -1155,6 +1171,201 @@ export class SubscriptionSalesController {
       inactivePlans,
       plansOnSale,
       message: `${plans.length} plan(s) trouvé(s) pour cet organisateur`,
+    };
+  }
+
+  @Get('organizers/:organizerId/seasons')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lister les saisons des plans d\'un organisateur' })
+  async listOrganizerSeasons(@Param('organizerId', ParseUUIDPipe) organizerId: string) {
+    const seasons = await this.seasonOperationsService.listSeasonsWithStats(organizerId);
+    return {
+      success: true,
+      data: seasons,
+      message: `${seasons.length} saison(s) trouvée(s)`,
+    };
+  }
+
+  @Get('organizers/:organizerId/seasons/:seasonId/summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Résumé opérationnel d\'une saison' })
+  async getSeasonSummary(
+    @Param('organizerId', ParseUUIDPipe) organizerId: string,
+    @Param('seasonId') seasonId: string,
+  ) {
+    const summary = await this.seasonOperationsService.getSeasonSummary(organizerId, seasonId);
+    return { success: true, data: summary };
+  }
+
+  @Get('organizers/:organizerId/seasons/:targetSeason/preflight')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Vérifications préalables avant une action saison' })
+  @ApiQuery({ name: 'action', enum: ['generate_qr', 'rollback', 'cancel_draft', 'activate', 'clone'] })
+  @ApiQuery({ name: 'sourceSeason', required: false })
+  async seasonPreflight(
+    @Param('organizerId', ParseUUIDPipe) organizerId: string,
+    @Param('targetSeason') targetSeason: string,
+    @Query('action') action: SeasonAction,
+    @Query('sourceSeason') sourceSeason?: string,
+  ) {
+    if (!action) {
+      throw new BadRequestException('action est requis');
+    }
+    const result = await this.seasonOperationsService.preflight(
+      organizerId,
+      targetSeason,
+      action,
+      sourceSeason,
+    );
+    return { success: true, data: result };
+  }
+
+  @Post('organizers/:organizerId/seasons/:targetSeason/generate-qrs')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Générer les QR codes pour une nouvelle saison' })
+  async generateSeasonQRs(
+    @Param('organizerId', ParseUUIDPipe) organizerId: string,
+    @Param('targetSeason') targetSeason: string,
+    @Body(ValidationPipe) dto: GenerateSeasonQRsDto,
+  ) {
+    const check = await this.seasonOperationsService.preflight(
+      organizerId,
+      targetSeason,
+      'generate_qr',
+      dto.sourceSeason,
+    );
+    if (!check.allowed && !dto.dryRun) {
+      throw new BadRequestException(check.blockers.join(' '));
+    }
+
+    const result = await this.seasonQRMigrationService.generateSeasonQRs(
+      organizerId,
+      dto.sourceSeason,
+      targetSeason,
+      { archiveSource: dto.archiveSource ?? true, dryRun: dto.dryRun ?? false },
+    );
+
+    return {
+      success: true,
+      data: result,
+      warnings: check.warnings,
+      message: dto.dryRun ? 'Prévisualisation QR générée' : 'QR codes générés',
+    };
+  }
+
+  @Post('organizers/:organizerId/seasons/:targetSeason/activate-sales')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Activer les ventes sur la saison cible' })
+  async activateSeasonSales(
+    @Param('organizerId', ParseUUIDPipe) organizerId: string,
+    @Param('targetSeason') targetSeason: string,
+    @Body(ValidationPipe) dto: ActivateSeasonDto,
+  ) {
+    const check = await this.seasonOperationsService.preflight(
+      organizerId,
+      targetSeason,
+      'activate',
+      dto.sourceSeason,
+    );
+    if (!check.allowed) {
+      throw new BadRequestException(check.blockers.join(' '));
+    }
+
+    const result = await this.seasonQRMigrationService.activateSeasonSales(
+      organizerId,
+      dto.sourceSeason,
+      targetSeason,
+    );
+
+    return {
+      success: true,
+      data: result,
+      warnings: check.warnings,
+      message: 'Ventes activées sur la saison cible',
+    };
+  }
+
+  @Post('organizers/:organizerId/seasons/:targetSeason/rollback-migration')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Annuler la migration QR (rollback complet)' })
+  async rollbackSeasonMigration(
+    @Param('organizerId', ParseUUIDPipe) organizerId: string,
+    @Param('targetSeason') targetSeason: string,
+    @Body(ValidationPipe) dto: RollbackSeasonDto,
+  ) {
+    const check = await this.seasonOperationsService.preflight(
+      organizerId,
+      targetSeason,
+      'rollback',
+      dto.sourceSeason,
+    );
+    if (!check.allowed) {
+      throw new BadRequestException(check.blockers.join(' '));
+    }
+
+    const result = await this.seasonQRMigrationService.rollbackMigration(
+      organizerId,
+      dto.sourceSeason,
+      targetSeason,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: 'Migration QR annulée',
+    };
+  }
+
+  @Delete('organizers/:organizerId/seasons/:targetSeason/draft')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Supprimer une saison brouillon (plans uniquement)' })
+  async cancelDraftSeason(
+    @Param('organizerId', ParseUUIDPipe) organizerId: string,
+    @Param('targetSeason') targetSeason: string,
+  ) {
+    const result = await this.seasonOperationsService.cancelDraftSeason(organizerId, targetSeason);
+    return {
+      success: true,
+      data: result,
+      message: `Saison brouillon ${targetSeason} supprimée`,
+    };
+  }
+
+  @Post('seasons/clone')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Cloner les plans vers une nouvelle saison' })
+  async cloneSeason(
+    @Body() dto: CloneSeasonDto,
+    @Query('organizerId') queryOrganizerId?: string,
+  ) {
+    const organizerId = dto.organizerId || queryOrganizerId;
+    if (!organizerId) {
+      throw new BadRequestException('organizerId est requis');
+    }
+
+    const result = await this.subscriptionPlansService.cloneSeasonPlans(
+      dto.sourceSeason,
+      dto.targetSeason,
+      organizerId,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: `${result.createdCount} plan(s) créé(s) pour ${dto.targetSeason}`,
     };
   }
 
