@@ -47,9 +47,12 @@ export class CssForeverEligibilityService {
   async resolvePlan(
     type: PartnerSubscriptionTypeDto,
     standNumber?: string,
+    planCode?: string,
   ) {
     const season = this.configService.get<string>('cssforever.targetSeason');
-    const code = this.mapper.mapSubscriptionTypeToPlanCode(type, standNumber);
+    const explicit = planCode?.trim();
+    const code =
+      explicit || this.mapper.mapSubscriptionTypeToPlanCode(type, standNumber);
     if (!code) {
       throw new CssForeverException('PLAN_NOT_FOUND', 'Plan d\'abonnement introuvable');
     }
@@ -58,12 +61,19 @@ export class CssForeverEligibilityService {
       where: {
         code,
         is_active: true,
-        metadata: { path: ['season'], equals: season },
+        ...(season
+          ? { metadata: { path: ['season'], equals: season } }
+          : {}),
       },
     });
 
     if (!plan) {
-      throw new CssForeverException('PLAN_NOT_FOUND', `Plan ${code} introuvable pour la saison ${season}`);
+      throw new CssForeverException(
+        'PLAN_NOT_FOUND',
+        season
+          ? `Plan ${code} introuvable pour la saison ${season}`
+          : `Plan ${code} introuvable`,
+      );
     }
 
     return plan;

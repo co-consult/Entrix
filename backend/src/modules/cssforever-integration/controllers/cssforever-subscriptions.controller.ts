@@ -142,7 +142,11 @@ export class CssForeverSubscriptionsController {
   async checkNew(@Body() dto: CheckNewDto, @Req() req: any) {
     try {
       this.eligibility.assertNewSubscriptionsOpen();
-      const plan = await this.eligibility.resolvePlan(dto.subscriptionType, dto.standNumber);
+      const plan = await this.eligibility.resolvePlan(
+        dto.subscriptionType,
+        dto.standNumber,
+        dto.planCode,
+      );
       const availability =
         dto.subscriptionType === PartnerSubscriptionTypeDto.CHAISE
           ? await this.eligibility.checkChaiseAvailability(

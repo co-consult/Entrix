@@ -164,6 +164,7 @@ export class CssForeverConfirmService {
     const plan = await this.eligibility.resolvePlan(
       dto.subscriptionType,
       dto.standNumber,
+      dto.planCode,
     );
 
     const availability =
@@ -180,10 +181,23 @@ export class CssForeverConfirmService {
       throw new CssForeverException('NOT_AVAILABLE', 'Place ou stock non disponible');
     }
 
-    const availableQr = await this.prisma.physical_qr_codes.findFirst({
-      where: { subscription_plan_id: plan.id, status: 'AVAILABLE' },
-      orderBy: { serial_number: 'asc' },
-    });
+    const preferredSerial = dto.preferredSerialNumber?.trim();
+    let availableQr = preferredSerial
+      ? await this.prisma.physical_qr_codes.findFirst({
+          where: {
+            subscription_plan_id: plan.id,
+            status: 'AVAILABLE',
+            serial_number: preferredSerial,
+          },
+        })
+      : null;
+
+    if (!availableQr) {
+      availableQr = await this.prisma.physical_qr_codes.findFirst({
+        where: { subscription_plan_id: plan.id, status: 'AVAILABLE' },
+        orderBy: { serial_number: 'asc' },
+      });
+    }
 
     if (!availableQr) {
       throw new CssForeverException('NO_STOCK', 'Aucune carte QR disponible');

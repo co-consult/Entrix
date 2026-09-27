@@ -67,6 +67,11 @@ export class CheckNewDto {
   @IsEnum(PartnerSubscriptionTypeDto)
   subscriptionType: PartnerSubscriptionTypeDto;
 
+  /** Explicit Entrix plan code (e.g. GRADIN-P3-2627, CHAISE1-2627). Preferred over defaults. */
+  @IsString()
+  @IsOptional()
+  planCode?: string;
+
   @IsString()
   @IsOptional()
   standNumber?: string;
@@ -78,9 +83,19 @@ export class CheckNewDto {
   @IsString()
   @IsOptional()
   seatNumber?: string;
+
+  /** Prefer this physical card serial when assigning a QR (CSSForever seat/serial). */
+  @IsString()
+  @IsOptional()
+  preferredSerialNumber?: string;
 }
 
 export class ConfirmNewDto extends ConfirmExistingDto {
+  /** Explicit Entrix plan code (e.g. GRADIN-P3-2627, CHAISE1-2627). Preferred over defaults. */
+  @IsString()
+  @IsOptional()
+  planCode?: string;
+
   @IsString()
   @IsOptional()
   standNumber?: string;
@@ -92,4 +107,9 @@ export class ConfirmNewDto extends ConfirmExistingDto {
   @IsString()
   @IsOptional()
   seatNumber?: string;
+
+  /** Prefer this physical card serial when assigning a QR (CSSForever seat/serial). */
+  @IsString()
+  @IsOptional()
+  preferredSerialNumber?: string;
 }
