@@ -141,3 +141,17 @@ export class ActivateSubscriptionDto {
   @IsOptional()
   reason?: string;
 }
+
+export class CancelSubscriptionDto {
+  @IsString()
+  @IsOptional()
+  subscriptionId?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentReference?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
+}

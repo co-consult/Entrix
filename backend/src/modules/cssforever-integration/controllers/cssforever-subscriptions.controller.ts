@@ -16,6 +16,7 @@ import { PartnerApiGuard } from '../guards/partner-api.guard';
 import { CssForeverExceptionFilter } from '../filters/cssforever-exception.filter';
 import {
   ActivateSubscriptionDto,
+  CancelSubscriptionDto,
   CheckExistingDto,
   CheckNewDto,
   ConfirmExistingDto,
@@ -268,6 +269,34 @@ export class CssForeverSubscriptionsController {
     } catch (e) {
       await this.audit.log({
         endpoint: '/partner/subscriptions/activate',
+        method: 'POST',
+        ip: req.ip,
+        responseStatus: 'KO',
+        errorCode: e instanceof CssForeverException ? e.errorCode : 'ERROR',
+      });
+      throw e;
+    }
+  }
+
+  @Post('cancel')
+  @ApiOperation({ summary: 'Annuler/libérer un abonnement (annulation vente CSSForever)' })
+  async cancel(@Body() dto: CancelSubscriptionDto, @Req() req: any) {
+    try {
+      const response = await this.lifecycleService.cancel(dto);
+      await this.audit.log({
+        endpoint: '/partner/subscriptions/cancel',
+        method: 'POST',
+        ip: req.ip,
+        payloadHash: this.audit.hashPayload({
+          subscriptionId: dto.subscriptionId,
+          paymentReference: dto.paymentReference,
+        }),
+        responseStatus: 'OK',
+      });
+      return response;
+    } catch (e) {
+      await this.audit.log({
+        endpoint: '/partner/subscriptions/cancel',
         method: 'POST',
         ip: req.ip,
         responseStatus: 'KO',

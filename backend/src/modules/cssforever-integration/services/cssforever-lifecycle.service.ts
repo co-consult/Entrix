@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { CssForeverException } from '../exceptions/cssforever.exception';
 
-export type PartnerLifecycleAction = 'SUSPEND' | 'ACTIVATE';
+export type PartnerLifecycleAction = 'SUSPEND' | 'ACTIVATE' | 'CANCEL';
 
 @Injectable()
 export class CssForeverLifecycleService {
@@ -24,6 +24,15 @@ export class CssForeverLifecycleService {
     return this.applyLifecycle('ACTIVATE', params);
   }
 
+  /** Annulation vente CSSForever : CANCELLED + libère QR + purge cache partenaire. */
+  async cancel(params: {
+    subscriptionId?: string;
+    paymentReference?: string;
+    reason?: string;
+  }) {
+    return this.applyLifecycle('CANCEL', params);
+  }
+
   private async applyLifecycle(
     action: PartnerLifecycleAction,
     params: { subscriptionId?: string; paymentReference?: string; reason?: string },
@@ -31,6 +40,10 @@ export class CssForeverLifecycleService {
     const subscription = await this.resolveSubscription(params);
     if (!subscription) {
       throw new CssForeverException('NOT_FOUND', 'Abonnement Entrix introuvable', 404);
+    }
+
+    if (action === 'CANCEL') {
+      return this.cancelSubscription(subscription, params.reason, params.paymentReference);
     }
 
     const targetStatus = action === 'SUSPEND' ? 'SUSPENDED' : 'ACTIVE';
@@ -80,6 +93,78 @@ export class CssForeverLifecycleService {
     };
   }
 
+  private async cancelSubscription(
+    subscription: { id: string; metadata: unknown },
+    reason?: string,
+    paymentReference?: string,
+  ) {
+    const meta = (subscription.metadata as Record<string, any>) || {};
+    const qrCode = typeof meta.qrCode === 'string' ? meta.qrCode : null;
+    const pref =
+      paymentReference?.trim() ||
+      (typeof meta?.paymentDetails?.reference === 'string'
+        ? meta.paymentDetails.reference
+        : null);
+    const nowIso = new Date().toISOString();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscriptions.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'CANCELLED',
+          metadata: {
+            ...meta,
+            cancelledAt: nowIso,
+            cancelledBy: 'cssforever_partner',
+            cancellationReason: reason || 'CSSFOREVER_CANCEL_SALE',
+          },
+          updated_at: new Date(),
+        },
+      });
+
+      await tx.$executeRawUnsafe('ALTER TABLE access_rights DISABLE TRIGGER USER');
+      try {
+        await tx.access_rights.deleteMany({ where: { subscription_id: subscription.id } });
+        if (qrCode) {
+          await tx.access_rights.deleteMany({ where: { qr_code: qrCode } });
+        }
+      } finally {
+        await tx.$executeRawUnsafe('ALTER TABLE access_rights ENABLE TRIGGER USER');
+      }
+
+      if (qrCode) {
+        await tx.physical_qr_codes.updateMany({
+          where: { qr_code: qrCode, status: 'ASSIGNED' },
+          data: {
+            status: 'AVAILABLE',
+            assigned_at: null,
+            assigned_by: null,
+            updated_at: new Date(),
+          },
+        });
+      }
+
+      if (pref) {
+        await tx.partner_payment_confirmations.deleteMany({
+          where: { payment_reference: pref },
+        });
+      }
+      await tx.$executeRaw`
+        DELETE FROM partner_payment_confirmations
+        WHERE response_payload->>'subscriptionId' = ${subscription.id}
+      `;
+    });
+
+    return {
+      status: 'OK',
+      action: 'CANCEL' as const,
+      subscriptionId: subscription.id,
+      subscriptionStatus: 'CANCELLED',
+      paymentReference: pref,
+      qrFreed: qrCode,
+    };
+  }
+
   private async resolveSubscription(params: {
     subscriptionId?: string;
     paymentReference?: string;
@@ -110,7 +195,6 @@ export class CssForeverLifecycleService {
       }
     }
 
-    // Fallback: scan metadata.paymentDetails.reference (indexed via confirm path normally)
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id
       FROM subscriptions
