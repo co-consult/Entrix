@@ -15,16 +15,19 @@ import { Response } from 'express';
 import { PartnerApiGuard } from '../guards/partner-api.guard';
 import { CssForeverExceptionFilter } from '../filters/cssforever-exception.filter';
 import {
+  ActivateSubscriptionDto,
   CheckExistingDto,
   CheckNewDto,
   ConfirmExistingDto,
   ConfirmNewDto,
   PartnerSubscriptionTypeDto,
+  SuspendSubscriptionDto,
 } from '../dto/cssforever-subscriptions.dto';
 import { CssForeverLegacySubscriberService } from '../services/cssforever-legacy-subscriber.service';
 import { CssForeverEligibilityService } from '../services/cssforever-eligibility.service';
 import { CssForeverSeatStatusService } from '../services/cssforever-seat-status.service';
 import { CssForeverConfirmService } from '../services/cssforever-confirm.service';
+import { CssForeverLifecycleService } from '../services/cssforever-lifecycle.service';
 import { CssForeverReceiptService } from '../services/cssforever-receipt.service';
 import { CssForeverAuditService } from '../services/cssforever-audit.service';
 import { CssForeverMapperService } from '../services/cssforever-mapper.service';
@@ -40,6 +43,7 @@ export class CssForeverSubscriptionsController {
     private readonly eligibility: CssForeverEligibilityService,
     private readonly seatStatus: CssForeverSeatStatusService,
     private readonly confirmService: CssForeverConfirmService,
+    private readonly lifecycleService: CssForeverLifecycleService,
     private readonly receiptService: CssForeverReceiptService,
     private readonly audit: CssForeverAuditService,
     private readonly mapper: CssForeverMapperService,
@@ -208,6 +212,62 @@ export class CssForeverSubscriptionsController {
     } catch (e) {
       await this.audit.log({
         endpoint: '/partner/subscriptions/confirm-new',
+        method: 'POST',
+        ip: req.ip,
+        responseStatus: 'KO',
+        errorCode: e instanceof CssForeverException ? e.errorCode : 'ERROR',
+      });
+      throw e;
+    }
+  }
+
+  @Post('suspend')
+  @ApiOperation({ summary: 'Suspendre un abonnement (blocage CSSForever)' })
+  async suspend(@Body() dto: SuspendSubscriptionDto, @Req() req: any) {
+    try {
+      const response = await this.lifecycleService.suspend(dto);
+      await this.audit.log({
+        endpoint: '/partner/subscriptions/suspend',
+        method: 'POST',
+        ip: req.ip,
+        payloadHash: this.audit.hashPayload({
+          subscriptionId: dto.subscriptionId,
+          paymentReference: dto.paymentReference,
+        }),
+        responseStatus: 'OK',
+      });
+      return response;
+    } catch (e) {
+      await this.audit.log({
+        endpoint: '/partner/subscriptions/suspend',
+        method: 'POST',
+        ip: req.ip,
+        responseStatus: 'KO',
+        errorCode: e instanceof CssForeverException ? e.errorCode : 'ERROR',
+      });
+      throw e;
+    }
+  }
+
+  @Post('activate')
+  @ApiOperation({ summary: 'Réactiver un abonnement suspendu' })
+  async activate(@Body() dto: ActivateSubscriptionDto, @Req() req: any) {
+    try {
+      const response = await this.lifecycleService.activate(dto);
+      await this.audit.log({
+        endpoint: '/partner/subscriptions/activate',
+        method: 'POST',
+        ip: req.ip,
+        payloadHash: this.audit.hashPayload({
+          subscriptionId: dto.subscriptionId,
+          paymentReference: dto.paymentReference,
+        }),
+        responseStatus: 'OK',
+      });
+      return response;
+    } catch (e) {
+      await this.audit.log({
+        endpoint: '/partner/subscriptions/activate',
         method: 'POST',
         ip: req.ip,
         responseStatus: 'KO',

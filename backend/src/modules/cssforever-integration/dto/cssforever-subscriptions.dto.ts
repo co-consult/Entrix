@@ -113,3 +113,31 @@ export class ConfirmNewDto extends ConfirmExistingDto {
   @IsOptional()
   preferredSerialNumber?: string;
 }
+
+export class SuspendSubscriptionDto {
+  @IsString()
+  @IsOptional()
+  subscriptionId?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentReference?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
+}
+
+export class ActivateSubscriptionDto {
+  @IsString()
+  @IsOptional()
+  subscriptionId?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentReference?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
+}

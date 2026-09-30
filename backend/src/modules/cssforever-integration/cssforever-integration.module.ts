@@ -13,6 +13,7 @@ import { CssForeverLegacySubscriberService } from './services/cssforever-legacy-
 import { CssForeverEligibilityService } from './services/cssforever-eligibility.service';
 import { CssForeverSeatStatusService } from './services/cssforever-seat-status.service';
 import { CssForeverConfirmService } from './services/cssforever-confirm.service';
+import { CssForeverLifecycleService } from './services/cssforever-lifecycle.service';
 import { CssForeverReceiptService } from './services/cssforever-receipt.service';
 
 @Module({
@@ -32,6 +33,7 @@ import { CssForeverReceiptService } from './services/cssforever-receipt.service'
     CssForeverEligibilityService,
     CssForeverSeatStatusService,
     CssForeverConfirmService,
+    CssForeverLifecycleService,
     CssForeverReceiptService,
   ],
   exports: [
