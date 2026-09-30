@@ -1,0 +1,61 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'PROD', description: 'Branche Entrix à déployer')
+        choice(name: 'REMOTE_NAME', choices: ['coconsult', 'origin', 'github'], description: 'Remote du bare repo')
+    }
+
+    environment {
+        // Job à exécuter sur un agent qui a accès SSH au VPS Entrix,
+        // OU directement sur le VPS Entrix si Jenkins y tourne.
+        ENTRIX_SSH_HOST = 'vps-05f35511'
+        ENTRIX_SSH_USER = 'm2s'
+        ENTRIX_DEPLOY_SCRIPT = '/opt/entrix/scripts/deploy-prod-backend.sh'
+    }
+
+    stages {
+        stage('Deploy Entrix backend') {
+            steps {
+                script {
+                    // Prérequis VPS (une seule fois) :
+                    // 1) scripts/deploy-prod-backend.sh copié dans /opt/entrix/scripts/
+                    // 2) bare repo /home/m2s/entrix.git avec remote coconsult
+                    // 3) clé SSH Jenkins → m2s@vps-05f35511 (credential jenkins-entrix-ssh)
+                    sshagent(credentials: ['jenkins-entrix-ssh']) {
+                        sh """
+                        set -e
+                        ssh -o StrictHostKeyChecking=accept-new ${ENTRIX_SSH_USER}@${ENTRIX_SSH_HOST} \
+                          'BRANCH=${params.BRANCH} REMOTE_NAME=${params.REMOTE_NAME} bash ${ENTRIX_DEPLOY_SCRIPT}'
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Smoke partner suspend') {
+            steps {
+                script {
+                    sshagent(credentials: ['jenkins-entrix-ssh']) {
+                        sh """
+                        set -e
+                        ssh ${ENTRIX_SSH_USER}@${ENTRIX_SSH_HOST} '
+                          curl -sS -o /tmp/entrix-suspend-smoke.json -w "HTTP %{http_code}\\n" \
+                            -X POST -H "Content-Type: application/json" -H "X-API-KEY: smoke-missing-key" \
+                            -d "{\"subscriptionId\":\"00000000-0000-0000-0000-000000000000\",\"reason\":\"SMOKE\"}" \
+                            http://127.0.0.1:3000/api/v1/partner/subscriptions/suspend || true
+                          head -c 400 /tmp/entrix-suspend-smoke.json || true
+                          echo
+                        '
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success { echo 'Entrix PROD backend deploy OK' }
+        failure { echo 'Entrix PROD backend deploy FAILED' }
+    }
+}
